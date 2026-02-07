@@ -104,7 +104,7 @@ const AdminDashboard = () => {
       materials: artwork.materials,
       featured: artwork.featured
     });
-    setImagePreview(artwork.image ? `http://localhost:5000${artwork.image}` : '');
+    setImagePreview(artwork.image || '');
     setShowForm(true);
   };
 
@@ -322,7 +322,7 @@ const AdminDashboard = () => {
                   <tr key={artwork.id}>
                     <td>
                       <img
-                        src={`http://localhost:5000${artwork.image}`}
+                        src={artwork.image}
                         alt={artwork.title}
                         className="artwork-thumbnail"
                       />

@@ -46,7 +46,7 @@ const ArtDetails = () => {
   }
 
   const category = getCategoryById(artwork.category);
-  const imageUrl = artwork.image ? `http://localhost:5000${artwork.image}` : '/assets/images/placeholder.jpg';
+  const imageUrl = artwork.image || '/assets/images/placeholder.jpg';
 
   return (
     <div className="art-details">

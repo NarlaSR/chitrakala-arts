@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import '../styles/ArtCard.css';
 
 const ArtCard = ({ artwork }) => {
-  const imageUrl = artwork.image ? `http://localhost:5000${artwork.image}` : '/assets/images/placeholder.jpg';
+  const imageUrl = artwork.image || '/assets/images/placeholder.jpg';
   
   return (
     <div className="art-card">
