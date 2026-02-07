@@ -59,6 +59,12 @@ if (!fs.existsSync(DATA_DIR)) {
 
 // Initialize default admin user
 const initializeDefaultAdmin = async () => {
+  // Force reset if RESET_ADMIN environment variable is set
+  if (process.env.RESET_ADMIN === 'true' && fs.existsSync(USERS_FILE)) {
+    fs.unlinkSync(USERS_FILE);
+    console.log('Users file deleted - resetting admin password');
+  }
+  
   if (!fs.existsSync(USERS_FILE)) {
     const defaultAdmin = {
       id: 'admin-1',
