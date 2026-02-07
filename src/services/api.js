@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://ckk-art-backend.loca.lt/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://chitrakalaarts-production.up.railway.app/api';
 
 // Create axios instance
 const api = axios.create({
