@@ -1,0 +1,96 @@
+.category-card {
+  background-color: var(--white);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.category-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+}
+
+.category-card-link {
+  display: block;
+  color: inherit;
+}
+
+.category-card-image {
+  position: relative;
+  width: 100%;
+  height: 250px;
+  overflow: hidden;
+  background-color: var(--bg-light);
+}
+
+.category-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.category-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.category-placeholder-icon {
+  font-size: 4rem;
+}
+
+.category-placeholder p {
+  color: var(--white);
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 0 1rem;
+  margin: 0;
+}
+
+.category-card:hover .category-card-image img {
+  transform: scale(1.05);
+}
+
+.category-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  padding: 2rem 1.5rem 1.5rem;
+}
+
+.category-card-overlay h3 {
+  color: var(--white);
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.category-card-content {
+  padding: 1.5rem;
+}
+
+.category-card-content p {
+  color: var(--text-light);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.category-card-cta {
+  color: var(--primary-color);
+  font-weight: 600;
+  display: inline-block;
+  transition: color 0.3s ease;
+}
+
+.category-card:hover .category-card-cta {
+  color: var(--secondary-color);
+}

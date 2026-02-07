@@ -1,0 +1,16 @@
+.loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-light);
+  font-size: 1.1rem;
+}
+
+.no-artworks {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-light);
+}
+
+.no-artworks p {
+  font-size: 1.1rem;
+}

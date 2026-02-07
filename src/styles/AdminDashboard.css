@@ -1,0 +1,272 @@
+.admin-dashboard {
+  min-height: 100vh;
+  background-color: var(--bg-light);
+  padding-top: 0;
+}
+
+.admin-header {
+  background-color: var(--primary-color);
+  color: var(--white);
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow);
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.dashboard-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-toolbar h2 {
+  color: var(--primary-color);
+  margin: 0;
+}
+
+.btn-primary, .btn-secondary, .btn-logout {
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: var(--white);
+}
+
+.btn-primary:hover {
+  background-color: var(--secondary-color);
+  color: var(--text-dark);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background-color: var(--white);
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-light);
+}
+
+.btn-logout {
+  background-color: #d32f2f;
+  color: var(--white);
+}
+
+.btn-logout:hover {
+  background-color: #b71c1c;
+}
+
+.artwork-form-container {
+  background-color: var(--white);
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
+}
+
+.artwork-form-container h3 {
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+}
+
+.artwork-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.artwork-form .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.artwork-form label {
+  display: block;
+  color: var(--primary-color);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.artwork-form input,
+.artwork-form textarea,
+.artwork-form select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+}
+
+.artwork-form input:focus,
+.artwork-form textarea:focus,
+.artwork-form select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.artwork-form textarea {
+  resize: vertical;
+}
+
+.image-preview {
+  margin-top: 1rem;
+  max-width: 300px;
+}
+
+.image-preview img {
+  width: 100%;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.artworks-table {
+  background-color: var(--white);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+.artworks-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.artworks-table th,
+.artworks-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.artworks-table th {
+  background-color: var(--bg-light);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.artworks-table tr:hover {
+  background-color: var(--bg-light);
+}
+
+.artwork-thumbnail {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-edit, .btn-delete {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-edit {
+  background-color: #4CAF50;
+  color: var(--white);
+  border: none;
+}
+
+.btn-edit:hover {
+  background-color: #45a049;
+}
+
+.btn-delete {
+  background-color: #f44336;
+  color: var(--white);
+  border: none;
+}
+
+.btn-delete:hover {
+  background-color: #da190b;
+}
+
+.no-data {
+  text-align: center;
+  color: var(--text-light);
+  padding: 3rem !important;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-light);
+  font-size: 1.2rem;
+}
+
+@media (max-width: 768px) {
+  .admin-header {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .dashboard-toolbar {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .artwork-form .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .artworks-table {
+    overflow-x: scroll;
+  }
+
+  .actions-cell {
+    flex-direction: column;
+  }
+}
