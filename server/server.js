@@ -63,11 +63,11 @@ const initializeDefaultAdmin = async () => {
     const defaultAdmin = {
       id: 'admin-1',
       username: 'admin',
-      password: await bcrypt.hash('admin123', 10), // Change this password!
+      password: await bcrypt.hash('sonu@786', 10),
       role: 'admin'
     };
     fs.writeFileSync(USERS_FILE, JSON.stringify([defaultAdmin], null, 2));
-    console.log('Default admin created - username: admin, password: admin123');
+    console.log('Default admin created - username: admin');
   }
 };
 
