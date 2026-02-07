@@ -2,6 +2,8 @@
 
 A beautiful and responsive React web application with admin capabilities to manage an art portfolio. Features secure authentication, image uploads, and full CRUD operations for artwork management.
 
+**Live Site:** https://chitrakala-arts.vercel.app
+
 ## Features
 
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
