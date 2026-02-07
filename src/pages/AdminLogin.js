@@ -67,7 +67,7 @@ const AdminLogin = () => {
           </form>
           
           <div className="login-info">
-            <p>Default credentials: admin / admin123</p>
+            <p>Default credentials: admin / sonu786</p>
           </div>
         </div>
       </div>

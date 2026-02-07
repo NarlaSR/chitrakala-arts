@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 
 // Middleware
 app.use(cors());
@@ -208,7 +209,7 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), (req, res) 
       price: parseFloat(req.body.price),
       size: req.body.size,
       materials: req.body.materials,
-      image: req.file ? `/uploads/${req.file.filename}` : '',
+      image: req.file ? `${BASE_URL}/uploads/${req.file.filename}` : '',
       featured: req.body.featured === 'true',
       createdAt: new Date().toISOString()
     };
@@ -249,12 +250,17 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), (req, re
     if (req.file) {
       // Delete old image if exists
       if (artworks[index].image) {
-        const oldImagePath = path.join(__dirname, artworks[index].image);
+        // Extract filename from full URL or relative path
+        const imageUrl = artworks[index].image;
+        const filename = imageUrl.includes('/uploads/') 
+          ? imageUrl.split('/uploads/')[1] 
+          : imageUrl.replace('/uploads/', '');
+        const oldImagePath = path.join(__dirname, 'uploads', filename);
         if (fs.existsSync(oldImagePath)) {
           fs.unlinkSync(oldImagePath);
         }
       }
-      updatedArtwork.image = `/uploads/${req.file.filename}`;
+      updatedArtwork.image = `${BASE_URL}/uploads/${req.file.filename}`;
     }
 
     artworks[index] = updatedArtwork;
@@ -279,7 +285,12 @@ app.delete('/api/artworks/:id', authenticateToken, (req, res) => {
 
     // Delete associated image file
     if (artworks[index].image) {
-      const imagePath = path.join(__dirname, artworks[index].image);
+      // Extract filename from full URL or relative path
+      const imageUrl = artworks[index].image;
+      const filename = imageUrl.includes('/uploads/') 
+        ? imageUrl.split('/uploads/')[1] 
+        : imageUrl.replace('/uploads/', '');
+      const imagePath = path.join(__dirname, 'uploads', filename);
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
