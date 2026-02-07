@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/ArtCard.css';
 
+// Fixed: Use full URLs from backend directly
 const ArtCard = ({ artwork }) => {
   const imageUrl = artwork.image || '/assets/images/placeholder.jpg';
   
