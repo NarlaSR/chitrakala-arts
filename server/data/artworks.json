@@ -7,7 +7,7 @@
     "price": 4000,
     "size": "12\" x 12\"",
     "materials": "Dot painting on MDF board",
-    "image": "/uploads/1770419263457-804127379.jpg",
+    "image": "https://chitrakalaarts-production.up.railway.app/uploads/1770419263457-804127379.jpg",
     "featured": true,
     "createdAt": "2026-02-06T23:07:43.599Z"
   },
@@ -19,7 +19,7 @@
     "price": 4000,
     "size": "12\" x 12\"",
     "materials": "Dot painting on MDF board",
-    "image": "/uploads/1770419392039-796012095.jpg",
+    "image": "https://chitrakalaarts-production.up.railway.app/uploads/1770419392039-796012095.jpg",
     "featured": false,
     "createdAt": "2026-02-06T23:09:52.051Z"
   },
@@ -31,7 +31,7 @@
     "price": 4000,
     "size": "12\" x 12\"",
     "materials": "Dot painting on MDF board",
-    "image": "/uploads/1770419460836-250629339.jpg",
+    "image": "https://chitrakalaarts-production.up.railway.app/uploads/1770419460836-250629339.jpg",
     "featured": false,
     "createdAt": "2026-02-06T23:11:00.850Z"
   },
@@ -43,7 +43,7 @@
     "price": 4000,
     "size": "12\" x 12\"",
     "materials": "Dot painting on MDF board",
-    "image": "/uploads/1770419511367-771759308.jpg",
+    "image": "https://chitrakalaarts-production.up.railway.app/uploads/1770419511367-771759308.jpg",
     "featured": false,
     "createdAt": "2026-02-06T23:11:51.388Z"
   }
