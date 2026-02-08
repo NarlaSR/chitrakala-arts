@@ -55,16 +55,19 @@ chitrakala_arts/
 ## Installation
 
 1. Clone or navigate to the project directory:
+
 ```bash
 cd chitrakala_arts
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Start the development server:
+
 ```bash
 npm start
 ```
@@ -74,12 +77,15 @@ The application will open in your browser at `http://localhost:3000`
 ## Art Categories
 
 ### 1. Dot Mandala Art
+
 Intricate dot patterns creating beautiful mandala designs that bring harmony and balance to your space.
 
 ### 2. Lippan Art
+
 Traditional mirror and clay work art from Gujarat, featuring geometric patterns and reflective beauty.
 
 ### 3. Textile Designing
+
 Hand-painted and designed textile pieces that blend traditional techniques with contemporary aesthetics.
 
 ## Adding New Artwork
@@ -108,21 +114,24 @@ To add new artwork to the portfolio:
 ## Customization
 
 ### Colors
+
 Modify the color scheme by updating CSS variables in `src/styles/index.css`:
 
 ```css
 :root {
-  --primary-color: #8B4513;
-  --secondary-color: #D4AF37;
-  --accent-color: #C19A6B;
+  --primary-color: #8b4513;
+  --secondary-color: #d4af37;
+  --accent-color: #c19a6b;
   /* ... other colors */
 }
 ```
 
 ### Navigation
+
 Update navigation links in `src/components/Header.js`
 
 ### Footer
+
 Customize footer content and links in `src/components/Footer.js`
 
 ## Build for Production

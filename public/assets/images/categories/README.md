@@ -29,6 +29,7 @@ You need to add **3 category images** to showcase each art category on the homep
 ## How to Add Images
 
 ### Option 1: PNG Format (Recommended for Quality)
+
 1. Save your images as:
    - `dot-mandala.png`
    - `lippan-art.png`
@@ -37,6 +38,7 @@ You need to add **3 category images** to showcase each art category on the homep
 2. Place them in: `public/assets/images/categories/`
 
 ### Option 2: JPG Format (Smaller File Size)
+
 1. Save your images as:
    - `dot-mandala.jpg`
    - `lippan-art.jpg`
@@ -47,6 +49,7 @@ You need to add **3 category images** to showcase each art category on the homep
 3. Place them in: `public/assets/images/categories/`
 
 ### Mixing Formats
+
 You can use different formats for different categories! Just update the file extension in `src/data/artData.js` to match your actual file:
 
 ```javascript
@@ -60,6 +63,7 @@ You can use different formats for different categories! Just update the file ext
 ## Temporary Placeholder
 
 Until you add the images, the site will display:
+
 - 🎨 Colorful gradient background
 - Category name
 - No broken image icon
@@ -81,4 +85,3 @@ This ensures your site looks professional even without images yet.
 - **WEBP**: Modern format, smaller size with good quality (if browser supports)
 
 Choose the format that works best for your needs - all common image formats are supported!
-

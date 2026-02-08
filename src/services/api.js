@@ -66,4 +66,26 @@ export const artworksAPI = {
   }
 };
 
+// About Page
+export const aboutAPI = {
+  get: async () => {
+    const response = await api.get('/about');
+    return response.data;
+  },
+  
+  update: async (data) => {
+    const response = await api.put('/about', data);
+    return response.data;
+  },
+  
+  uploadImage: async (imageFile) => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    const response = await api.post('/about/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  }
+};
+
 export default api;

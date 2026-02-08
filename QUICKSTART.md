@@ -3,6 +3,7 @@
 ## ✅ Setup Complete!
 
 Your interactive art portfolio application is ready with:
+
 - ✨ Frontend React app
 - 🔧 Backend Express server
 - 🔐 Admin authentication
@@ -14,6 +15,7 @@ Your interactive art portfolio application is ready with:
 ## 🚀 How to Start
 
 ### Option 1: Automatic Start (Windows PowerShell)
+
 ```powershell
 .\start.ps1
 ```
@@ -21,12 +23,14 @@ Your interactive art portfolio application is ready with:
 ### Option 2: Manual Start
 
 **Terminal 1 - Backend:**
+
 ```bash
 cd server
 npm start
 ```
 
 **Terminal 2 - Frontend:**
+
 ```bash
 npm start
 ```
@@ -53,10 +57,12 @@ npm start
 ## 📝 Quick Admin Guide
 
 ### 1. Login
+
 - Go to http://localhost:3000/admin/login
 - Enter credentials above
 
 ### 2. Add Artwork
+
 - Click "+ Add New Artwork"
 - Fill in the form:
   - **Title**: Name of artwork
@@ -70,6 +76,7 @@ npm start
 - Click "Create Artwork"
 
 ### 3. Edit Artwork
+
 - Find artwork in table
 - Click "Edit"
 - Update fields as needed
@@ -77,6 +84,7 @@ npm start
 - Click "Update Artwork"
 
 ### 4. Delete Artwork
+
 - Find artwork in table
 - Click "Delete"
 - Confirm deletion
@@ -86,12 +94,14 @@ npm start
 ## 🎯 Features You Can Use
 
 ### For Visitors:
+
 - Browse artwork by category
 - View detailed artwork information
 - See prices and specifications
 - Contact form
 
 ### For Admin:
+
 - Secure login/logout
 - Upload artwork images
 - Set prices
@@ -112,21 +122,26 @@ npm start
 ## 🔧 Troubleshooting
 
 ### "Port already in use"
+
 If ports are busy:
+
 ```bash
 # In server/server.js, change:
 const PORT = process.env.PORT || 5001;  # Change 5000 to 5001
 ```
 
 ### "Cannot connect to API"
+
 Make sure backend server is running on port 5000.
 
 ### "Images not showing"
+
 1. Check backend server is running
 2. Verify images in `server/uploads/` folder
 3. Check browser console for errors
 
 ### Frontend won't start
+
 1. Stop existing React server
 2. Delete `node_modules` and run `npm install`
 3. Run `npm start` again
@@ -156,6 +171,7 @@ Make sure backend server is running on port 5000.
 ## 🆘 Need Help?
 
 Check the main README.md for:
+
 - API endpoints
 - Detailed documentation
 - Security notes

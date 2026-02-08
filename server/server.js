@@ -52,6 +52,7 @@ const upload = multer({
 const DATA_DIR = path.join(__dirname, 'data');
 const ARTWORKS_FILE = path.join(DATA_DIR, 'artworks.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const ABOUT_FILE = path.join(DATA_DIR, 'about.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -101,6 +102,16 @@ const readUsers = () => {
   if (!fs.existsSync(USERS_FILE)) return [];
   const data = fs.readFileSync(USERS_FILE, 'utf8');
   return JSON.parse(data);
+};
+
+const readAbout = () => {
+  if (!fs.existsSync(ABOUT_FILE)) return null;
+  const data = fs.readFileSync(ABOUT_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const writeAbout = (aboutData) => {
+  fs.writeFileSync(ABOUT_FILE, JSON.stringify(aboutData, null, 2));
 };
 
 // Middleware to verify JWT token
@@ -303,6 +314,49 @@ app.delete('/api/artworks/:id', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('Error deleting artwork:', error);
     res.status(500).json({ error: 'Failed to delete artwork' });
+  }
+});
+
+// About Page Routes
+
+// Get about page content (public)
+app.get('/api/about', (req, res) => {
+  try {
+    const about = readAbout();
+    if (!about) {
+      return res.status(404).json({ error: 'About page content not found' });
+    }
+    res.json(about);
+  } catch (error) {
+    console.error('Error reading about page:', error);
+    res.status(500).json({ error: 'Failed to fetch about page' });
+  }
+});
+
+// Update about page content (admin only)
+app.put('/api/about', authenticateToken, (req, res) => {
+  try {
+    const aboutData = req.body;
+    writeAbout(aboutData);
+    res.json({ message: 'About page updated successfully', data: aboutData });
+  } catch (error) {
+    console.error('Error updating about page:', error);
+    res.status(500).json({ error: 'Failed to update about page' });
+  }
+});
+
+// Upload story image (admin only)
+app.post('/api/about/upload-image', authenticateToken, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    const imageUrl = `${BASE_URL}/uploads/${req.file.filename}`;
+    res.json({ imageUrl });
+  } catch (error) {
+    console.error('Error uploading story image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
   }
 });
 

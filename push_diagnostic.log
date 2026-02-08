@@ -1,0 +1,86 @@
+============================================ 
+Git Diagnostic Report 
+Generated: Sun 02/08/2026 12:02:33.02 
+============================================ 
+ 
+=== Current Git Status === 
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   ADMIN_ACCESS.md
+	modified:   PROJECT_DOCUMENTATION.md
+	modified:   QUICKSTART.md
+	modified:   README.md
+	modified:   public/assets/images/LOGO_INSTRUCTIONS.md
+	modified:   public/assets/images/README.md
+	modified:   public/assets/images/categories/README.md
+	modified:   push_to_github.bat
+	modified:   server/server.js
+	modified:   src/App.js
+	modified:   src/pages/About.js
+	modified:   src/pages/AdminDashboard.js
+	modified:   src/services/api.js
+	modified:   src/styles/About.css
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	check_status.bat
+	diagnostic.bat
+	git_info.bat
+	push_diagnostic.log
+	server/data/about.json
+	src/pages/AdminAboutPage.js
+	src/styles/AdminAbout.css
+
+no changes added to commit (use "git add" and/or "git commit -a")
+ 
+=== Last 5 Commits === 
+a1bafdc Fix ESLint errors for Vercel build
+a83bfc6 Force Vercel webhook trigger
+f2ab47f Trigger Vercel deployment - Frontend and database fixes
+64d79e8 Fix database URLs to use full Railway URLs
+2791c30 Fix frontend to use full image URLs from backend
+ 
+=== Last Commit Details === 
+commit a1bafdc72e012b8d982fe9b3d8182ed74eba0e00
+Author: NarlaSR <snarla369@gmail.com>
+Date:   Sat Feb 7 14:52:29 2026 -0500
+
+    Fix ESLint errors for Vercel build
+
+ push_to_github.bat          | 4 ++--
+ src/components/Footer.js    | 6 +++---
+ src/pages/AdminDashboard.js | 1 +
+ 3 files changed, 6 insertions(+), 5 deletions(-)
+ 
+=== Check if local is ahead of remote === 
+## main...origin/main
+ M ADMIN_ACCESS.md
+ M PROJECT_DOCUMENTATION.md
+ M QUICKSTART.md
+ M README.md
+ M public/assets/images/LOGO_INSTRUCTIONS.md
+ M public/assets/images/README.md
+ M public/assets/images/categories/README.md
+ M push_to_github.bat
+ M server/server.js
+ M src/App.js
+ M src/pages/About.js
+ M src/pages/AdminDashboard.js
+ M src/services/api.js
+ M src/styles/About.css
+?? check_status.bat
+?? diagnostic.bat
+?? git_info.bat
+?? push_diagnostic.log
+?? server/data/about.json
+?? src/pages/AdminAboutPage.js
+?? src/styles/AdminAbout.css
+ 
+=== Remote URL === 
+origin	https://github.com/NarlaSR/chitrakala-arts.git (fetch)
+origin	https://github.com/NarlaSR/chitrakala-arts.git (push)
+ 

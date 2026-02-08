@@ -10,6 +10,7 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminAboutPage from './pages/AdminAboutPage';
 import './styles/App.css';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
             {/* Admin Routes - Hidden paths for security */}
             <Route path="/ckk-secure-admin" element={<AdminLogin />} />
             <Route path="/ckk-secure-admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/ckk-secure-admin/about" element={<AdminAboutPage />} />
             
             {/* Public Routes */}
             <Route path="/*" element={

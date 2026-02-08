@@ -58,6 +58,20 @@
   margin: 0;
 }
 
+.story-image {
+  margin-top: 2rem;
+  max-width: 500px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.story-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 @media (max-width: 768px) {
   .about-hero {
     padding: 3rem 1rem;

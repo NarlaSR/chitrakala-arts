@@ -1,6 +1,7 @@
 # Chitra's Kala Kreations - Complete Application Documentation
 
 ## 📋 Table of Contents
+
 - [Overview](#overview)
 - [Features](#features)
 - [Technology Stack](#technology-stack)
@@ -22,6 +23,7 @@
 **Chitra's Kala Kreations** is a full-stack interactive art portfolio web application built with React and Express.js. It showcases handcrafted artworks in three main categories: Dot Mandala Art, Lippan Art, and Textile Designing.
 
 The application features:
+
 - Public-facing website for browsing artwork
 - Secure admin dashboard for content management
 - Image upload functionality
@@ -34,6 +36,7 @@ The application features:
 ## ✨ Features
 
 ### Public Features
+
 - **Browse Artwork**: View artworks organized by categories
 - **Detailed Views**: See artwork with descriptions, prices, sizes, and materials
 - **Featured Section**: Highlighted artworks on homepage
@@ -43,6 +46,7 @@ The application features:
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
 
 ### Admin Features
+
 - **Secure Authentication**: JWT-based login system
 - **Dashboard**: Manage all artworks from a central location
 - **Upload Images**: Upload artwork photos (up to 5MB)
@@ -58,6 +62,7 @@ The application features:
 ## 🛠️ Technology Stack
 
 ### Frontend
+
 - **React** 18.2.0 - UI library
 - **React Router DOM** 6.20.0 - Client-side routing
 - **Axios** 1.6.2 - HTTP client for API calls
@@ -65,6 +70,7 @@ The application features:
 - **React Context API** - State management for authentication
 
 ### Backend
+
 - **Node.js** - Runtime environment
 - **Express.js** 4.18.2 - Web server framework
 - **JWT** (jsonwebtoken 9.0.2) - Authentication tokens
@@ -73,6 +79,7 @@ The application features:
 - **CORS** 2.8.5 - Cross-origin resource sharing
 
 ### Storage
+
 - **JSON Files** - Lightweight data storage
 - **File System** - Image storage
 
@@ -157,17 +164,20 @@ chitrakala_arts/
 ## 🚀 Installation & Setup
 
 ### Prerequisites
+
 - **Node.js** (v14 or higher)
 - **npm** (comes with Node.js)
 - **Git** (optional, for version control)
 
 ### Step 1: Install Frontend Dependencies
+
 ```bash
 cd chitrakala_arts
 npm install
 ```
 
 This installs:
+
 - react
 - react-dom
 - react-router-dom
@@ -175,12 +185,14 @@ This installs:
 - react-scripts
 
 ### Step 2: Install Backend Dependencies
+
 ```bash
 cd server
 npm install
 ```
 
 This installs:
+
 - express
 - cors
 - jsonwebtoken
@@ -188,10 +200,13 @@ This installs:
 - multer
 
 ### Step 3: Add Your Logo (Optional)
+
 Place your logo image at:
+
 ```
 public/assets/images/logo.png
 ```
+
 Recommended size: 280x280px (PNG format with transparency)
 
 ---
@@ -199,11 +214,13 @@ Recommended size: 280x280px (PNG format with transparency)
 ## 🎬 Running the Application
 
 ### Option 1: Automatic Start (Windows)
+
 ```powershell
 .\start.ps1
 ```
 
 This script will:
+
 1. Start the backend server on port 5000
 2. Start the frontend on port 3000
 3. Open both in separate terminal windows
@@ -211,19 +228,24 @@ This script will:
 ### Option 2: Manual Start
 
 **Terminal 1 - Backend Server:**
+
 ```bash
 cd server
 npm start
 ```
+
 Server runs at: http://localhost:5000
 
 **Terminal 2 - Frontend Application:**
+
 ```bash
 npm start
 ```
+
 Frontend runs at: http://localhost:3000
 
 ### Access URLs
+
 - **Public Website**: http://localhost:3000
 - **Admin Login**: http://localhost:3000/admin/login
 - **Backend API**: http://localhost:5000/api
@@ -246,6 +268,7 @@ Frontend runs at: http://localhost:3000
 ### Dashboard Overview
 
 After login, you'll see:
+
 - **Total artworks count**
 - **Add New Artwork button**
 - **Artworks table** with all entries
@@ -300,6 +323,7 @@ Click **"Logout"** button in the top right of the dashboard
 ## 🔌 API Documentation
 
 ### Base URL
+
 ```
 http://localhost:5000/api
 ```
@@ -307,9 +331,11 @@ http://localhost:5000/api
 ### Authentication Endpoints
 
 #### POST /api/auth/login
+
 Login to admin account
 
 **Request Body:**
+
 ```json
 {
   "username": "admin",
@@ -318,6 +344,7 @@ Login to admin account
 ```
 
 **Response (Success):**
+
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -330,6 +357,7 @@ Login to admin account
 ```
 
 **Response (Error):**
+
 ```json
 {
   "error": "Invalid credentials"
@@ -337,14 +365,17 @@ Login to admin account
 ```
 
 #### GET /api/auth/verify
+
 Verify JWT token validity
 
 **Headers:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```json
 {
   "valid": true,
@@ -359,9 +390,11 @@ Authorization: Bearer <token>
 ### Artwork Endpoints
 
 #### GET /api/artworks
+
 Get all artworks (public)
 
 **Response:**
+
 ```json
 [
   {
@@ -380,9 +413,11 @@ Get all artworks (public)
 ```
 
 #### GET /api/artworks/:id
+
 Get specific artwork by ID (public)
 
 **Response:**
+
 ```json
 {
   "id": "art-1234567890",
@@ -398,15 +433,18 @@ Get specific artwork by ID (public)
 ```
 
 #### POST /api/artworks
+
 Create new artwork (admin only)
 
 **Headers:**
+
 ```
 Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
 **Form Data:**
+
 - title: string (required)
 - category: string (required)
 - description: string (required)
@@ -417,6 +455,7 @@ Content-Type: multipart/form-data
 - featured: boolean (optional, default: false)
 
 **Response:**
+
 ```json
 {
   "id": "art-1234567890",
@@ -429,15 +468,18 @@ Content-Type: multipart/form-data
 ```
 
 #### PUT /api/artworks/:id
+
 Update existing artwork (admin only)
 
 **Headers:**
+
 ```
 Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
 **Form Data:** (all optional)
+
 - title: string
 - category: string
 - description: string
@@ -448,6 +490,7 @@ Content-Type: multipart/form-data
 - featured: boolean
 
 **Response:**
+
 ```json
 {
   "id": "art-1234567890",
@@ -457,14 +500,17 @@ Content-Type: multipart/form-data
 ```
 
 #### DELETE /api/artworks/:id
+
 Delete artwork (admin only)
 
 **Headers:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Artwork deleted successfully"
@@ -487,15 +533,17 @@ JWT_SECRET=your-super-secret-key-change-this-in-production
 ### Default Admin Credentials
 
 Located in `server/server.js`:
+
 ```javascript
 const defaultAdmin = {
-  id: 'admin-1',
-  username: 'admin',
-  password: await bcrypt.hash('admin123', 10)
+  id: "admin-1",
+  username: "admin",
+  password: await bcrypt.hash("admin123", 10),
 };
 ```
 
 To change:
+
 1. Delete `server/data/users.json`
 2. Modify credentials in `server/server.js`
 3. Restart server
@@ -503,6 +551,7 @@ To change:
 ### File Upload Limits
 
 In `server/server.js`:
+
 ```javascript
 const upload = multer({
   storage: storage,
@@ -510,23 +559,27 @@ const upload = multer({
   fileFilter: function (req, file, cb) {
     const filetypes = /jpeg|jpg|png|gif/;
     // ... validation
-  }
+  },
 });
 ```
 
 ### CORS Configuration
 
 In `server/server.js`:
+
 ```javascript
 app.use(cors()); // Allow all origins in development
 ```
 
 For production:
+
 ```javascript
-app.use(cors({
-  origin: 'https://yourdomain.com',
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: "https://yourdomain.com",
+    credentials: true,
+  }),
+);
 ```
 
 ---
@@ -536,22 +589,24 @@ app.use(cors({
 ### Color Scheme
 
 Edit `src/styles/index.css`:
+
 ```css
 :root {
-  --primary-color: #8B4513;      /* Brown */
-  --secondary-color: #D4AF37;    /* Gold */
-  --accent-color: #C19A6B;       /* Tan */
-  --text-dark: #2C2C2C;          /* Dark Gray */
-  --text-light: #666;            /* Light Gray */
-  --bg-light: #F9F6F1;           /* Cream */
-  --white: #FFFFFF;
-  --border-color: #E5E5E5;
+  --primary-color: #8b4513; /* Brown */
+  --secondary-color: #d4af37; /* Gold */
+  --accent-color: #c19a6b; /* Tan */
+  --text-dark: #2c2c2c; /* Dark Gray */
+  --text-light: #666; /* Light Gray */
+  --bg-light: #f9f6f1; /* Cream */
+  --white: #ffffff;
+  --border-color: #e5e5e5;
 }
 ```
 
 ### Site Name
 
 Already updated to "Chitra's Kala Kreations" in:
+
 - `src/components/Header.js`
 - `src/pages/Home.js`
 - `public/index.html` (update title tag)
@@ -559,6 +614,7 @@ Already updated to "Chitra's Kala Kreations" in:
 ### Logo
 
 Replace: `public/assets/images/logo.png`
+
 - Desktop hero: 280x280px
 - Header: 80x80px (auto-scaled)
 - Mobile hero: 180x180px
@@ -567,14 +623,15 @@ Replace: `public/assets/images/logo.png`
 ### Categories
 
 Add new categories in `src/data/artData.js`:
+
 ```javascript
 export const categories = [
   {
-    id: 'new-category',
-    name: 'New Category Name',
-    description: 'Description here',
-    image: '/assets/images/categories/new-category.jpg'
-  }
+    id: "new-category",
+    name: "New Category Name",
+    description: "Description here",
+    image: "/assets/images/categories/new-category.jpg",
+  },
 ];
 ```
 
@@ -585,6 +642,7 @@ Then add route in `src/App.js` navigation.
 ## 🔒 Security
 
 ### Current Security Features
+
 - JWT token authentication
 - Password hashing with bcrypt
 - File upload validation (type and size)
@@ -594,12 +652,14 @@ Then add route in `src/App.js` navigation.
 ### Security Best Practices for Production
 
 1. **Change Default Credentials**
+
    ```javascript
    // In server/server.js
-   password: await bcrypt.hash('STRONG_PASSWORD_HERE', 10)
+   password: await bcrypt.hash("STRONG_PASSWORD_HERE", 10);
    ```
 
 2. **Use Strong JWT Secret**
+
    ```env
    JWT_SECRET=use-a-long-random-string-at-least-32-characters
    ```
@@ -609,16 +669,19 @@ Then add route in `src/App.js` navigation.
    - Configure reverse proxy (Nginx)
 
 4. **Implement Rate Limiting**
+
    ```bash
    npm install express-rate-limit
    ```
 
 5. **Add Input Validation**
+
    ```bash
    npm install express-validator
    ```
 
 6. **Secure Headers**
+
    ```bash
    npm install helmet
    ```
@@ -642,6 +705,7 @@ Then add route in `src/App.js` navigation.
 **Problem**: Error: listen EADDRINUSE: address already in use :::5000
 
 **Solution**:
+
 ```bash
 # Change port in server/server.js
 const PORT = process.env.PORT || 5001;
@@ -652,6 +716,7 @@ const PORT = process.env.PORT || 5001;
 **Problem**: Network Error or CORS errors
 
 **Solution**:
+
 1. Ensure backend is running on port 5000
 2. Check `proxy` in `package.json`: `"proxy": "http://localhost:5000"`
 3. Verify CORS is enabled in `server/server.js`
@@ -661,6 +726,7 @@ const PORT = process.env.PORT || 5001;
 **Problem**: Images show broken icon
 
 **Solution**:
+
 1. Check backend server is running
 2. Verify images exist in `server/uploads/`
 3. Check image URLs in browser console
@@ -671,6 +737,7 @@ const PORT = process.env.PORT || 5001;
 **Problem**: "Invalid credentials" error
 
 **Solution**:
+
 1. Verify username: `admin` and password: `admin123`
 2. Check `server/data/users.json` exists
 3. Delete users.json and restart server to recreate default admin
@@ -681,6 +748,7 @@ const PORT = process.env.PORT || 5001;
 **Problem**: Cannot find module 'axios' or similar
 
 **Solution**:
+
 ```bash
 # Reinstall dependencies
 rm -rf node_modules
@@ -692,6 +760,7 @@ npm install
 **Problem**: Compilation errors
 
 **Solution**:
+
 1. Delete `node_modules` and `package-lock.json`
 2. Run `npm install`
 3. Check for syntax errors in recent changes
@@ -702,6 +771,7 @@ npm install
 **Problem**: Error uploading images
 
 **Solution**:
+
 1. Check file size (must be under 5MB)
 2. Verify file type (JPG, PNG, GIF only)
 3. Ensure `server/uploads/` directory exists
@@ -738,15 +808,16 @@ This creates optimized production build in `build/` directory.
 ### Serve Frontend from Backend
 
 In `server/server.js`:
+
 ```javascript
-const path = require('path');
+const path = require("path");
 
 // Serve static files from React build
-app.use(express.static(path.join(__dirname, '../build')));
+app.use(express.static(path.join(__dirname, "../build")));
 
 // Handle React routing
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../build/index.html'));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../build/index.html"));
 });
 ```
 
@@ -755,32 +826,37 @@ app.get('*', (req, res) => {
 Replace JSON files with a real database:
 
 **PostgreSQL Example:**
+
 ```javascript
-const { Pool } = require('pg');
+const { Pool } = require("pg");
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
+  connectionString: process.env.DATABASE_URL,
 });
 ```
 
 **MongoDB Example:**
+
 ```javascript
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 mongoose.connect(process.env.MONGODB_URI);
 ```
 
 ### Cloud Storage for Images
 
 **AWS S3 Example:**
+
 ```javascript
-const AWS = require('aws-sdk');
+const AWS = require("aws-sdk");
 const s3 = new AWS.S3();
 
 const uploadToS3 = (file) => {
-  return s3.upload({
-    Bucket: process.env.S3_BUCKET,
-    Key: file.filename,
-    Body: file.buffer
-  }).promise();
+  return s3
+    .upload({
+      Bucket: process.env.S3_BUCKET,
+      Key: file.filename,
+      Body: file.buffer,
+    })
+    .promise();
 };
 ```
 
@@ -858,6 +934,7 @@ tar -czf backups/uploads-$(date +%Y%m%d).tar.gz server/uploads/
 ### Monitoring
 
 Recommended tools:
+
 - **Uptime**: UptimeRobot, Pingdom
 - **Analytics**: Google Analytics, Plausible
 - **Errors**: Sentry, LogRocket
@@ -874,6 +951,7 @@ This project was created for Chitra's Kala Kreations portfolio purposes.
 ## 🎉 Conclusion
 
 You now have a complete, interactive art portfolio website with:
+
 - Beautiful public-facing pages
 - Secure admin dashboard
 - Image upload and management
@@ -882,6 +960,7 @@ You now have a complete, interactive art portfolio website with:
 - Professional styling
 
 **Next Steps:**
+
 1. Add your logo to `public/assets/images/logo.png`
 2. Login to admin dashboard
 3. Upload your first artwork
@@ -892,4 +971,4 @@ You now have a complete, interactive art portfolio website with:
 
 **Built with ❤️ for Chitra's Kala Kreations**
 
-*Last Updated: February 6, 2026*
+_Last Updated: February 6, 2026_
