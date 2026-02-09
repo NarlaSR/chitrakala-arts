@@ -437,16 +437,17 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       `
     };
 
-    // Send email via Resend
+    // Send email via Resend (must use array for 'to' field, not comma-separated string)
+    console.log('Sending email to:', adminEmails);
     const result = await resend.emails.send({
       from: 'Chitrakala Arts <onboarding@resend.dev>',
-      to: adminEmails,
+      to: adminEmails, // Array format required by Resend
       replyTo: email,
       subject: `New Contact Form: ${subject}`,
       html: mailOptions.html
     });
 
-    console.log('Email sent successfully via Resend:', result.id);
+    console.log('Email sent successfully via Resend. ID:', result.data?.id || result.id || 'N/A');
     res.json({ message: 'Message sent successfully!' });
   } catch (error) {
     console.error('Error sending message:', error);
