@@ -5,8 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
-const rateLimit = require('express-rate-limit');
+const { Resend } = require('resend');
+const { rateLimit } = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
