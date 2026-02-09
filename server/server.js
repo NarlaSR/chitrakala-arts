@@ -13,6 +13,9 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 
+// Trust Railway proxy to get correct IP addresses for rate limiting
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
