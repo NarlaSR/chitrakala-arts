@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -53,6 +55,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const ARTWORKS_FILE = path.join(DATA_DIR, 'artworks.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const ABOUT_FILE = path.join(DATA_DIR, 'about.json');
+const CONTACT_FILE = path.join(DATA_DIR, 'contact.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -113,6 +116,34 @@ const readAbout = () => {
 const writeAbout = (aboutData) => {
   fs.writeFileSync(ABOUT_FILE, JSON.stringify(aboutData, null, 2));
 };
+
+const readContact = () => {
+  if (!fs.existsSync(CONTACT_FILE)) return null;
+  const data = fs.readFileSync(CONTACT_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const writeContact = (contactData) => {
+  fs.writeFileSync(CONTACT_FILE, JSON.stringify(contactData, null, 2));
+};
+
+// Configure nodemailer
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  }
+});
+
+// Rate limiter for contact form (3 submissions per hour per IP)
+const contactLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  message: { error: 'Too many messages sent. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -314,6 +345,108 @@ app.delete('/api/artworks/:id', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('Error deleting artwork:', error);
     res.status(500).json({ error: 'Failed to delete artwork' });
+  }
+});
+
+// Contact Page Routes
+
+// Get contact info (public)
+app.get('/api/contact', (req, res) => {
+  try {
+    const contact = readContact();
+    if (!contact) {
+      return res.status(404).json({ error: 'Contact information not found' });
+    }
+    res.json(contact);
+  } catch (error) {
+    console.error('Error reading contact info:', error);
+    res.status(500).json({ error: 'Failed to fetch contact information' });
+  }
+});
+
+// Update contact info (admin only)
+app.put('/api/contact', authenticateToken, (req, res) => {
+  try {
+    const contactData = req.body;
+    writeContact(contactData);
+    res.json({ message: 'Contact information updated successfully', data: contactData });
+  } catch (error) {
+    console.error('Error updating contact info:', error);
+    res.status(500).json({ error: 'Failed to update contact information' });
+  }
+});
+
+// Send contact form message with spam prevention
+app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
+  try {
+    const { name, email, subject, message, honeypot, timestamp } = req.body;
+
+    // Spam prevention checks
+    // 1. Honeypot field should be empty (hidden field only bots fill)
+    if (honeypot) {
+      return res.status(400).json({ error: 'Spam detected' });
+    }
+
+    // 2. Check if form was filled too quickly (less than 3 seconds = likely bot)
+    const submissionTime = Date.now();
+    if (timestamp && (submissionTime - timestamp < 3000)) {
+      return res.status(400).json({ error: 'Form submitted too quickly' });
+    }
+
+    // 3. Validate required fields
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // 4. Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // 5. Message minimum length (prevent spam like "hi", "test")
+    if (message.trim().length < 20) {
+      return res.status(400).json({ error: 'Message must be at least 20 characters long' });
+    }
+
+    // Get admin emails from contact data
+    const contactData = readContact();
+    const adminEmails = contactData?.emails || ['snarla369@gmail.com'];
+
+    // Prepare email content
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: adminEmails.join(', '),
+      replyTo: email,
+      subject: `New Contact Form: ${subject}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #8b5a3c;">New Contact Form Submission</h2>
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Subject:</strong> ${subject}</p>
+          </div>
+          <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+            <p><strong>Message:</strong></p>
+            <p style="white-space: pre-wrap;">${message}</p>
+          </div>
+          <div style="margin-top: 20px; padding: 10px; background-color: #f9f9f9; border-radius: 5px; font-size: 12px; color: #666;">
+            <p><strong>Submission Details:</strong></p>
+            <p>IP Address: ${req.ip}</p>
+            <p>Time: ${new Date().toLocaleString()}</p>
+          </div>
+        </div>
+      `
+    };
+
+    // Send email
+    await transporter.sendMail(mailOptions);
+
+    res.json({ message: 'Message sent successfully!' });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Failed to send message. Please try again later.' });
   }
 });
 

@@ -11,6 +11,7 @@ import Contact from './pages/Contact';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminAboutPage from './pages/AdminAboutPage';
+import AdminContactPage from './pages/AdminContactPage';
 import './styles/App.css';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/ckk-secure-admin" element={<AdminLogin />} />
             <Route path="/ckk-secure-admin/dashboard" element={<AdminDashboard />} />
             <Route path="/ckk-secure-admin/about" element={<AdminAboutPage />} />
+            <Route path="/ckk-secure-admin/contact" element={<AdminContactPage />} />
             
             {/* Public Routes */}
             <Route path="/*" element={
