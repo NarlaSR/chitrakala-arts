@@ -439,6 +439,13 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
 
     // Send email via Resend (must use array for 'to' field, not comma-separated string)
     console.log('Sending email to:', adminEmails);
+    console.log('Email request:', {
+      from: 'Chitrakala Arts <onboarding@resend.dev>',
+      to: adminEmails,
+      replyTo: email,
+      subject: `New Contact Form: ${subject}`
+    });
+    
     const result = await resend.emails.send({
       from: 'Chitrakala Arts <onboarding@resend.dev>',
       to: adminEmails, // Array format required by Resend
@@ -447,6 +454,7 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       html: mailOptions.html
     });
 
+    console.log('Resend API response:', JSON.stringify(result, null, 2));
     console.log('Email sent successfully via Resend. ID:', result.data?.id || result.id || 'N/A');
     res.json({ message: 'Message sent successfully!' });
   } catch (error) {
