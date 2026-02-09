@@ -437,18 +437,21 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       `
     };
 
-    // Send email via Resend (must use array for 'to' field, not comma-separated string)
-    console.log('Sending email to:', adminEmails);
+    // NOTE: Resend's test domain (onboarding@resend.dev) can only send to verified email addresses
+    // Currently sending to first email only. To send to all addresses, verify a custom domain in Resend.
+    const recipientEmail = [adminEmails[0]]; // Use only first (verified) email for now
+    
+    console.log('Sending email to:', recipientEmail, '(from', adminEmails.length, 'total)');
     console.log('Email request:', {
       from: 'Chitrakala Arts <onboarding@resend.dev>',
-      to: adminEmails,
+      to: recipientEmail,
       replyTo: email,
       subject: `New Contact Form: ${subject}`
     });
     
     const result = await resend.emails.send({
       from: 'Chitrakala Arts <onboarding@resend.dev>',
-      to: adminEmails, // Array format required by Resend
+      to: recipientEmail, // Array with single verified email
       replyTo: email,
       subject: `New Contact Form: ${subject}`,
       html: mailOptions.html
