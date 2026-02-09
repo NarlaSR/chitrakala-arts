@@ -133,8 +133,8 @@ const writeContact = (contactData) => {
 // Configure nodemailer with explicit SMTP settings for better Railway compatibility
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // Use STARTTLS
+  port: 465,
+  secure: true, // Use SSL
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD
@@ -143,7 +143,9 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false
   },
   connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000
+  greetingTimeout: 10000,
+  // Force IPv4 to avoid Railway network issues
+  family: 4
 });
 
 // Rate limiter for contact form (3 submissions per hour per IP)
