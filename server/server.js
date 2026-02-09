@@ -130,23 +130,8 @@ const writeContact = (contactData) => {
   fs.writeFileSync(CONTACT_FILE, JSON.stringify(contactData, null, 2));
 };
 
-// Configure nodemailer with explicit SMTP settings for better Railway compatibility
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // Use SSL
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  // Force IPv4 to avoid Railway network issues
-  family: 4
-});
+// Configure Resend for email sending (HTTP-based, bypasses Railway SMTP blocking)
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Rate limiter for contact form (3 submissions per hour per IP)
 const contactLimiter = rateLimit({
@@ -452,8 +437,14 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       `
     };
 
-    // Send email
-    await transporter.sendMail(mailOptions);
+    // Send email via Resend
+    await resend.emails.send({
+      from: 'Chitrakala Arts <onboarding@resend.dev>',
+      to: adminEmails,
+      reply_to: email,
+      subject: `New Contact Form: ${subject}`,
+      html: mailOptions.html
+    });
 
     res.json({ message: 'Message sent successfully!' });
   } catch (error) {

@@ -2,14 +2,14 @@
 cd /d C:\Development\workspace\chitrakala_arts
 echo.
 echo ====================================
-echo   PUSHING PROXY FIX TO GITHUB
+echo   PUSHING RESEND EMAIL TO GITHUB
 echo ====================================
 echo.
 echo [1/4] Adding all files...
 git add .
 echo.
 echo [2/4] Committing changes...
-git commit -m "Fix rate limiter proxy configuration for Railway"
+git commit -m "Switch from Gmail SMTP to Resend HTTP API for Railway compatibility"
 echo.
 echo [3/4] Pushing to GitHub...
 git push origin main
