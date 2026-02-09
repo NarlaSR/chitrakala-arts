@@ -438,17 +438,19 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
     };
 
     // Send email via Resend
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: 'Chitrakala Arts <onboarding@resend.dev>',
       to: adminEmails,
-      reply_to: email,
+      replyTo: email,
       subject: `New Contact Form: ${subject}`,
       html: mailOptions.html
     });
 
+    console.log('Email sent successfully via Resend:', result.id);
     res.json({ message: 'Message sent successfully!' });
   } catch (error) {
     console.error('Error sending message:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     res.status(500).json({ error: 'Failed to send message. Please try again later.' });
   }
 });
