@@ -71,6 +71,15 @@ const contactLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Rate limiter for login endpoint (prevent brute force attacks)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per 15 minutes
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Initialize default admin user in database
 const initializeDefaultAdmin = async () => {
   try {
@@ -121,7 +130,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Auth Routes
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     
