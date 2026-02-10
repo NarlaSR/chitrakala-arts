@@ -146,6 +146,52 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
 });
 
+// Image serving routes (serve images from database)
+app.get('/api/images/artworks/:id', async (req, res) => {
+  try {
+    const imageData = await db.getArtworkImage(req.params.id);
+    if (!imageData || !imageData.image_data) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    res.setHeader('Content-Type', imageData.image_mime_type || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.send(imageData.image_data);
+  } catch (error) {
+    console.error('Error serving artwork image:', error);
+    res.status(500).json({ error: 'Failed to serve image' });
+  }
+});
+
+app.get('/api/images/about', async (req, res) => {
+  try {
+    const imageData = await db.getAboutImage();
+    if (!imageData || !imageData.story_image_data) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    res.setHeader('Content-Type', imageData.story_image_mime_type || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.send(imageData.story_image_data);
+  } catch (error) {
+    console.error('Error serving about image:', error);
+    res.status(500).json({ error: 'Failed to serve image' });
+  }
+});
+
+app.get('/api/images/logo', async (req, res) => {
+  try {
+    const imageData = await db.getLogoImage();
+    if (!imageData || !imageData.logo_data) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    res.setHeader('Content-Type', imageData.logo_mime_type || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.send(imageData.logo_data);
+  } catch (error) {
+    console.error('Error serving logo image:', error);
+    res.status(500).json({ error: 'Failed to serve image' });
+  }
+});
+
 // Artwork Routes
 
 // Get all artworks (public)
@@ -178,19 +224,30 @@ app.get('/api/artworks/:id', async (req, res) => {
 // Create new artwork (admin only)
 app.post('/api/artworks', authenticateToken, upload.single('image'), async (req, res) => {
   try {
+    const artworkId = `art-${Date.now()}`;
+    
     const newArtwork = {
-      id: `art-${Date.now()}`,
+      id: artworkId,
       title: req.body.title,
       category: req.body.category,
       description: req.body.description,
       price: parseFloat(req.body.price),
       dimensions: req.body.size,
       materials: req.body.materials,
-      image: req.file ? `${BASE_URL}/uploads/${req.file.filename}` : '',
+      image: req.file ? `${BASE_URL}/api/images/artworks/${artworkId}` : '',
       featured: req.body.featured === 'true'
     };
 
     const artwork = await db.createArtwork(newArtwork);
+    
+    // Store image in database if uploaded
+    if (req.file) {
+      const imageBuffer = fs.readFileSync(req.file.path);
+      await db.storeArtworkImage(artworkId, imageBuffer, req.file.mimetype);
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
+    }
+    
     res.status(201).json(artwork);
   } catch (error) {
     console.error('Error creating artwork:', error);
@@ -220,18 +277,14 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
 
     // Update image if new one is uploaded
     if (req.file) {
-      // Delete old image if exists
-      if (existingArtwork.image) {
-        const imageUrl = existingArtwork.image;
-        const filename = imageUrl.includes('/uploads/') 
-          ? imageUrl.split('/uploads/')[1] 
-          : imageUrl.replace('/uploads/', '');
-        const oldImagePath = path.join(__dirname, 'uploads', filename);
-        if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath);
-        }
-      }
-      updatedArtwork.image = `${BASE_URL}/uploads/${req.file.filename}`;
+      updatedArtwork.image = `${BASE_URL}/api/images/artworks/${req.params.id}`;
+      
+      // Store new image in database
+      const imageBuffer = fs.readFileSync(req.file.path);
+      await db.storeArtworkImage(req.params.id, imageBuffer, req.file.mimetype);
+      
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
     }
 
     const artwork = await db.updateArtwork(req.params.id, updatedArtwork);
@@ -393,21 +446,16 @@ app.put('/api/settings', authenticateToken, upload.single('developerLogo'), asyn
   try {
     const settingsData = JSON.parse(req.body.settings || '{}');
     
-    // If a new developer logo was uploaded, update the logo URL
+    // If a new developer logo was uploaded, store in database
     if (req.file) {
-      // Delete old logo if exists
-      const oldSettings = await db.getSettings();
-      if (oldSettings && oldSettings.developer && oldSettings.developer.logo) {
-        const oldLogoUrl = oldSettings.developer.logo;
-        if (oldLogoUrl.includes('/uploads/')) {
-          const filename = oldLogoUrl.split('/uploads/')[1];
-          const oldLogoPath = path.join(__dirname, 'uploads', filename);
-          if (fs.existsSync(oldLogoPath)) {
-            fs.unlinkSync(oldLogoPath);
-          }
-        }
-      }
-      settingsData.developer.logo = `${BASE_URL}/uploads/${req.file.filename}`;
+      settingsData.developer.logo = `${BASE_URL}/api/images/logo`;
+      
+      // Store logo in database
+      const imageBuffer = fs.readFileSync(req.file.path);
+      await db.storeLogoImage(imageBuffer, req.file.mimetype);
+      
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
     }
     
     await db.updateSettings(settingsData);
@@ -447,13 +495,20 @@ app.put('/api/about', authenticateToken, async (req, res) => {
 });
 
 // Upload story image (admin only)
-app.post('/api/about/upload-image', authenticateToken, upload.single('image'), (req, res) => {
+app.post('/api/about/upload-image', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
     }
     
-    const imageUrl = `${BASE_URL}/uploads/${req.file.filename}`;
+    // Store image in database
+    const imageBuffer = fs.readFileSync(req.file.path);
+    await db.storeAboutImage(imageBuffer, req.file.mimetype);
+    
+    // Delete temporary file
+    fs.unlinkSync(req.file.path);
+    
+    const imageUrl = `${BASE_URL}/api/images/about`;
     res.json({ imageUrl });
   } catch (error) {
     console.error('Error uploading story image:', error);

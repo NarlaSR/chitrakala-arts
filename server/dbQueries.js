@@ -253,6 +253,50 @@ async function updateSettings(settingsData) {
   );
 }
 
+// Image data functions
+async function storeArtworkImage(artworkId, imageBuffer, mimeType) {
+  await pool.query(
+    'UPDATE artworks SET image_data = $2, image_mime_type = $3 WHERE id = $1',
+    [artworkId, imageBuffer, mimeType]
+  );
+}
+
+async function getArtworkImage(artworkId) {
+  const result = await pool.query(
+    'SELECT image_data, image_mime_type FROM artworks WHERE id = $1',
+    [artworkId]
+  );
+  return result.rows[0];
+}
+
+async function storeAboutImage(imageBuffer, mimeType) {
+  await pool.query(
+    'UPDATE about SET story_image_data = $1, story_image_mime_type = $2 WHERE id = 1',
+    [imageBuffer, mimeType]
+  );
+}
+
+async function getAboutImage() {
+  const result = await pool.query(
+    'SELECT story_image_data, story_image_mime_type FROM about WHERE id = 1'
+  );
+  return result.rows[0];
+}
+
+async function storeLogoImage(imageBuffer, mimeType) {
+  await pool.query(
+    'UPDATE settings SET logo_data = $1, logo_mime_type = $2 WHERE id = 1',
+    [imageBuffer, mimeType]
+  );
+}
+
+async function getLogoImage() {
+  const result = await pool.query(
+    'SELECT logo_data, logo_mime_type FROM settings WHERE id = 1'
+  );
+  return result.rows[0];
+}
+
 module.exports = {
   getUsers,
   getUserByUsername,
@@ -267,5 +311,11 @@ module.exports = {
   getContact,
   updateContact,
   getSettings,
-  updateSettings
+  updateSettings,
+  storeArtworkImage,
+  getArtworkImage,
+  storeAboutImage,
+  getAboutImage,
+  storeLogoImage,
+  getLogoImage
 };

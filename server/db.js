@@ -124,6 +124,25 @@ async function initializeDatabase() {
       )
     `);
 
+    // Add image blob columns if they don't exist
+    await client.query(`
+      ALTER TABLE artworks 
+      ADD COLUMN IF NOT EXISTS image_data BYTEA,
+      ADD COLUMN IF NOT EXISTS image_mime_type VARCHAR(50)
+    `);
+
+    await client.query(`
+      ALTER TABLE about 
+      ADD COLUMN IF NOT EXISTS story_image_data BYTEA,
+      ADD COLUMN IF NOT EXISTS story_image_mime_type VARCHAR(50)
+    `);
+
+    await client.query(`
+      ALTER TABLE settings 
+      ADD COLUMN IF NOT EXISTS logo_data BYTEA,
+      ADD COLUMN IF NOT EXISTS logo_mime_type VARCHAR(50)
+    `);
+
     await client.query('COMMIT');
     console.log('✅ Database schema initialized successfully');
   } catch (error) {
