@@ -28,6 +28,11 @@ yarn-error.log*
 *.swo
 *~
 .vercel
+
+# Runtime Data (user-editable content)
+server/data/*.json
+!server/data/*.template.json
+
 # Debug/Helper Scripts (adhoc)
 *.bat
 *.ps1

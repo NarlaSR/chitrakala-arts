@@ -66,6 +66,24 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+// Initialize data files from templates if they don't exist
+const initializeDataFiles = () => {
+  const dataFiles = [
+    { file: ABOUT_FILE, template: path.join(DATA_DIR, 'about.template.json') },
+    { file: CONTACT_FILE, template: path.join(DATA_DIR, 'contact.template.json') },
+    { file: SETTINGS_FILE, template: path.join(DATA_DIR, 'settings.template.json') }
+  ];
+
+  dataFiles.forEach(({ file, template }) => {
+    if (!fs.existsSync(file) && fs.existsSync(template)) {
+      fs.copyFileSync(template, file);
+      console.log(`Initialized ${path.basename(file)} from template`);
+    }
+  });
+};
+
+initializeDataFiles();
+
 // Initialize default admin user
 const initializeDefaultAdmin = async () => {
   // Force reset if RESET_ADMIN environment variable is set

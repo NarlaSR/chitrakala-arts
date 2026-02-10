@@ -14,6 +14,7 @@ Railway (and many PaaS platforms) block SMTP ports (587, 465) to prevent spam ab
 ### Add This Variable:
 
 **RESEND_API_KEY**
+
 ```
 re_EYMtGKK2_7kxPdjdbBb6c7DUf6oW9W53z
 ```
@@ -57,6 +58,7 @@ Railway will automatically redeploy your backend when you add the environment va
 ## Troubleshooting
 
 **If emails don't arrive:**
+
 1. Check Railway logs: `railway logs`
 2. Look for "Error sending message" in logs
 3. Verify RESEND_API_KEY is exactly: re_EYMtGKK2_7kxPdjdbBb6c7DUf6oW9W53z (no extra spaces)
@@ -64,6 +66,7 @@ Railway will automatically redeploy your backend when you add the environment va
 
 **To verify API key is working:**
 Railway logs will show either:
+
 - ✅ Success: No error messages about email sending
 - ❌ Error: "Invalid API key" or similar Resend error
 
@@ -77,6 +80,7 @@ Railway logs will show either:
 ## Next Steps After Email Works
 
 Once contact form is working:
+
 1. ✅ Phase 1 Complete: Contact CMS + Email
 2. 🔜 Phase 2: Footer/Site Settings CMS
 3. 🔜 Phase 3: Multiple Images per Artwork
@@ -85,6 +89,7 @@ Once contact form is working:
 ## Contact Email Management
 
 To add/change email addresses later:
+
 1. Go to: https://chitrakala-arts.vercel.app/ckk-secure-admin/dashboard
 2. Login: admin / sonu@786
 3. Click "Edit Contact Info"

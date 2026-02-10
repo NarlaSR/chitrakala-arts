@@ -7,6 +7,7 @@ This guide will help you set up email functionality for the contact form on Chit
 The contact form uses **Nodemailer** with Gmail SMTP to send emails. Messages sent via the contact form will be delivered to the email addresses configured in the admin panel.
 
 Currently configured email addresses:
+
 - snarla369@gmail.com
 - supraja_narla@yahoo.com
 
@@ -38,7 +39,6 @@ Since Gmail requires "App Passwords" for third-party applications (not your regu
 2. Select your **chitrakala-arts** backend project
 3. Click on the **Variables** tab
 4. Add these two environment variables:
-
    - **EMAIL_USER**: `snarla369@gmail.com`
    - **EMAIL_PASSWORD**: `[paste the 16-character app password here]`
 
@@ -82,11 +82,13 @@ All future contact form submissions will be sent to the updated email addresses.
 ### "Failed to send message" Error
 
 **Possible causes:**
+
 1. App Password not set in Railway environment variables
 2. Incorrect App Password
 3. Email address changed in Gmail security settings
 
 **Solution:**
+
 - Double-check EMAIL_USER and EMAIL_PASSWORD variables in Railway
 - Regenerate App Password if needed
 - Check Railway logs: `railway logs` command
@@ -94,11 +96,13 @@ All future contact form submissions will be sent to the updated email addresses.
 ### Not Receiving Emails
 
 **Possible causes:**
+
 1. Emails going to Spam/Junk folder
 2. Incorrect email addresses in contact.json
 3. Gmail blocking the email
 
 **Solution:**
+
 - Check Spam/Junk folders in both Gmail and Yahoo
 - Add chitrakalaarts@gmail.com to your contacts
 - Verify email addresses in Admin → Edit Contact Info
