@@ -475,7 +475,7 @@ const startServer = async () => {
       console.log(`API available at http://localhost:${PORT}/api`);
       console.log(`Uploads available at http://localhost:${PORT}/uploads`);
       console.log(`Database: PostgreSQL (${process.env.DATABASE_URL ? 'Connected' : 'Not configured'})`);
-      console.log(`🎨 Chitrakala Arts - Data persists forever in PostgreSQL!`);
+      console.log(`🎨 Chitrakala Arts - Data & Images persist forever!`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
