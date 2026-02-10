@@ -6,8 +6,19 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// Check if database is configured
+const isDatabaseConfigured = () => {
+  return !!process.env.DATABASE_URL;
+};
+
 // Initialize database schema
 async function initializeDatabase() {
+  if (!isDatabaseConfigured()) {
+    console.log('⚠️  DATABASE_URL not configured - skipping database initialization');
+    console.log('⚠️  Server will use JSON files for data storage');
+    return;
+  }
+
   const client = await pool.connect();
   
   try {
@@ -126,5 +137,6 @@ async function initializeDatabase() {
 
 module.exports = {
   pool,
-  initializeDatabase
+  initializeDatabase,
+  isDatabaseConfigured
 };
