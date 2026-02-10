@@ -4,7 +4,6 @@ import '../styles/Header.css';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [logoError, setLogoError] = useState(false);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
