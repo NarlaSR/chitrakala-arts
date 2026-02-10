@@ -7,7 +7,7 @@ async function getUsers() {
 }
 
 async function getUserByUsername(username) {
-  const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  const result = await pool.query('SELECT * FROM users WHERE LOWER(username) = LOWER($1)', [username]);
   return result.rows[0];
 }
 

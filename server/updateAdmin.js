@@ -7,7 +7,7 @@ async function updateAdminCredentials() {
   try {
     await initializeDatabase();
     
-    const newUsername = 'MSuchitra';
+    const newUsername = 'msuchitra';
     const newPassword = 'sonu@786';
     
     // Hash the new password
