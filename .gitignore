@@ -32,6 +32,7 @@ yarn-error.log*
 # Runtime Data (user-editable content)
 server/data/*.json
 !server/data/*.template.json
+server/backups/
 
 # Debug/Helper Scripts (adhoc)
 *.bat

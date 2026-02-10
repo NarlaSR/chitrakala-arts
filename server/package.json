@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "migrate": "node migrate.js",
     "migrate-images": "node migrateImages.js",
-    "update-admin": "node updateAdmin.js"
+    "update-admin": "node updateAdmin.js",
+    "backup": "node backup.js"
   },
   "keywords": [],
   "author": "",
