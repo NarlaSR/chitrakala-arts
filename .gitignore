@@ -28,3 +28,12 @@ yarn-error.log*
 *.swo
 *~
 .vercel
+# Debug/Helper Scripts (adhoc)
+*.bat
+*.ps1
+*_HELP.md
+*_FIX.md
+*_SETUP.md
+TEST_*.md
+RAILWAY_*.md
+RESEND_*.md
