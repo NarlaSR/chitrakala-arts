@@ -43,7 +43,7 @@ const Home = () => {
             <div className="hero-logo-placeholder" style={{display: 'none'}}>CKK</div>
           </div>
           <div className="hero-text">
-            <h1 className="hero-title">Welcome to Chitra's Kala Sanskriti</h1>
+            <h1 className="hero-title">Welcome to Chitra Kala Sanskriti</h1>
             <p className="hero-subtitle">
               Discover exquisite handcrafted artworks that blend tradition with contemporary design
             </p>
