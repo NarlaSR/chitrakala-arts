@@ -1,0 +1,26 @@
+{
+  "emails": [
+    "snarla369@gmail.com",
+    "supraja_narla@yahoo.com"
+  ],
+  "phone": "+1 (555) 123-4567",
+  "address": {
+    "street": "123 Art Street",
+    "city": "Your City",
+    "state": "State",
+    "zip": "12345"
+  },
+  "hours": {
+    "weekdays": "Monday - Friday: 9:00 AM - 6:00 PM",
+    "weekend": "Saturday - Sunday: 10:00 AM - 4:00 PM"
+  },
+  "social": {
+    "facebook": "",
+    "instagram": "",
+    "pinterest": "",
+    "twitter": ""
+  },
+  "showHours": true,
+  "showAddress": true,
+  "showSocial": false
+}

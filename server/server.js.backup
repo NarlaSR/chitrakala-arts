@@ -7,8 +7,6 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Resend } = require('resend');
 const { rateLimit } = require('express-rate-limit');
-const { initializeDatabase } = require('./db');
-const db = require('./dbQueries');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -55,6 +53,112 @@ const upload = multer({
   }
 });
 
+// Database file paths
+const DATA_DIR = path.join(__dirname, 'data');
+const ARTWORKS_FILE = path.join(DATA_DIR, 'artworks.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const ABOUT_FILE = path.join(DATA_DIR, 'about.json');
+const CONTACT_FILE = path.join(DATA_DIR, 'contact.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Initialize data files from templates if they don't exist
+const initializeDataFiles = () => {
+  const dataFiles = [
+    { file: ABOUT_FILE, template: path.join(DATA_DIR, 'about.template.json') },
+    { file: CONTACT_FILE, template: path.join(DATA_DIR, 'contact.template.json') },
+    { file: SETTINGS_FILE, template: path.join(DATA_DIR, 'settings.template.json') }
+  ];
+
+  dataFiles.forEach(({ file, template }) => {
+    if (!fs.existsSync(file) && fs.existsSync(template)) {
+      fs.copyFileSync(template, file);
+      console.log(`Initialized ${path.basename(file)} from template`);
+    }
+  });
+};
+
+initializeDataFiles();
+
+// Initialize default admin user
+const initializeDefaultAdmin = async () => {
+  // Force reset if RESET_ADMIN environment variable is set
+  if (process.env.RESET_ADMIN === 'true' && fs.existsSync(USERS_FILE)) {
+    fs.unlinkSync(USERS_FILE);
+    console.log('Users file deleted - resetting admin password');
+  }
+  
+  if (!fs.existsSync(USERS_FILE)) {
+    const defaultAdmin = {
+      id: 'admin-1',
+      username: 'admin',
+      password: await bcrypt.hash('sonu@786', 10),
+      role: 'admin'
+    };
+    fs.writeFileSync(USERS_FILE, JSON.stringify([defaultAdmin], null, 2));
+    console.log('Default admin created - username: admin');
+  }
+};
+
+// Initialize default artworks
+const initializeDefaultArtworks = () => {
+  if (!fs.existsSync(ARTWORKS_FILE)) {
+    const defaultArtworks = [];
+    fs.writeFileSync(ARTWORKS_FILE, JSON.stringify(defaultArtworks, null, 2));
+  }
+};
+
+// Helper functions to read/write data
+const readArtworks = () => {
+  if (!fs.existsSync(ARTWORKS_FILE)) return [];
+  const data = fs.readFileSync(ARTWORKS_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const writeArtworks = (artworks) => {
+  fs.writeFileSync(ARTWORKS_FILE, JSON.stringify(artworks, null, 2));
+};
+
+const readUsers = () => {
+  if (!fs.existsSync(USERS_FILE)) return [];
+  const data = fs.readFileSync(USERS_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const readAbout = () => {
+  if (!fs.existsSync(ABOUT_FILE)) return null;
+  const data = fs.readFileSync(ABOUT_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const writeAbout = (aboutData) => {
+  fs.writeFileSync(ABOUT_FILE, JSON.stringify(aboutData, null, 2));
+};
+
+const readContact = () => {
+  if (!fs.existsSync(CONTACT_FILE)) return null;
+  const data = fs.readFileSync(CONTACT_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const writeContact = (contactData) => {
+  fs.writeFileSync(CONTACT_FILE, JSON.stringify(contactData, null, 2));
+};
+
+const readSettings = () => {
+  if (!fs.existsSync(SETTINGS_FILE)) return null;
+  const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const writeSettings = (settingsData) => {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsData, null, 2));
+};
+
 // Configure Resend for email sending (HTTP-based, bypasses Railway SMTP blocking)
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -66,20 +170,6 @@ const contactLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-// Initialize default admin user in database
-const initializeDefaultAdmin = async () => {
-  try {
-    const users = await db.getUsers();
-    if (users.length === 0) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await db.createUser('admin-1', 'admin', hashedPassword, 'admin');
-      console.log('✅ Default admin created - username: admin, password: admin123');
-    }
-  } catch (error) {
-    console.error('Error initializing admin:', error);
-  }
-};
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -108,7 +198,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = await db.getUserByUsername(username);
+    const users = readUsers();
+    const user = users.find(u => u.username === username);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -146,9 +237,9 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
 // Artwork Routes
 
 // Get all artworks (public)
-app.get('/api/artworks', async (req, res) => {
+app.get('/api/artworks', (req, res) => {
   try {
-    const artworks = await db.getArtworks();
+    const artworks = readArtworks();
     res.json(artworks);
   } catch (error) {
     console.error('Error reading artworks:', error);
@@ -157,9 +248,10 @@ app.get('/api/artworks', async (req, res) => {
 });
 
 // Get artwork by ID (public)
-app.get('/api/artworks/:id', async (req, res) => {
+app.get('/api/artworks/:id', (req, res) => {
   try {
-    const artwork = await db.getArtworkById(req.params.id);
+    const artworks = readArtworks();
+    const artwork = artworks.find(a => a.id === req.params.id);
     
     if (!artwork) {
       return res.status(404).json({ error: 'Artwork not found' });
@@ -173,22 +265,27 @@ app.get('/api/artworks/:id', async (req, res) => {
 });
 
 // Create new artwork (admin only)
-app.post('/api/artworks', authenticateToken, upload.single('image'), async (req, res) => {
+app.post('/api/artworks', authenticateToken, upload.single('image'), (req, res) => {
   try {
+    const artworks = readArtworks();
+    
     const newArtwork = {
       id: `art-${Date.now()}`,
       title: req.body.title,
       category: req.body.category,
       description: req.body.description,
       price: parseFloat(req.body.price),
-      dimensions: req.body.size,
+      size: req.body.size,
       materials: req.body.materials,
       image: req.file ? `${BASE_URL}/uploads/${req.file.filename}` : '',
-      featured: req.body.featured === 'true'
+      featured: req.body.featured === 'true',
+      createdAt: new Date().toISOString()
     };
 
-    const artwork = await db.createArtwork(newArtwork);
-    res.status(201).json(artwork);
+    artworks.push(newArtwork);
+    writeArtworks(artworks);
+
+    res.status(201).json(newArtwork);
   } catch (error) {
     console.error('Error creating artwork:', error);
     res.status(500).json({ error: 'Failed to create artwork' });
@@ -196,30 +293,33 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
 });
 
 // Update artwork (admin only)
-app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (req, res) => {
+app.put('/api/artworks/:id', authenticateToken, upload.single('image'), (req, res) => {
   try {
-    const existingArtwork = await db.getArtworkById(req.params.id);
+    const artworks = readArtworks();
+    const index = artworks.findIndex(a => a.id === req.params.id);
     
-    if (!existingArtwork) {
+    if (index === -1) {
       return res.status(404).json({ error: 'Artwork not found' });
     }
 
     const updatedArtwork = {
-      title: req.body.title || existingArtwork.title,
-      category: req.body.category || existingArtwork.category,
-      description: req.body.description || existingArtwork.description,
-      price: req.body.price ? parseFloat(req.body.price) : existingArtwork.price,
-      dimensions: req.body.size || existingArtwork.dimensions,
-      materials: req.body.materials || existingArtwork.materials,
-      featured: req.body.featured !== undefined ? req.body.featured === 'true' : existingArtwork.featured,
-      image: existingArtwork.image
+      ...artworks[index],
+      title: req.body.title || artworks[index].title,
+      category: req.body.category || artworks[index].category,
+      description: req.body.description || artworks[index].description,
+      price: req.body.price ? parseFloat(req.body.price) : artworks[index].price,
+      size: req.body.size || artworks[index].size,
+      materials: req.body.materials || artworks[index].materials,
+      featured: req.body.featured !== undefined ? req.body.featured === 'true' : artworks[index].featured,
+      updatedAt: new Date().toISOString()
     };
 
     // Update image if new one is uploaded
     if (req.file) {
       // Delete old image if exists
-      if (existingArtwork.image) {
-        const imageUrl = existingArtwork.image;
+      if (artworks[index].image) {
+        // Extract filename from full URL or relative path
+        const imageUrl = artworks[index].image;
         const filename = imageUrl.includes('/uploads/') 
           ? imageUrl.split('/uploads/')[1] 
           : imageUrl.replace('/uploads/', '');
@@ -231,8 +331,10 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       updatedArtwork.image = `${BASE_URL}/uploads/${req.file.filename}`;
     }
 
-    const artwork = await db.updateArtwork(req.params.id, updatedArtwork);
-    res.json(artwork);
+    artworks[index] = updatedArtwork;
+    writeArtworks(artworks);
+
+    res.json(updatedArtwork);
   } catch (error) {
     console.error('Error updating artwork:', error);
     res.status(500).json({ error: 'Failed to update artwork' });
@@ -240,17 +342,19 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
 });
 
 // Delete artwork (admin only)
-app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
+app.delete('/api/artworks/:id', authenticateToken, (req, res) => {
   try {
-    const artwork = await db.getArtworkById(req.params.id);
+    const artworks = readArtworks();
+    const index = artworks.findIndex(a => a.id === req.params.id);
     
-    if (!artwork) {
+    if (index === -1) {
       return res.status(404).json({ error: 'Artwork not found' });
     }
 
     // Delete associated image file
-    if (artwork.image) {
-      const imageUrl = artwork.image;
+    if (artworks[index].image) {
+      // Extract filename from full URL or relative path
+      const imageUrl = artworks[index].image;
       const filename = imageUrl.includes('/uploads/') 
         ? imageUrl.split('/uploads/')[1] 
         : imageUrl.replace('/uploads/', '');
@@ -260,7 +364,9 @@ app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    await db.deleteArtwork(req.params.id);
+    artworks.splice(index, 1);
+    writeArtworks(artworks);
+
     res.json({ message: 'Artwork deleted successfully' });
   } catch (error) {
     console.error('Error deleting artwork:', error);
@@ -271,9 +377,9 @@ app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
 // Contact Page Routes
 
 // Get contact info (public)
-app.get('/api/contact', async (req, res) => {
+app.get('/api/contact', (req, res) => {
   try {
-    const contact = await db.getContact();
+    const contact = readContact();
     if (!contact) {
       return res.status(404).json({ error: 'Contact information not found' });
     }
@@ -285,10 +391,10 @@ app.get('/api/contact', async (req, res) => {
 });
 
 // Update contact info (admin only)
-app.put('/api/contact', authenticateToken, async (req, res) => {
+app.put('/api/contact', authenticateToken, (req, res) => {
   try {
     const contactData = req.body;
-    await db.updateContact(contactData);
+    writeContact(contactData);
     res.json({ message: 'Contact information updated successfully', data: contactData });
   } catch (error) {
     console.error('Error updating contact info:', error);
@@ -302,34 +408,43 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
     const { name, email, subject, message, honeypot, timestamp } = req.body;
 
     // Spam prevention checks
+    // 1. Honeypot field should be empty (hidden field only bots fill)
     if (honeypot) {
       return res.status(400).json({ error: 'Spam detected' });
     }
 
+    // 2. Check if form was filled too quickly (less than 3 seconds = likely bot)
     const submissionTime = Date.now();
     if (timestamp && (submissionTime - timestamp < 3000)) {
       return res.status(400).json({ error: 'Form submitted too quickly' });
     }
 
+    // 3. Validate required fields
     if (!name || !email || !subject || !message) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
+    // 4. Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
+    // 5. Message minimum length (prevent spam like "hi", "test")
     if (message.trim().length < 20) {
       return res.status(400).json({ error: 'Message must be at least 20 characters long' });
     }
 
-    // Get admin emails from database
-    const contactData = await db.getContact();
+    // Get admin emails from contact data
+    const contactData = readContact();
     const adminEmails = contactData?.emails || ['snarla369@gmail.com'];
 
+    // Prepare email content
     const mailOptions = {
-      from: 'Chitrakala Arts <onboarding@resend.dev>',
+      from: process.env.EMAIL_USER,
+      to: adminEmails.join(', '),
+      replyTo: email,
+      subject: `New Contact Form: ${subject}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #8b5a3c;">New Contact Form Submission</h2>
@@ -351,20 +466,32 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       `
     };
 
-    const recipientEmail = [adminEmails[0]];
+    // NOTE: Resend's test domain (onboarding@resend.dev) can only send to verified email addresses
+    // Currently sending to first email only. To send to all addresses, verify a custom domain in Resend.
+    const recipientEmail = [adminEmails[0]]; // Use only first (verified) email for now
+    
+    console.log('Sending email to:', recipientEmail, '(from', adminEmails.length, 'total)');
+    console.log('Email request:', {
+      from: 'Chitrakala Arts <onboarding@resend.dev>',
+      to: recipientEmail,
+      replyTo: email,
+      subject: `New Contact Form: ${subject}`
+    });
     
     const result = await resend.emails.send({
       from: 'Chitrakala Arts <onboarding@resend.dev>',
-      to: recipientEmail,
+      to: recipientEmail, // Array with single verified email
       replyTo: email,
       subject: `New Contact Form: ${subject}`,
       html: mailOptions.html
     });
 
+    console.log('Resend API response:', JSON.stringify(result, null, 2));
     console.log('Email sent successfully via Resend. ID:', result.data?.id || result.id || 'N/A');
     res.json({ message: 'Message sent successfully!' });
   } catch (error) {
     console.error('Error sending message:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     res.status(500).json({ error: 'Failed to send message. Please try again later.' });
   }
 });
@@ -372,9 +499,9 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
 // Site Settings Routes
 
 // Get site settings (public)
-app.get('/api/settings', async (req, res) => {
+app.get('/api/settings', (req, res) => {
   try {
-    const settings = await db.getSettings();
+    const settings = readSettings();
     if (!settings) {
       return res.status(404).json({ error: 'Site settings not found' });
     }
@@ -386,14 +513,14 @@ app.get('/api/settings', async (req, res) => {
 });
 
 // Update site settings (admin only)
-app.put('/api/settings', authenticateToken, upload.single('developerLogo'), async (req, res) => {
+app.put('/api/settings', authenticateToken, upload.single('developerLogo'), (req, res) => {
   try {
     const settingsData = JSON.parse(req.body.settings || '{}');
     
     // If a new developer logo was uploaded, update the logo URL
     if (req.file) {
       // Delete old logo if exists
-      const oldSettings = await db.getSettings();
+      const oldSettings = readSettings();
       if (oldSettings && oldSettings.developer && oldSettings.developer.logo) {
         const oldLogoUrl = oldSettings.developer.logo;
         if (oldLogoUrl.includes('/uploads/')) {
@@ -407,7 +534,7 @@ app.put('/api/settings', authenticateToken, upload.single('developerLogo'), asyn
       settingsData.developer.logo = `${BASE_URL}/uploads/${req.file.filename}`;
     }
     
-    await db.updateSettings(settingsData);
+    writeSettings(settingsData);
     res.json({ message: 'Site settings updated successfully', data: settingsData });
   } catch (error) {
     console.error('Error updating settings:', error);
@@ -418,9 +545,9 @@ app.put('/api/settings', authenticateToken, upload.single('developerLogo'), asyn
 // About Page Routes
 
 // Get about page content (public)
-app.get('/api/about', async (req, res) => {
+app.get('/api/about', (req, res) => {
   try {
-    const about = await db.getAbout();
+    const about = readAbout();
     if (!about) {
       return res.status(404).json({ error: 'About page content not found' });
     }
@@ -432,10 +559,10 @@ app.get('/api/about', async (req, res) => {
 });
 
 // Update about page content (admin only)
-app.put('/api/about', authenticateToken, async (req, res) => {
+app.put('/api/about', authenticateToken, (req, res) => {
   try {
     const aboutData = req.body;
-    await db.updateAbout(aboutData);
+    writeAbout(aboutData);
     res.json({ message: 'About page updated successfully', data: aboutData });
   } catch (error) {
     console.error('Error updating about page:', error);
@@ -458,25 +585,16 @@ app.post('/api/about/upload-image', authenticateToken, upload.single('image'), (
   }
 });
 
-// Initialize database and start server
+// Initialize data and start server
 const startServer = async () => {
-  try {
-    console.log('Initializing database...');
-    await initializeDatabase();
-    console.log('Running data migration...');
-    // Migration will be run separately
-    await initializeDefaultAdmin();
+  await initializeDefaultAdmin();
+  initializeDefaultArtworks();
 
-    app.listen(PORT, () => {
-      console.log(`✅ Server running on port ${PORT}`);
-      console.log(`API available at http://localhost:${PORT}/api`);
-      console.log(`Uploads available at http://localhost:${PORT}/uploads`);
-      console.log(`Database: PostgreSQL (${process.env.DATABASE_URL ? 'Connected' : 'Not configured'})`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`API available at http://localhost:${PORT}/api`);
+    console.log(`Uploads available at http://localhost:${PORT}/uploads`);
+  });
 };
 
 startServer();
