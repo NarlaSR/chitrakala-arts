@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const { pool, initializeDatabase } = require('./db');
 const db = require('./dbQueries');
 
@@ -48,16 +49,24 @@ async function migrateImages() {
       
       if (imageFile && fs.existsSync(imageFile)) {
         const imageBuffer = fs.readFileSync(imageFile);
-        const mimeType = getMimeType(imageFile);
         
-        await db.storeArtworkImage(artwork.id, imageBuffer, mimeType);
+        // Compress image before storing
+        const compressedBuffer = await sharp(imageBuffer)
+          .resize(1920, 1920, { 
+            fit: 'inside', 
+            withoutEnlargement: true 
+          })
+          .jpeg({ quality: 85, mozjpeg: true })
+          .toBuffer();
+        
+        await db.storeArtworkImage(artwork.id, compressedBuffer, 'image/jpeg');
         
         // Update the image URL to point to the database route
         const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
         const newImageUrl = `${BASE_URL}/api/images/artworks/${artwork.id}`;
         await pool.query('UPDATE artworks SET image = $1 WHERE id = $2', [newImageUrl, artwork.id]);
         
-        console.log(`  ✅ Migrated ${artwork.id}: ${path.basename(imageFile)}`);
+        console.log(`  ✅ Migrated & compressed ${artwork.id}: ${path.basename(imageFile)}`);
       } else {
         console.log(`  ⚠️  No image file found for ${artwork.id}`);
       }

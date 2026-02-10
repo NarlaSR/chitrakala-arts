@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Resend } = require('resend');
 const { rateLimit } = require('express-rate-limit');
+const sharp = require('sharp');
 const { initializeDatabase, isDatabaseConfigured } = require('./db');
 const db = require('./dbQueries');
 
@@ -81,6 +82,23 @@ const initializeDefaultAdmin = async () => {
     }
   } catch (error) {
     console.error('Error initializing admin:', error);
+  }
+};
+
+// Helper function to compress and optimize images
+const compressImage = async (inputBuffer) => {
+  try {
+    return await sharp(inputBuffer)
+      .resize(1920, 1920, { 
+        fit: 'inside', 
+        withoutEnlargement: true // Don't upscale smaller images
+      })
+      .jpeg({ quality: 85, mozjpeg: true }) // High quality JPEG compression
+      .toBuffer();
+  } catch (error) {
+    console.error('Error compressing image:', error);
+    // Return original if compression fails
+    return inputBuffer;
   }
 };
 
@@ -243,7 +261,8 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
     // Store image in database if uploaded
     if (req.file) {
       const imageBuffer = fs.readFileSync(req.file.path);
-      await db.storeArtworkImage(artworkId, imageBuffer, req.file.mimetype);
+      const compressedBuffer = await compressImage(imageBuffer);
+      await db.storeArtworkImage(artworkId, compressedBuffer, 'image/jpeg');
       // Delete temporary file
       fs.unlinkSync(req.file.path);
     }
@@ -279,9 +298,10 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
     if (req.file) {
       updatedArtwork.image = `${BASE_URL}/api/images/artworks/${req.params.id}`;
       
-      // Store new image in database
+      // Store new image in database with compression
       const imageBuffer = fs.readFileSync(req.file.path);
-      await db.storeArtworkImage(req.params.id, imageBuffer, req.file.mimetype);
+      const compressedBuffer = await compressImage(imageBuffer);
+      await db.storeArtworkImage(req.params.id, compressedBuffer, 'image/jpeg');
       
       // Delete temporary file
       fs.unlinkSync(req.file.path);
@@ -450,9 +470,10 @@ app.put('/api/settings', authenticateToken, upload.single('developerLogo'), asyn
     if (req.file) {
       settingsData.developer.logo = `${BASE_URL}/api/images/logo`;
       
-      // Store logo in database
+      // Store logo in database with compression
       const imageBuffer = fs.readFileSync(req.file.path);
-      await db.storeLogoImage(imageBuffer, req.file.mimetype);
+      const compressedBuffer = await compressImage(imageBuffer);
+      await db.storeLogoImage(compressedBuffer, 'image/jpeg');
       
       // Delete temporary file
       fs.unlinkSync(req.file.path);
@@ -501,9 +522,10 @@ app.post('/api/about/upload-image', authenticateToken, upload.single('image'), a
       return res.status(400).json({ error: 'No image file provided' });
     }
     
-    // Store image in database
+    // Store image in database with compression
     const imageBuffer = fs.readFileSync(req.file.path);
-    await db.storeAboutImage(imageBuffer, req.file.mimetype);
+    const compressedBuffer = await compressImage(imageBuffer);
+    await db.storeAboutImage(compressedBuffer, 'image/jpeg');
     
     // Delete temporary file
     fs.unlinkSync(req.file.path);
