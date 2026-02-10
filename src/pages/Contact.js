@@ -21,7 +21,7 @@ const Contact = () => {
 
   const fetchContactInfo = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/contact`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/contact`);
       if (response.ok) {
         const data = await response.json();
         setContactInfo(data);
@@ -54,7 +54,7 @@ const Contact = () => {
     setSubmitStatus(null);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/contact/send-message`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/contact/send-message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
