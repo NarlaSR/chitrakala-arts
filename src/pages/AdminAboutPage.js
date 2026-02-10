@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { aboutAPI } from '../services/api';
 import '../styles/AdminAbout.css';
 
 const AdminAboutPage = () => {
+  const navigate = useNavigate();
   const [aboutData, setAboutData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -144,7 +146,12 @@ const AdminAboutPage = () => {
 
   return (
     <div className="admin-about">
-      <h2>Edit About Page</h2>
+      <div className="admin-about-header">
+        <button onClick={() => navigate('/ckk-secure-admin/dashboard')} className="back-button">
+          ← Back to Dashboard
+        </button>
+        <h2>Edit About Page</h2>
+      </div>
       
       <form onSubmit={handleSubmit} className="about-form">
         {/* Our Story Section */}
@@ -298,6 +305,14 @@ const AdminAboutPage = () => {
         </div>
 
         <div className="form-actions">
+          <button 
+            type="button" 
+            onClick={() => navigate('/ckk-secure-admin/dashboard')} 
+            className="btn-secondary"
+            disabled={saving}
+          >
+            Cancel
+          </button>
           <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </button>

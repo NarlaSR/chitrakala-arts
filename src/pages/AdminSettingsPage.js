@@ -145,7 +145,7 @@ const AdminSettingsPage = () => {
   return (
     <div className="admin-settings-container">
       <div className="admin-settings-header">
-        <button onClick={() => navigate('/admin')} className="back-button">
+        <button onClick={() => navigate('/ckk-secure-admin/dashboard')} className="back-button">
           ← Back to Dashboard
         </button>
         <h1>Site Settings</h1>
@@ -317,7 +317,7 @@ const AdminSettingsPage = () => {
         <div className="form-actions">
           <button 
             type="button" 
-            onClick={() => navigate('/admin')} 
+            onClick={() => navigate('/ckk-secure-admin/dashboard')} 
             className="cancel-button"
             disabled={saving}
           >
