@@ -1,13 +1,61 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/Footer.css';
 
 const Footer = () => {
+  const [settings, setSettings] = useState({
+    siteName: 'Chitrakala Arts',
+    tagline: 'Showcasing the beauty of handcrafted art',
+    copyright: '© {year} Chitrakala Arts. All rights reserved.',
+    social: {
+      facebook: '',
+      instagram: '',
+      pinterest: '',
+      twitter: '',
+      youtube: ''
+    },
+    developer: {
+      name: '',
+      logo: '',
+      website: '',
+      showCredit: true
+    },
+    showSocial: true
+  });
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/settings`);
+      if (response.ok) {
+        const data = await response.json();
+        setSettings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    }
+  };
+
+  const formatCopyright = (text) => {
+    return text.replace('{year}', new Date().getFullYear());
+  };
+
+  const socialPlatforms = [
+    { key: 'instagram', label: 'Instagram', icon: '📷' },
+    { key: 'facebook', label: 'Facebook', icon: '👍' },
+    { key: 'pinterest', label: 'Pinterest', icon: '📌' },
+    { key: 'twitter', label: 'Twitter', icon: '🐦' },
+    { key: 'youtube', label: 'YouTube', icon: '▶️' }
+  ];
+
   return (
     <footer className="footer">
       <div className="footer-container">
         <div className="footer-section">
-          <h3>Chitrakala Arts</h3>
-          <p>Showcasing the beauty of handcrafted art</p>
+          <h3>{settings.siteName}</h3>
+          <p>{settings.tagline}</p>
         </div>
         
         <div className="footer-section">
@@ -28,21 +76,67 @@ const Footer = () => {
           </ul>
         </div>
         
-        <div className="footer-section">
-          <h4>Connect</h4>
-          <div className="social-links">
-            <a href="/" aria-label="Instagram">Instagram</a>
-            <a href="/" aria-label="Facebook">Facebook</a>
-            <a href="/" aria-label="Pinterest">Pinterest</a>
+        {settings.showSocial && (
+          <div className="footer-section">
+            <h4>Connect</h4>
+            <div className="social-links">
+              {socialPlatforms.map(platform => (
+                settings.social[platform.key] && (
+                  <a 
+                    key={platform.key}
+                    href={settings.social[platform.key]} 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={platform.label}
+                  >
+                    {platform.label}
+                  </a>
+                )
+              )).filter(Boolean)}
+            </div>
           </div>
-        </div>
+        )}
       </div>
       
       <div className="footer-bottom">
-        <p>&copy; {new Date().getFullYear()} Chitrakala Arts. All rights reserved.</p>
+        <p>{formatCopyright(settings.copyright)}</p>
+        {settings.developer.showCredit && settings.developer.name && (
+          <div className="developer-credit">
+            <span>Designed & Developed by </span>
+            {settings.developer.website ? (
+              <a 
+                href={settings.developer.website} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="developer-link"
+              >
+                {settings.developer.logo && (
+                  <img 
+                    src={settings.developer.logo} 
+                    alt={settings.developer.name}
+                    className="developer-logo"
+                  />
+                )}
+                <span>{settings.developer.name}</span>
+              </a>
+            ) : (
+              <>
+                {settings.developer.logo && (
+                  <img 
+                    src={settings.developer.logo} 
+                    alt={settings.developer.name}
+                    className="developer-logo"
+                  />
+                )}
+                <span>{settings.developer.name}</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </footer>
   );
 };
 
 export default Footer;
+

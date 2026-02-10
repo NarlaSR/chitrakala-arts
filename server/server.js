@@ -59,6 +59,7 @@ const ARTWORKS_FILE = path.join(DATA_DIR, 'artworks.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const ABOUT_FILE = path.join(DATA_DIR, 'about.json');
 const CONTACT_FILE = path.join(DATA_DIR, 'contact.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -128,6 +129,16 @@ const readContact = () => {
 
 const writeContact = (contactData) => {
   fs.writeFileSync(CONTACT_FILE, JSON.stringify(contactData, null, 2));
+};
+
+const readSettings = () => {
+  if (!fs.existsSync(SETTINGS_FILE)) return null;
+  const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+  return JSON.parse(data);
+};
+
+const writeSettings = (settingsData) => {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsData, null, 2));
 };
 
 // Configure Resend for email sending (HTTP-based, bypasses Railway SMTP blocking)
@@ -464,6 +475,52 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
     console.error('Error sending message:', error);
     console.error('Error details:', JSON.stringify(error, null, 2));
     res.status(500).json({ error: 'Failed to send message. Please try again later.' });
+  }
+});
+
+// Site Settings Routes
+
+// Get site settings (public)
+app.get('/api/settings', (req, res) => {
+  try {
+    const settings = readSettings();
+    if (!settings) {
+      return res.status(404).json({ error: 'Site settings not found' });
+    }
+    res.json(settings);
+  } catch (error) {
+    console.error('Error reading settings:', error);
+    res.status(500).json({ error: 'Failed to fetch site settings' });
+  }
+});
+
+// Update site settings (admin only)
+app.put('/api/settings', authenticateToken, upload.single('developerLogo'), (req, res) => {
+  try {
+    const settingsData = JSON.parse(req.body.settings || '{}');
+    
+    // If a new developer logo was uploaded, update the logo URL
+    if (req.file) {
+      // Delete old logo if exists
+      const oldSettings = readSettings();
+      if (oldSettings && oldSettings.developer && oldSettings.developer.logo) {
+        const oldLogoUrl = oldSettings.developer.logo;
+        if (oldLogoUrl.includes('/uploads/')) {
+          const filename = oldLogoUrl.split('/uploads/')[1];
+          const oldLogoPath = path.join(__dirname, 'uploads', filename);
+          if (fs.existsSync(oldLogoPath)) {
+            fs.unlinkSync(oldLogoPath);
+          }
+        }
+      }
+      settingsData.developer.logo = `${BASE_URL}/uploads/${req.file.filename}`;
+    }
+    
+    writeSettings(settingsData);
+    res.json({ message: 'Site settings updated successfully', data: settingsData });
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    res.status(500).json({ error: 'Failed to update site settings' });
   }
 });
 

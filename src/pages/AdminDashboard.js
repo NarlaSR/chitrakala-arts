@@ -157,6 +157,9 @@ const AdminDashboard = () => {
           <button onClick={() => navigate('/ckk-secure-admin/contact')} className="btn-secondary">
             Edit Contact Info
           </button>
+          <button onClick={() => navigate('/ckk-secure-admin/settings')} className="btn-secondary">
+            Site Settings
+          </button>
           <button onClick={() => navigate('/')} className="btn-secondary">
             View Site
           </button>
