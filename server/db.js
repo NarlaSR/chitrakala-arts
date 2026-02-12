@@ -129,7 +129,8 @@ async function initializeDatabase() {
     await client.query(`
       ALTER TABLE artworks 
       ADD COLUMN IF NOT EXISTS image_data BYTEA,
-      ADD COLUMN IF NOT EXISTS image_mime_type VARCHAR(50)
+      ADD COLUMN IF NOT EXISTS image_mime_type VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     `);
 
     await client.query(`

@@ -44,7 +44,8 @@ async function updateArtwork(id, artwork) {
   const result = await pool.query(
     `UPDATE artworks 
      SET title = $2, category = $3, price = $4, description = $5, 
-         dimensions = $6, materials = $7, image = $8, featured = $9
+         dimensions = $6, materials = $7, image = $8, featured = $9,
+         updated_at = CURRENT_TIMESTAMP
      WHERE id = $1
      RETURNING *`,
     [id, artwork.title, artwork.category, artwork.price, artwork.description,
