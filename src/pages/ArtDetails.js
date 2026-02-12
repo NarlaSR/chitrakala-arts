@@ -46,7 +46,10 @@ const ArtDetails = () => {
   }
 
   const category = getCategoryById(artwork.category);
-  const imageUrl = artwork.image || '/assets/images/placeholder.jpg';
+  // Add cache-busting query string to image URL
+  const imageUrl = artwork.image
+    ? `${artwork.image}?t=${artwork.updatedAt || Date.now()}`
+    : '/assets/images/placeholder.jpg';
 
   return (
     <div className="art-details">
