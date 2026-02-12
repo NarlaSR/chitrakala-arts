@@ -319,6 +319,11 @@ app.get('/api/artworks/:id', async (req, res) => {
       return res.status(404).json({ error: 'Artwork not found' });
     }
     
+    // Convert updated_at to updatedAt for frontend cache-busting
+    if (artwork && artwork.updated_at) {
+      artwork.updatedAt = artwork.updated_at;
+      delete artwork.updated_at;
+    }
     res.json(artwork);
   } catch (error) {
     console.error('Error reading artwork:', error);
