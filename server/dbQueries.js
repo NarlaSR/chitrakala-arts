@@ -257,7 +257,7 @@ async function updateSettings(settingsData) {
 // Image data functions
 async function storeArtworkImage(artworkId, imageBuffer, mimeType) {
   await pool.query(
-    'UPDATE artworks SET image_data = $2, image_mime_type = $3 WHERE id = $1',
+    'UPDATE artworks SET image_data = $2, image_mime_type = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
     [artworkId, imageBuffer, mimeType]
   );
 }

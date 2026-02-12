@@ -435,6 +435,11 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
     }
 
     const artwork = await db.updateArtwork(req.params.id, updatedArtwork);
+    // Convert updated_at to updatedAt for frontend cache-busting
+    if (artwork && artwork.updated_at) {
+      artwork.updatedAt = artwork.updated_at;
+      delete artwork.updated_at;
+    }
     res.json(artwork);
   } catch (error) {
     console.error('Error updating artwork:', error);
