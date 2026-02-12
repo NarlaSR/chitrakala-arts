@@ -37,15 +37,17 @@ const allowedOrigins = [
   'http://localhost:3001',
   'http://localhost:5000',
   'https://chitrakalaarts-production.up.railway.app',
-  process.env.FRONTEND_URL // Add your production frontend URL
-].filter(Boolean); // Remove undefined values
+  'https://chitrakalaarts.vercel.app', // Add your actual Vercel frontend URL
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Debug log for CORS
+    console.log('CORS request origin:', origin);
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
