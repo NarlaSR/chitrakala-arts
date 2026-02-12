@@ -1,9 +1,10 @@
 const { Pool } = require('pg');
 
 // Create PostgreSQL connection pool
+const isProduction = process.env.NODE_ENV === 'production';
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ...(isProduction ? { ssl: { rejectUnauthorized: false } } : {})
 });
 
 // Check if database is configured

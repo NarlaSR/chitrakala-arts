@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -16,15 +17,63 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 
+// Security warning for default JWT secret
+if (JWT_SECRET === 'your-secret-key-change-in-production') {
+  console.warn('⚠️  WARNING: Using default JWT_SECRET! Set JWT_SECRET environment variable in production!');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ CRITICAL: Cannot run in production with default JWT_SECRET!');
+    process.exit(1);
+  }
+}
+
 // Check if using database or JSON files
 const USE_DATABASE = !!process.env.DATABASE_URL;
 
 // Trust Railway proxy to get correct IP addresses for rate limiting
 app.set('trust proxy', 1);
 
+// CORS configuration - restrict to your domains
+const allowedOrigins = [
+  'http://localhost:3001',
+  'http://localhost:5000',
+  'https://chitrakalaarts-production.up.railway.app',
+  process.env.FRONTEND_URL // Add your production frontend URL
+].filter(Boolean); // Remove undefined values
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Security headers
+app.use((req, res, next) => {
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Enable XSS protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Content Security Policy
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'");
+  next();
+});
+
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Limit request body size
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Ensure uploads directory exists
@@ -85,13 +134,36 @@ const initializeDefaultAdmin = async () => {
   try {
     const users = await db.getUsers();
     if (users.length === 0) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const defaultPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
       await db.createUser('admin-1', 'admin', hashedPassword, 'admin');
-      console.log('✅ Default admin created - username: admin, password: admin123');
+      console.log('✅ Default admin created - username: admin');
+      console.warn('⚠️  IMPORTANT: Change default admin password immediately!');
     }
   } catch (error) {
     console.error('Error initializing admin:', error);
   }
+};
+
+// Input validation helpers
+const validateString = (str, minLength = 1, maxLength = 1000) => {
+  if (typeof str !== 'string') return false;
+  const trimmed = str.trim();
+  return trimmed.length >= minLength && trimmed.length <= maxLength;
+};
+
+const validateEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return typeof email === 'string' && email.length <= 254 && emailRegex.test(email);
+};
+
+const validatePrice = (price) => {
+  const num = parseFloat(price);
+  return !isNaN(num) && num >= 0 && num <= 999999.99;
+};
+
+const validateArtworkId = (id) => {
+  return typeof id === 'string' && /^art-\d+$/.test(id);
 };
 
 // Helper function to compress and optimize images
@@ -134,8 +206,12 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+    // Validate input
+    if (!validateString(username, 3, 50)) {
+      return res.status(400).json({ error: 'Invalid username format' });
+    }
+    if (!validateString(password, 6, 100)) {
+      return res.status(400).json({ error: 'Invalid password format' });
     }
 
     const user = await db.getUserByUsername(username);
@@ -251,16 +327,36 @@ app.get('/api/artworks/:id', async (req, res) => {
 // Create new artwork (admin only)
 app.post('/api/artworks', authenticateToken, upload.single('image'), async (req, res) => {
   try {
+    // Validate required fields
+    if (!validateString(req.body.title, 2, 255)) {
+      return res.status(400).json({ error: 'Title must be between 2 and 255 characters' });
+    }
+    if (!validateString(req.body.category, 2, 50)) {
+      return res.status(400).json({ error: 'Category must be between 2 and 50 characters' });
+    }
+    if (!validateString(req.body.description, 10, 5000)) {
+      return res.status(400).json({ error: 'Description must be between 10 and 5000 characters' });
+    }
+    if (!validatePrice(req.body.price)) {
+      return res.status(400).json({ error: 'Invalid price format' });
+    }
+    if (req.body.size && !validateString(req.body.size, 0, 100)) {
+      return res.status(400).json({ error: 'Dimensions must be less than 100 characters' });
+    }
+    if (req.body.materials && !validateString(req.body.materials, 0, 255)) {
+      return res.status(400).json({ error: 'Materials must be less than 255 characters' });
+    }
+
     const artworkId = `art-${Date.now()}`;
     
     const newArtwork = {
       id: artworkId,
-      title: req.body.title,
-      category: req.body.category,
-      description: req.body.description,
+      title: req.body.title.trim(),
+      category: req.body.category.trim(),
+      description: req.body.description.trim(),
       price: parseFloat(req.body.price),
-      dimensions: req.body.size,
-      materials: req.body.materials,
+      dimensions: req.body.size?.trim() || '',
+      materials: req.body.materials?.trim() || '',
       image: req.file ? `${BASE_URL}/api/images/artworks/${artworkId}` : '',
       featured: req.body.featured === 'true'
     };
@@ -292,13 +388,33 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       return res.status(404).json({ error: 'Artwork not found' });
     }
 
+    // Validate updated fields
+    if (req.body.title && !validateString(req.body.title, 2, 255)) {
+      return res.status(400).json({ error: 'Title must be between 2 and 255 characters' });
+    }
+    if (req.body.category && !validateString(req.body.category, 2, 50)) {
+      return res.status(400).json({ error: 'Category must be between 2 and 50 characters' });
+    }
+    if (req.body.description && !validateString(req.body.description, 10, 5000)) {
+      return res.status(400).json({ error: 'Description must be between 10 and 5000 characters' });
+    }
+    if (req.body.price && !validatePrice(req.body.price)) {
+      return res.status(400).json({ error: 'Invalid price format' });
+    }
+    if (req.body.size && !validateString(req.body.size, 0, 100)) {
+      return res.status(400).json({ error: 'Dimensions must be less than 100 characters' });
+    }
+    if (req.body.materials && !validateString(req.body.materials, 0, 255)) {
+      return res.status(400).json({ error: 'Materials must be less than 255 characters' });
+    }
+
     const updatedArtwork = {
-      title: req.body.title || existingArtwork.title,
-      category: req.body.category || existingArtwork.category,
-      description: req.body.description || existingArtwork.description,
+      title: req.body.title?.trim() || existingArtwork.title,
+      category: req.body.category?.trim() || existingArtwork.category,
+      description: req.body.description?.trim() || existingArtwork.description,
       price: req.body.price ? parseFloat(req.body.price) : existingArtwork.price,
-      dimensions: req.body.size || existingArtwork.dimensions,
-      materials: req.body.materials || existingArtwork.materials,
+      dimensions: req.body.size?.trim() || existingArtwork.dimensions,
+      materials: req.body.materials?.trim() || existingArtwork.materials,
       featured: req.body.featured !== undefined ? req.body.featured === 'true' : existingArtwork.featured,
       image: existingArtwork.image
     };
@@ -339,8 +455,14 @@ app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
       const filename = imageUrl.includes('/uploads/') 
         ? imageUrl.split('/uploads/')[1] 
         : imageUrl.replace('/uploads/', '');
-      const imagePath = path.join(__dirname, 'uploads', filename);
-      if (fs.existsSync(imagePath)) {
+      
+      // Prevent path traversal attacks
+      const sanitizedFilename = path.basename(filename);
+      const imagePath = path.join(__dirname, 'uploads', sanitizedFilename);
+      
+      // Ensure the resolved path is within uploads directory
+      const uploadsPath = path.join(__dirname, 'uploads');
+      if (imagePath.startsWith(uploadsPath) && fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
     }
@@ -381,7 +503,12 @@ app.put('/api/contact', authenticateToken, async (req, res) => {
   }
 });
 
-// Send contact form message with spam prevention
+
+// Profanity filter
+const Filter = require('bad-words').default || require('bad-words').Filter || require('bad-words');
+const profanityFilter = new Filter();
+
+// Send contact form message with spam prevention and profanity filter
 app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
   try {
     const { name, email, subject, message, honeypot, timestamp } = req.body;
@@ -396,22 +523,42 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Form submitted too quickly' });
     }
 
-    if (!name || !email || !subject || !message) {
-      return res.status(400).json({ error: 'All fields are required' });
+    // Enhanced validation
+    if (!validateString(name, 2, 100)) {
+      return res.status(400).json({ error: 'Name must be between 2 and 100 characters' });
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!validateEmail(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
+    if (!validateString(subject, 3, 200)) {
+      return res.status(400).json({ error: 'Subject must be between 3 and 200 characters' });
+    }
+    if (!validateString(message, 20, 5000)) {
+      return res.status(400).json({ error: 'Message must be between 20 and 5000 characters' });
+    }
 
-    if (message.trim().length < 20) {
-      return res.status(400).json({ error: 'Message must be at least 20 characters long' });
+    // Profanity check
+    if (profanityFilter.isProfane(name) || profanityFilter.isProfane(subject) || profanityFilter.isProfane(message)) {
+      return res.status(400).json({ error: 'Inappropriate language is not allowed.' });
     }
 
     // Get admin emails from database
     const contactData = await db.getContact();
     const adminEmails = contactData?.emails || ['snarla369@gmail.com'];
+
+        // Sanitize user input to prevent XSS
+    const sanitizeHTML = (str) => {
+      return str.replace(/[&<>"']/g, (match) => {
+        const escape = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        };
+        return escape[match];
+      });
+    };
 
     const mailOptions = {
       from: 'Chitrakala Arts <onboarding@resend.dev>',
@@ -419,17 +566,16 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #8b5a3c;">New Contact Form Submission</h2>
           <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-            <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Subject:</strong> ${subject}</p>
+            <p><strong>Name:</strong> ${sanitizeHTML(name)}</p>
+            <p><strong>Email:</strong> ${sanitizeHTML(email)}</p>
+            <p><strong>Subject:</strong> ${sanitizeHTML(subject)}</p>
           </div>
           <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
             <p><strong>Message:</strong></p>
-            <p style="white-space: pre-wrap;">${message}</p>
+            <p style="white-space: pre-wrap;">${sanitizeHTML(message)}</p>
           </div>
           <div style="margin-top: 20px; padding: 10px; background-color: #f9f9f9; border-radius: 5px; font-size: 12px; color: #666;">
             <p><strong>Submission Details:</strong></p>
-            <p>IP Address: ${req.ip}</p>
             <p>Time: ${new Date().toLocaleString()}</p>
           </div>
         </div>
@@ -545,6 +691,24 @@ app.post('/api/about/upload-image', authenticateToken, upload.single('image'), a
     console.error('Error uploading story image:', error);
     res.status(500).json({ error: 'Failed to upload image' });
   }
+});
+
+// Global error handler - must be after all routes
+app.use((err, req, res, next) => {
+  console.error('Global error handler:', err);
+  
+  // Don't leak error details in production
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
+  res.status(err.status || 500).json({
+    error: isDevelopment ? err.message : 'Internal server error',
+    ...(isDevelopment && { stack: err.stack })
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
 });
 
 // Initialize database and start server
