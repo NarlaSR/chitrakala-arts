@@ -259,7 +259,10 @@ app.get('/api/images/artworks/:id', async (req, res) => {
       return res.status(404).json({ error: 'Image not found' });
     }
     res.setHeader('Content-Type', imageData.image_mime_type || 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    // Disable browser caching so cache-busting works
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(imageData.image_data);
   } catch (error) {
     console.error('Error serving artwork image:', error);
