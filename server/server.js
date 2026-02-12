@@ -37,7 +37,7 @@ const allowedOrigins = [
   'http://localhost:3001',
   'http://localhost:5000',
   'https://chitrakalaarts-production.up.railway.app',
-  'https://chitrakalaarts.vercel.app', // Add your actual Vercel frontend URL
+  'https://chitrakala-arts.vercel.app', // Add your actual Vercel frontend URL
   process.env.FRONTEND_URL
 ].filter(Boolean);
 

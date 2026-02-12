@@ -64,11 +64,7 @@ const AdminLogin = () => {
             <button type="submit" className="login-btn" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
-          </form>
-          
-          <div className="login-info">
-            <p>Default credentials: admin / sonu786</p>
-          </div>
+                    </form>
         </div>
       </div>
     </div>

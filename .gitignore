@@ -43,3 +43,9 @@ server/backups/
 TEST_*.md
 RAILWAY_*.md
 RESEND_*.md
+
+# Security-sensitive files
+ADMIN_ACCESS.md
+SECURITY_*.md
+*.key
+*.pem
