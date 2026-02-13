@@ -323,10 +323,13 @@ app.get('/api/artworks/:id', async (req, res) => {
     }
     
     // Debug: log full artwork object
-    console.error('Artwork object returned:', artwork);
-    if (artwork && artwork.updated_at) {
-      artwork.updatedAt = artwork.updated_at;
-      delete artwork.updated_at;
+    // Remove image_data from response and add updatedAt for cache-busting
+    if (artwork) {
+      if ('image_data' in artwork) delete artwork.image_data;
+      if (artwork.updated_at) {
+        artwork.updatedAt = artwork.updated_at;
+        delete artwork.updated_at;
+      }
     }
     res.json(artwork);
   } catch (error) {
