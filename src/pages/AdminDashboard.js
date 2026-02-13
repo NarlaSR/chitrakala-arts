@@ -332,7 +332,7 @@ const AdminDashboard = () => {
                   <tr key={artwork.id}>
                     <td>
                       <img
-                        src={artwork.image}
+                        src={artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')}
                         alt={artwork.title}
                         className="artwork-thumbnail"
                       />
