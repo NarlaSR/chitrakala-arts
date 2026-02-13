@@ -306,7 +306,14 @@ app.get('/api/images/logo', async (req, res) => {
 app.get('/api/artworks', async (req, res) => {
   try {
     const artworks = await db.getArtworks();
-    res.json(artworks);
+    // Transform each artwork: remove image_data, add updatedAt, remove updated_at
+    const transformed = artworks.map(artwork => {
+      if ('image_data' in artwork) delete artwork.image_data;
+      artwork.updatedAt = artwork.updated_at || null;
+      delete artwork.updated_at;
+      return artwork;
+    });
+    res.json(transformed);
   } catch (error) {
     console.error('Error reading artworks:', error);
     res.status(500).json({ error: 'Failed to fetch artworks' });
