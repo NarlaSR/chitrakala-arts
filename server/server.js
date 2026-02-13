@@ -323,7 +323,7 @@ app.get('/api/artworks/:id', async (req, res) => {
     }
     
     // Debug: log full artwork object
-    console.log('Artwork object returned:', artwork);
+    console.error('Artwork object returned:', artwork);
     if (artwork && artwork.updated_at) {
       artwork.updatedAt = artwork.updated_at;
       delete artwork.updated_at;
