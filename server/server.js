@@ -322,9 +322,9 @@ app.get('/api/artworks/:id', async (req, res) => {
       return res.status(404).json({ error: 'Artwork not found' });
     }
     
-    // Debug: log updated_at value
+    // Debug: log full artwork object
+    console.log('Artwork object returned:', artwork);
     if (artwork && artwork.updated_at) {
-      console.log(`Artwork ${artwork.id} updated_at:`, artwork.updated_at);
       artwork.updatedAt = artwork.updated_at;
       delete artwork.updated_at;
     }
