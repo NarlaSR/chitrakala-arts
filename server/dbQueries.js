@@ -25,7 +25,7 @@ async function getArtworks() {
 }
 
 async function getArtworkById(id) {
-  const result = await pool.query('SELECT * FROM artworks WHERE id = $1', [id]);
+  const result = await pool.query('SELECT id, title, category, price, description, dimensions, materials, image, featured, created_at, updated_at FROM artworks WHERE id = $1', [id]);
   return result.rows[0];
 }
 
