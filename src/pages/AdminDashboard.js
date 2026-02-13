@@ -34,7 +34,9 @@ const AdminDashboard = () => {
 
   const loadArtworks = async () => {
     try {
-      const data = await artworksAPI.getAll();
+      // Add timestamp to force fresh fetch
+      const data = await artworksAPI.getAll(`?_ts=${Date.now()}`);
+      console.log('Loaded artworks:', data);
       setArtworks(data);
     } catch (error) {
       console.error('Failed to load artworks:', error);
