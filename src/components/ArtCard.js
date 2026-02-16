@@ -13,7 +13,13 @@ const ArtCard = ({ artwork }) => {
     <div className="art-card">
       <Link to={`/art/${artwork.id}`} className="art-card-link">
         <div className="art-card-image">
-          <img src={imageUrl} alt={artwork.title} />
+          <img
+            src={imageUrl}
+            alt={artwork.title}
+            onContextMenu={e => e.preventDefault()}
+            draggable={false}
+            style={{ userSelect: 'none', pointerEvents: 'none' }}
+          />
           <div className="art-card-overlay">
             <span>View Details</span>
           </div>

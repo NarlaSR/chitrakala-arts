@@ -60,7 +60,14 @@ const ArtDetails = () => {
 
         <div className="art-details-content">
           <div className="art-details-image">
-            <img src={imageUrl} alt={artwork.title} />
+            <img
+              src={imageUrl}
+              alt={artwork.title}
+              className="art-details-image"
+              onContextMenu={e => e.preventDefault()}
+              draggable={false}
+              style={{ userSelect: 'none', pointerEvents: 'none' }}
+            />
           </div>
 
           <div className="art-details-info">

@@ -337,6 +337,9 @@ const AdminDashboard = () => {
                         src={artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')}
                         alt={artwork.title}
                         className="artwork-thumbnail"
+                        onContextMenu={e => e.preventDefault()}
+                        draggable={false}
+                        style={{ userSelect: 'none', pointerEvents: 'none' }}
                       />
                     </td>
                     <td>{artwork.title}</td>
