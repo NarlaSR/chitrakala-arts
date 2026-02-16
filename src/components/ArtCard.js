@@ -23,7 +23,7 @@ const ArtCard = ({ artwork }) => {
           <p className="art-card-description">{artwork.description}</p>
           <div className="art-card-footer">
             <span className="art-card-price">₹{artwork.price.toLocaleString()}</span>
-            <span className="art-card-size">{artwork.size}</span>
+            <span className="art-card-size">{artwork.dimensions}</span>
           </div>
         </div>
       </Link>

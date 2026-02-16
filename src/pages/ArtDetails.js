@@ -81,7 +81,7 @@ const ArtDetails = () => {
               <h3>Specifications</h3>
               <ul>
                 <li>
-                  <strong>Size:</strong> {artwork.size}
+                  <strong>Size:</strong> {artwork.dimensions}
                 </li>
                 <li>
                   <strong>Materials:</strong> {artwork.materials}

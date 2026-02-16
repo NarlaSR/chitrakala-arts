@@ -342,7 +342,7 @@ const AdminDashboard = () => {
                     <td>{artwork.title}</td>
                     <td>{artwork.category}</td>
                     <td>₹{artwork.price.toLocaleString()}</td>
-                    <td>{artwork.size}</td>
+                    <td>{artwork.dimensions}</td>
                     <td>{artwork.featured ? '⭐ Yes' : 'No'}</td>
                     <td className="actions-cell">
                       <button
