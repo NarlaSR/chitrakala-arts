@@ -81,7 +81,7 @@ const ArtDetails = () => {
                 <ul>
                   {artwork.sizes.map((sp, idx) => (
                     <li key={idx}>
-                      <strong>{sp.size}:</strong> ₹{Number(sp.price).toLocaleString()}
+                      <strong>{sp.size_label}:</strong> ₹{Number(sp.price).toLocaleString()}
                     </li>
                   ))}
                 </ul>
@@ -105,7 +105,7 @@ const ArtDetails = () => {
                 {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
                   artwork.sizes.map((sp, idx) => (
                     <li key={idx}>
-                      <strong>Size:</strong> {sp.size} | <strong>Price:</strong> ₹{Number(sp.price).toLocaleString()}
+                      <strong>Size:</strong> {sp.size_label} | <strong>Price:</strong> ₹{Number(sp.price).toLocaleString()}
                     </li>
                   ))
                 ) : (

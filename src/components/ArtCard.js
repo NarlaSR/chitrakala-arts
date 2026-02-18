@@ -33,7 +33,7 @@ const ArtCard = ({ artwork }) => {
               <div className="art-card-sizes">
                 {artwork.sizes.map((sp, idx) => (
                   <div key={idx} className="art-card-size-price">
-                    <span className="art-card-size">{sp.size}</span>
+                    <span className="art-card-size">{sp.size_label}</span>
                     <span className="art-card-price">₹{Number(sp.price).toLocaleString()}</span>
                   </div>
                 ))}

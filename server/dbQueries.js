@@ -22,7 +22,13 @@ async function createUser(id, username, password, role) {
 // Artwork sizes functions
 async function addArtworkSizes(artworkId, sizesArray) {
   if (!sizesArray || !Array.isArray(sizesArray) || sizesArray.length === 0) return;
-  const values = sizesArray.map(s => `('${artworkId}', '${s.size_label}', ${s.price})`).join(',');
+  // Map sizes to correct format: {size_label, price}
+  const mapped = sizesArray.map(s => ({
+    size_label: s.size_label || s.size || '',
+    price: s.price
+  })).filter(s => s.size_label && s.price !== undefined && s.price !== null && s.price !== '');
+  if (mapped.length === 0) return;
+  const values = mapped.map(s => `('${artworkId}', '${s.size_label.replace(/'/g, "''")}', ${s.price})`).join(',');
   const query = `INSERT INTO artwork_sizes (artwork_id, size_label, price) VALUES ${values}`;
   await pool.query(query);
 }

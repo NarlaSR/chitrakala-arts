@@ -1,3 +1,6 @@
+// ...existing code...
+
+// (Move the main price field JSX into the artwork form, after the description and before the sizes section)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -5,6 +8,31 @@ import { artworksAPI } from '../services/api';
 import '../styles/AdminDashboard.css';
 
 const AdminDashboard = () => {
+        // Helper for description validation color
+        const getDescriptionValidationColor = () => {
+          const len = formData.description?.length || 0;
+          if (len === 0) return '';
+          if (len < 15) return 'desc-too-short';
+          if (len <= 5000) return 'desc-valid';
+          return 'desc-too-long';
+        };
+      // Validate a single field and update formErrors
+      const validateField = (name, value) => {
+        let error = '';
+        if (name === 'title') {
+          if (!value || value.trim().length < 2) error = 'Title must be at least 2 characters.';
+        } else if (name === 'category') {
+          if (!value || value.trim().length < 2) error = 'Category is required.';
+        } else if (name === 'description') {
+          if (!value || value.trim().length < 15) error = 'Description must be at least 15 characters.';
+        } else if (name === 'price') {
+          if (!value || isNaN(value) || Number(value) < 0) error = 'Price must be a valid number.';
+        } else if (name === 'materials') {
+          if (value && value.length > 255) error = 'Materials must be less than 255 characters.';
+        }
+        setFormErrors(prev => ({ ...prev, [name]: error }));
+      };
+    const [formErrors, setFormErrors] = useState({});
   const { logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [artworks, setArtworks] = useState([]);
@@ -15,6 +43,7 @@ const AdminDashboard = () => {
     title: '',
     category: 'dot-mandala',
     description: '',
+    price: '',
     materials: '',
     featured: false,
     sizes: [{ size: '', price: '' }]
@@ -90,10 +119,34 @@ const AdminDashboard = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Frontend validation
+    const errors = {};
+    if (!formData.title || formData.title.trim().length < 2) {
+      errors.title = 'Title must be at least 2 characters.';
+    }
+    if (!formData.category || formData.category.trim().length < 2) {
+      errors.category = 'Category is required.';
+    }
+    if (!formData.description || formData.description.trim().length < 15) {
+      errors.description = 'Description must be at least 15 characters.';
+    }
+    if (!formData.price || isNaN(formData.price) || Number(formData.price) < 0) {
+      errors.price = 'Price must be a valid number.';
+    }
+    if (formData.materials && formData.materials.length > 255) {
+      errors.materials = 'Materials must be less than 255 characters.';
+    }
+    if (!formData.sizes || !Array.isArray(formData.sizes) || formData.sizes.some(s => !s.size || !s.price)) {
+      errors.sizes = 'All sizes and prices must be filled.';
+    }
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     const data = new FormData();
     data.append('title', formData.title);
     data.append('category', formData.category);
     data.append('description', formData.description);
+    data.append('price', formData.price); // Ensure price is sent
     data.append('materials', formData.materials);
     data.append('featured', formData.featured);
     // Send sizes array as JSON
@@ -212,8 +265,10 @@ const AdminDashboard = () => {
                     name="title"
                     value={formData.title}
                     onChange={handleInputChange}
+                    onBlur={e => validateField('title', e.target.value)}
                     required
                   />
+                  {formErrors.title && <div className="form-error">{formErrors.title}</div>}
                 </div>
 
                 <div className="form-group">
@@ -223,14 +278,17 @@ const AdminDashboard = () => {
                     name="category"
                     value={formData.category}
                     onChange={handleInputChange}
+                    onBlur={e => validateField('category', e.target.value)}
                     required
                   >
                     <option value="dot-mandala">Dot Mandala Art</option>
                     <option value="lippan-art">Lippan Art</option>
                     <option value="textile-design">Textile Designing</option>
                   </select>
+                  {formErrors.category && <div className="form-error">{formErrors.category}</div>}
                 </div>
               </div>
+
 
               <div className="form-group">
                 <label htmlFor="description">Description *</label>
@@ -239,9 +297,41 @@ const AdminDashboard = () => {
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
+                  onBlur={e => validateField('description', e.target.value)}
                   rows="3"
                   required
+                  className={getDescriptionValidationColor()}
                 ></textarea>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className={getDescriptionValidationColor()}>
+                    {formData.description.length} / 5000
+                  </span>
+                  {formData.description.length > 0 && formData.description.length < 15 && (
+                    <span className="form-error">Description must be at least 15 characters.</span>
+                  )}
+                  {formData.description.length > 5000 && (
+                    <span className="form-error">Description must be less than 5000 characters.</span>
+                  )}
+                </div>
+              </div>
+              {/* Main price field for backend compatibility */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="price">Main Price (₹) *</label>
+                  <input
+                    type="number"
+                    id="price"
+                    name="price"
+                    value={formData.price || ''}
+                    onChange={handleInputChange}
+                    onBlur={e => validateField('price', e.target.value)}
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                  <small>Required for backend. Use the lowest or default price if multiple sizes.</small>
+                  {formErrors.price && <div className="form-error">{formErrors.price}</div>}
+                </div>
               </div>
 
               {/* Multiple sizes/prices UI */}
@@ -251,7 +341,7 @@ const AdminDashboard = () => {
                   <div className="size-price-row" key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                     <input
                       type="text"
-                      placeholder="Size (e.g., 12\" x 12\")"
+                      placeholder={'Size (e.g., 12" x 12")'}
                       value={sp.size}
                       onChange={e => handleSizeChange(idx, 'size', e.target.value)}
                       required
@@ -277,6 +367,7 @@ const AdminDashboard = () => {
                 <button type="button" className="btn-add-size" onClick={addSize} style={{ marginTop: '8px' }}>
                   + Add Size/Price
                 </button>
+                {formErrors.sizes && <div className="form-error">{formErrors.sizes}</div>}
               </div>
 
               <div className="form-group">
@@ -287,6 +378,7 @@ const AdminDashboard = () => {
                   name="materials"
                   value={formData.materials}
                   onChange={handleInputChange}
+                  onBlur={e => validateField('materials', e.target.value)}
                   placeholder="e.g., Acrylic on canvas"
                   required
                 />
