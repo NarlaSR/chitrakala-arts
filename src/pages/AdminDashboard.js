@@ -15,10 +15,9 @@ const AdminDashboard = () => {
     title: '',
     category: 'dot-mandala',
     description: '',
-    price: '',
-    size: '',
     materials: '',
-    featured: false
+    featured: false,
+    sizes: [{ size: '', price: '' }]
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
@@ -53,6 +52,30 @@ const AdminDashboard = () => {
     }));
   };
 
+  // Handle size/price pair changes
+  const handleSizeChange = (index, field, value) => {
+    setFormData(prev => {
+      const sizes = prev.sizes.map((s, i) =>
+        i === index ? { ...s, [field]: value } : s
+      );
+      return { ...prev, sizes };
+    });
+  };
+
+  const addSize = () => {
+    setFormData(prev => ({
+      ...prev,
+      sizes: [...prev.sizes, { size: '', price: '' }]
+    }));
+  };
+
+  const removeSize = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      sizes: prev.sizes.filter((_, i) => i !== index)
+    }));
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -67,27 +90,23 @@ const AdminDashboard = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     const data = new FormData();
     data.append('title', formData.title);
     data.append('category', formData.category);
     data.append('description', formData.description);
-    data.append('price', formData.price);
-    data.append('size', formData.size);
     data.append('materials', formData.materials);
     data.append('featured', formData.featured);
-    
+    // Send sizes array as JSON
+    data.append('sizes', JSON.stringify(formData.sizes));
     if (imageFile) {
       data.append('image', imageFile);
     }
-
     try {
       if (editingArtwork) {
         await artworksAPI.update(editingArtwork.id, data);
       } else {
         await artworksAPI.create(data);
       }
-      
       resetForm();
       loadArtworks();
     } catch (error) {
@@ -102,10 +121,9 @@ const AdminDashboard = () => {
       title: artwork.title,
       category: artwork.category,
       description: artwork.description,
-      price: artwork.price,
-      size: artwork.size,
       materials: artwork.materials,
-      featured: artwork.featured
+      featured: artwork.featured,
+      sizes: Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? artwork.sizes : [{ size: '', price: '' }]
     });
     setImagePreview(artwork.image || '');
     setShowForm(true);
@@ -128,10 +146,9 @@ const AdminDashboard = () => {
       title: '',
       category: 'dot-mandala',
       description: '',
-      price: '',
-      size: '',
       materials: '',
-      featured: false
+      featured: false,
+      sizes: [{ size: '', price: '' }]
     });
     setImageFile(null);
     setImagePreview('');
@@ -227,33 +244,39 @@ const AdminDashboard = () => {
                 ></textarea>
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="price">Price (₹) *</label>
-                  <input
-                    type="number"
-                    id="price"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    min="0"
-                    step="0.01"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="size">Size *</label>
-                  <input
-                    type="text"
-                    id="size"
-                    name="size"
-                    value={formData.size}
-                    onChange={handleInputChange}
-                    placeholder='e.g., 12" x 12"'
-                    required
-                  />
-                </div>
+              {/* Multiple sizes/prices UI */}
+              <div className="form-group">
+                <label>Sizes & Prices *</label>
+                {formData.sizes.map((sp, idx) => (
+                  <div className="size-price-row" key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="Size (e.g., 12\" x 12\")"
+                      value={sp.size}
+                      onChange={e => handleSizeChange(idx, 'size', e.target.value)}
+                      required
+                      style={{ flex: 2 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price (₹)"
+                      value={sp.price}
+                      onChange={e => handleSizeChange(idx, 'price', e.target.value)}
+                      min="0"
+                      step="0.01"
+                      required
+                      style={{ flex: 1 }}
+                    />
+                    {formData.sizes.length > 1 && (
+                      <button type="button" className="btn-remove-size" onClick={() => removeSize(idx)} style={{ flex: 0 }}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" className="btn-add-size" onClick={addSize} style={{ marginTop: '8px' }}>
+                  + Add Size/Price
+                </button>
               </div>
 
               <div className="form-group">

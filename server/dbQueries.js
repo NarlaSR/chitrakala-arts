@@ -19,14 +19,44 @@ async function createUser(id, username, password, role) {
 }
 
 // Artwork functions
+// Artwork sizes functions
+async function addArtworkSizes(artworkId, sizesArray) {
+  if (!sizesArray || !Array.isArray(sizesArray) || sizesArray.length === 0) return;
+  const values = sizesArray.map(s => `('${artworkId}', '${s.size_label}', ${s.price})`).join(',');
+  const query = `INSERT INTO artwork_sizes (artwork_id, size_label, price) VALUES ${values}`;
+  await pool.query(query);
+}
+
+async function getArtworkSizes(artworkId) {
+  const result = await pool.query('SELECT size_label, price FROM artwork_sizes WHERE artwork_id = $1 ORDER BY price ASC', [artworkId]);
+  return result.rows;
+}
+
+async function deleteArtworkSizes(artworkId) {
+  await pool.query('DELETE FROM artwork_sizes WHERE artwork_id = $1', [artworkId]);
+}
+
+async function updateArtworkSizes(artworkId, sizesArray) {
+  await deleteArtworkSizes(artworkId);
+  await addArtworkSizes(artworkId, sizesArray);
+}
 async function getArtworks() {
   const result = await pool.query('SELECT * FROM artworks ORDER BY created_at DESC');
-  return result.rows;
+  // Fetch sizes for each artwork
+  const artworks = await Promise.all(result.rows.map(async (artwork) => {
+    artwork.sizes = await getArtworkSizes(artwork.id);
+    return artwork;
+  }));
+  return artworks;
 }
 
 async function getArtworkById(id) {
   const result = await pool.query('SELECT id, title, category, price, description, dimensions, materials, image, featured, created_at, updated_at FROM artworks WHERE id = $1', [id]);
-  return result.rows[0];
+  const artwork = result.rows[0];
+  if (artwork) {
+    artwork.sizes = await getArtworkSizes(artwork.id);
+  }
+  return artwork;
 }
 
 async function createArtwork(artwork) {
@@ -37,6 +67,11 @@ async function createArtwork(artwork) {
     [artwork.id, artwork.title, artwork.category, artwork.price, artwork.description, 
      artwork.dimensions, artwork.materials, artwork.image, artwork.featured]
   );
+  // Add sizes if provided
+  if (artwork.sizes && Array.isArray(artwork.sizes)) {
+    await addArtworkSizes(result.rows[0].id, artwork.sizes);
+  }
+  result.rows[0].sizes = await getArtworkSizes(result.rows[0].id);
   return result.rows[0];
 }
 
@@ -51,6 +86,11 @@ async function updateArtwork(id, artwork) {
     [id, artwork.title, artwork.category, artwork.price, artwork.description,
      artwork.dimensions, artwork.materials, artwork.image, artwork.featured]
   );
+  // Update sizes if provided
+  if (artwork.sizes && Array.isArray(artwork.sizes)) {
+    await updateArtworkSizes(id, artwork.sizes);
+  }
+  result.rows[0].sizes = await getArtworkSizes(id);
   return result.rows[0];
 }
 

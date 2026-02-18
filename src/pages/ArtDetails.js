@@ -74,10 +74,24 @@ const ArtDetails = () => {
             <div className="art-category-badge">{category.name}</div>
             <h1 className="art-title">{artwork.title}</h1>
             
-            <div className="art-price">
-              <span className="price-label">Price:</span>
-              <span className="price-value">₹{artwork.price.toLocaleString()}</span>
-            </div>
+            {/* Show all sizes/prices */}
+            {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
+              <div className="art-sizes">
+                <h3>Available Sizes & Prices</h3>
+                <ul>
+                  {artwork.sizes.map((sp, idx) => (
+                    <li key={idx}>
+                      <strong>{sp.size}:</strong> ₹{Number(sp.price).toLocaleString()}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="art-price">
+                <span className="price-label">Price:</span>
+                <span className="price-value">₹{artwork.price?.toLocaleString?.() || ''}</span>
+              </div>
+            )}
 
             <div className="art-description">
               <h3>Description</h3>
@@ -87,9 +101,18 @@ const ArtDetails = () => {
             <div className="art-specifications">
               <h3>Specifications</h3>
               <ul>
-                <li>
-                  <strong>Size:</strong> {artwork.dimensions}
-                </li>
+                {/* Show all sizes if available */}
+                {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
+                  artwork.sizes.map((sp, idx) => (
+                    <li key={idx}>
+                      <strong>Size:</strong> {sp.size} | <strong>Price:</strong> ₹{Number(sp.price).toLocaleString()}
+                    </li>
+                  ))
+                ) : (
+                  <li>
+                    <strong>Size:</strong> {artwork.dimensions}
+                  </li>
+                )}
                 <li>
                   <strong>Materials:</strong> {artwork.materials}
                 </li>

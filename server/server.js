@@ -368,6 +368,15 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
 
     const artworkId = `art-${Date.now()}`;
     
+    // Parse sizes array from request
+    let sizes = [];
+    if (req.body.sizes) {
+      try {
+        sizes = typeof req.body.sizes === 'string' ? JSON.parse(req.body.sizes) : req.body.sizes;
+      } catch (e) {
+        sizes = [];
+      }
+    }
     const newArtwork = {
       id: artworkId,
       title: req.body.title.trim(),
@@ -377,9 +386,9 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       dimensions: req.body.size?.trim() || '',
       materials: req.body.materials?.trim() || '',
       image: req.file ? `${BASE_URL}/api/images/artworks/${artworkId}` : '',
-      featured: req.body.featured === 'true'
+      featured: req.body.featured === 'true',
+      sizes
     };
-
     const artwork = await db.createArtwork(newArtwork);
     
     // Store image in database if uploaded
@@ -427,6 +436,15 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       return res.status(400).json({ error: 'Materials must be less than 255 characters' });
     }
 
+    // Parse sizes array from request
+    let sizes = [];
+    if (req.body.sizes) {
+      try {
+        sizes = typeof req.body.sizes === 'string' ? JSON.parse(req.body.sizes) : req.body.sizes;
+      } catch (e) {
+        sizes = [];
+      }
+    }
     const updatedArtwork = {
       title: req.body.title?.trim() || existingArtwork.title,
       category: req.body.category?.trim() || existingArtwork.category,
@@ -435,7 +453,8 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       dimensions: req.body.size?.trim() || existingArtwork.dimensions,
       materials: req.body.materials?.trim() || existingArtwork.materials,
       featured: req.body.featured !== undefined ? req.body.featured === 'true' : existingArtwork.featured,
-      image: existingArtwork.image
+      image: existingArtwork.image,
+      sizes
     };
 
     // Update image if new one is uploaded

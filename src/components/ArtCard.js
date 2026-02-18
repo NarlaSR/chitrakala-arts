@@ -28,8 +28,19 @@ const ArtCard = ({ artwork }) => {
           <h3 className="art-card-title">{artwork.title}</h3>
           <p className="art-card-description">{artwork.description}</p>
           <div className="art-card-footer">
-            <span className="art-card-price">₹{artwork.price.toLocaleString()}</span>
-            <span className="art-card-size">{artwork.dimensions}</span>
+            {/* Show all sizes/prices */}
+            {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
+              <div className="art-card-sizes">
+                {artwork.sizes.map((sp, idx) => (
+                  <div key={idx} className="art-card-size-price">
+                    <span className="art-card-size">{sp.size}</span>
+                    <span className="art-card-price">₹{Number(sp.price).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="art-card-price">₹{artwork.price?.toLocaleString?.() || ''}</span>
+            )}
           </div>
         </div>
       </Link>
