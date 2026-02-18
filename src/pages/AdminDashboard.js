@@ -1,3 +1,5 @@
+// MULTISIZE TEST: This is a trivial change to force a redeploy and confirm the latest code is deployed.
+console.log('MULTISIZE TEST: AdminDashboard.js loaded');
 // ...existing code...
 
 // (Move the main price field JSX into the artwork form, after the description and before the sizes section)
