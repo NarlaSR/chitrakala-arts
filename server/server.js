@@ -38,6 +38,7 @@ const allowedOrigins = [
   'http://localhost:5000',
   'https://chitrakalaarts-production.up.railway.app',
   'https://chitrakala-arts.vercel.app', // Add your actual Vercel frontend URL
+  'https://chitrakala-arts-bkclleiho-sanjays-projects-7230cec0.vercel.app', // Added preview Vercel URL
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
