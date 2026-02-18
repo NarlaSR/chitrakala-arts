@@ -1,13 +1,12 @@
-// MULTISIZE TEST: This is a trivial change to force a redeploy and confirm the latest code is deployed.
-console.log('MULTISIZE TEST: AdminDashboard.js loaded');
-// ...existing code...
 
-// (Move the main price field JSX into the artwork form, after the description and before the sizes section)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { artworksAPI } from '../services/api';
 import '../styles/AdminDashboard.css';
+
+// MULTISIZE TEST: This is a trivial change to force a redeploy and confirm the latest code is deployed.
+console.log('MULTISIZE TEST: AdminDashboard.js loaded');
 
 const AdminDashboard = () => {
         // Helper for description validation color
