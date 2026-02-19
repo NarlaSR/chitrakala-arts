@@ -75,31 +75,13 @@ const ArtDetails = () => {
             <h1 className="art-title">{artwork.title}</h1>
             
             {/* Show all sizes/prices */}
-            {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
-              <div className="art-sizes">
-                <h3>Available Sizes & Prices</h3>
-                <ul>
-                  {artwork.sizes.map((sp, idx) => (
-                    <li key={idx}>
-                      <strong>{sp.size_label}:</strong> ₹{Number(sp.price).toLocaleString()}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <div className="art-price">
-                <span className="price-label">Price:</span>
-                <span className="price-value">₹{artwork.price?.toLocaleString?.() || ''}</span>
-              </div>
-            )}
-
             <div className="art-description">
               <h3>Description</h3>
               <p>{artwork.description}</p>
             </div>
 
             <div className="art-specifications">
-              <h3>Specifications</h3>
+              <h3>Available Sizes & Prices</h3>
               <ul>
                 {/* Show all sizes if available */}
                 {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
