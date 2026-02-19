@@ -82,6 +82,19 @@ const ArtDetails = () => {
 
             <div className="art-specifications">
               <h3>Available Sizes & Prices</h3>
+                <div style={{
+                  background: '#fffbe6',
+                  border: '1px solid #ffe58f',
+                  borderRadius: '6px',
+                  padding: '0.5rem 1rem',
+                  fontWeight: 500,
+                  fontSize: '0.75rem',
+                  color: '#b36b00',
+                  margin: '0.5rem 0 1rem 0'
+                }}>
+                  <span role="img" aria-label="info" style={{marginRight: '0.5rem'}}>ℹ️</span>
+                  Additional shipping charges & applicable sales tax may be added to the price shown
+                </div>
               <ul>
                 {/* Show all sizes if available */}
                 {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
