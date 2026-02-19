@@ -27,6 +27,7 @@ const ArtCard = ({ artwork }) => {
         <div className="art-card-content">
           <h3 className="art-card-title">{artwork.title}</h3>
           <p className="art-card-description">{artwork.description}</p>
+             {/* Show just one price in the art card footer */}
             <div className="art-card-footer">
               {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
                 <span className="art-card-price">
