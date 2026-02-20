@@ -40,6 +40,8 @@ const allowedOrigins = [
   'https://chitrakala-arts.vercel.app', // Add your actual Vercel frontend URL
   'https://chitrakala-arts-bkclleiho-sanjays-projects-7230cec0.vercel.app', // Added preview Vercel URL
   'https://chitrakala-arts-git-cka-6-mult-516191-sanjays-projects-7230cec0.vercel.app', // Added new preview Vercel URL
+  'https://chitrakala-arts-a1o06fflo-sanjays-projects-7230cec0.vercel.app', // Added another preview Vercel URL
+  'https://chitrakala-arts-git-wishlist-feature-sanjays-projects-7230cec0.vercel.app', // Added wishlist feature preview Vercel URL
   process.env.FRONTEND_URL,
   'http://localhost:3001' // Ensure local dev frontend is allowed
 ].filter(Boolean);
