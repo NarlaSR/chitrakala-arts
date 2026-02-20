@@ -58,7 +58,7 @@ const Home = () => {
       </section>
 
 
-      {/* Explore All Artworks Grouped by Category */}
+      {/* Explore All Artworks Grouped by Category - SN*/}
       {showAllGrouped ? (
         <section className="explore-all-section">
           <div className="section-header">
