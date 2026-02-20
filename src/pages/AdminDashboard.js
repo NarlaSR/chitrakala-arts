@@ -37,6 +37,31 @@ const AdminDashboard = () => {
   const { logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [artworks, setArtworks] = useState([]);
+  // Bulk Art Lookup state
+  const [bulkIds, setBulkIds] = useState('');
+  const [bulkResults, setBulkResults] = useState([]);
+  const [showBulkResults, setShowBulkResults] = useState(false);
+  const [hoveredImg, setHoveredImg] = useState(null);
+
+  const handleBulkLookup = (e) => {
+    e.preventDefault();
+    const ids = bulkIds.split(',').map(id => id.trim()).filter(Boolean);
+    if (ids.length === 0) {
+      setBulkResults([]);
+      setShowBulkResults(false);
+      return;
+    }
+    // Find artworks matching any of the IDs
+    const matches = artworks.filter(a => ids.includes(String(a.id)));
+    setBulkResults(matches);
+    setShowBulkResults(true);
+  };
+
+  const handleCloseBulkResults = () => {
+    setShowBulkResults(false);
+    setBulkResults([]);
+    setBulkIds('');
+  };
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingArtwork, setEditingArtwork] = useState(null);
@@ -238,6 +263,71 @@ const AdminDashboard = () => {
 
   return (
     <div className="admin-dashboard">
+      {/* Bulk Art Lookup Section */}
+      <div className="bulk-art-lookup" style={{ marginBottom: '2rem', background: '#f9f9f9', padding: '1rem', borderRadius: '8px', position: 'relative' }}>
+        <h2>Bulk Art Lookup (Paste Art IDs)</h2>
+        <form onSubmit={handleBulkLookup} style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <textarea
+            value={bulkIds}
+            onChange={e => setBulkIds(e.target.value)}
+            placeholder="Paste comma-separated art IDs here"
+            rows={2}
+            style={{ minWidth: '260px', flex: 2 }}
+          />
+          <button type="submit" className="btn-primary" style={{ flex: 0 }}>Search</button>
+        </form>
+        {showBulkResults && (
+          <div className="bulk-results-modal" style={{
+            position: 'fixed', left: 0, top: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.25)', zIndex: 3000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <div style={{ background: '#fff', borderRadius: '10px', padding: '2rem', minWidth: '60vw', maxWidth: '90vw', maxHeight: '80vh', overflow: 'auto', boxShadow: '0 4px 32px rgba(0,0,0,0.18)', position: 'relative' }}>
+              <button onClick={handleCloseBulkResults} style={{ position: 'absolute', top: 10, right: 18, fontSize: '2rem', background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>&times;</button>
+              <h3>Lookup Results</h3>
+              <table style={{ borderCollapse: 'collapse', width: '100%', marginTop: '1rem', fontSize: '1.05rem' }}>
+                <thead>
+                  <tr style={{ background: '#f2f2f2' }}>
+                    <th style={{ padding: '8px', border: '1px solid #ddd' }}>Image</th>
+                    <th style={{ padding: '8px', border: '1px solid #ddd' }}>Title</th>
+                    <th style={{ padding: '8px', border: '1px solid #ddd' }}>Category</th>
+                    <th style={{ padding: '8px', border: '1px solid #ddd' }}>Price</th>
+                    <th style={{ padding: '8px', border: '1px solid #ddd' }}>Size</th>
+                    <th style={{ padding: '8px', border: '1px solid #ddd' }}>Featured</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkResults.map(artwork => (
+                    <tr key={artwork.id}>
+                      <td style={{ textAlign: 'center', border: '1px solid #ddd', padding: '8px' }}>
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <img
+                            src={artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')}
+                            alt={artwork.title}
+                            className="artwork-thumbnail"
+                            style={{ userSelect: 'none', maxWidth: '60px', maxHeight: '60px', borderRadius: '6px', transition: 'box-shadow 0.2s' }}
+                            onMouseEnter={() => setHoveredImg(artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : ''))}
+                            onMouseLeave={() => setHoveredImg(null)}
+                          />
+                          {hoveredImg === (artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')) && (
+                            <div style={{ position: 'absolute', left: '110%', top: '50%', transform: 'translateY(-50%)', zIndex: 10, background: '#fff', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', padding: '6px' }}>
+                              <img src={hoveredImg} alt="Preview" style={{ maxWidth: '220px', maxHeight: '220px', borderRadius: '8px' }} />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px' }}>{artwork.title}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px' }}>{artwork.category}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px' }}>₹{artwork.price.toLocaleString()}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px' }}>{Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (artwork.sizes[0].size_label || artwork.sizes[0].size || '') : (artwork.dimensions || '')}</td>
+                      <td style={{ border: '1px solid #ddd', padding: '8px' }}>{artwork.featured ? '⭐ Yes' : 'No'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="admin-header">
         <h1>Admin Dashboard</h1>
         <div className="admin-actions">

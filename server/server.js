@@ -40,7 +40,8 @@ const allowedOrigins = [
   'https://chitrakala-arts.vercel.app', // Add your actual Vercel frontend URL
   'https://chitrakala-arts-bkclleiho-sanjays-projects-7230cec0.vercel.app', // Added preview Vercel URL
   'https://chitrakala-arts-git-cka-6-mult-516191-sanjays-projects-7230cec0.vercel.app', // Added new preview Vercel URL
-  process.env.FRONTEND_URL
+  process.env.FRONTEND_URL,
+  'http://localhost:3001' // Ensure local dev frontend is allowed
 ].filter(Boolean);
 
 app.use(cors({
@@ -116,13 +117,16 @@ const upload = multer({
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Rate limiter for contact form (3 submissions per hour per IP)
-const contactLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
-  message: { error: 'Too many messages sent. Please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const contactLimiter =
+  process.env.NODE_ENV === 'production'
+    ? rateLimit({
+        windowMs: 60 * 60 * 1000, // 1 hour
+        max: 3,
+        message: { error: 'Too many messages sent. Please try again later.' },
+        standardHeaders: true,
+        legacyHeaders: false,
+      })
+    : (req, res, next) => next(); // Disable rate limit in development
 
 // Rate limiter for login endpoint (prevent brute force attacks)
 const loginLimiter = rateLimit({

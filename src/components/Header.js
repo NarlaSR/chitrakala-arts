@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useWishlist } from '../context/WishlistContext';
+import WishlistModal from './WishlistModal';
 import { Link } from 'react-router-dom';
 import '../styles/Header.css';
 
@@ -9,13 +11,17 @@ const Header = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  const { wishlist } = useWishlist();
+  // Placeholder for modal open state (to be implemented)
+  const [showWishlist, setShowWishlist] = useState(false);
+
   return (
     <header className="header">
       <div className="header-container">
         <Link to="/" className="logo">
           <h1>Chitra Kala Sanskriti</h1>
         </Link>
-        
+
         <button className="mobile-menu-toggle" onClick={toggleMenu}>
           <span></span>
           <span></span>
@@ -34,7 +40,19 @@ const Header = () => {
           <Link to="/about" onClick={() => setIsMenuOpen(false)}>About</Link>
           <span className="nav-divider">|</span>
           <Link to="/contact" onClick={() => setIsMenuOpen(false)}>Contact</Link>
+          <span className="nav-divider">|</span>
+          <button
+            className="wishlist-btn"
+            onClick={() => setShowWishlist(true)}
+            aria-label="View Wishlist"
+          >
+            <span role="img" aria-label="wishlist">🛒</span>
+            {wishlist.length > 0 && (
+              <span className="wishlist-count">{wishlist.length}</span>
+            )}
+          </button>
         </nav>
+        <WishlistModal open={showWishlist} onClose={() => setShowWishlist(false)} />
       </div>
     </header>
   );
