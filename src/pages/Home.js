@@ -8,12 +8,15 @@ import '../styles/Home.css';
 
 const Home = () => {
   const [featuredArtworks, setFeaturedArtworks] = useState([]);
+  const [allArtworks, setAllArtworks] = useState([]);
+  const [showAllGrouped, setShowAllGrouped] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadArtworks = async () => {
       try {
         const data = await artworksAPI.getAll();
+        setAllArtworks(data);
         const featured = data.filter(art => art.featured);
         setFeaturedArtworks(featured);
       } catch (error) {
@@ -47,46 +50,75 @@ const Home = () => {
             <p className="hero-subtitle">
               Discover exquisite handcrafted artworks that blend tradition with contemporary design
             </p>
-            <Link to="/category/dot-mandala" className="hero-cta">
+            <button className="hero-cta" onClick={() => setShowAllGrouped(true)}>
               Explore Collection
-            </Link>
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Categories Section */}
-      <section className="categories-section">
-        <div className="section-header">
-          <h2>Our Art Categories</h2>
-          <p>Explore our diverse collection of handcrafted art pieces</p>
-        </div>
-        <div className="categories-grid">
-          {categories.map(category => (
-            <CategoryCard key={category.id} category={category} />
-          ))}
-        </div>
-      </section>
 
-      {/* Featured Artworks Section */}
-      <section className="featured-section">
-        <div className="section-header">
-          <h2>Featured Artworks</h2>
-          <p>Handpicked collection of our finest creations</p>
-        </div>
-        {loading ? (
-          <div className="loading">Loading artworks...</div>
-        ) : featuredArtworks.length > 0 ? (
-          <div className="artworks-grid">
-            {featuredArtworks.map(artwork => (
-              <ArtCard key={artwork.id} artwork={artwork} />
-            ))}
+      {/* Explore All Artworks Grouped by Category */}
+      {showAllGrouped ? (
+        <section className="explore-all-section">
+          <div className="section-header">
+            <h2>Explore All Artworks</h2>
+            <button className="hero-cta" style={{marginTop: '1rem'}} onClick={() => setShowAllGrouped(false)}>
+              Back to Home
+            </button>
           </div>
-        ) : (
-          <div className="no-artworks">
-            <p>No featured artworks available yet.</p>
-          </div>
-        )}
-      </section>
+          {categories.map(category => {
+            const catArtworks = allArtworks.filter(a => a.category === category.id);
+            if (catArtworks.length === 0) return null;
+            return (
+              <div key={category.id} className="category-group">
+                <h3 className="category-group-heading">{category.name}</h3>
+                <div className="artworks-grid">
+                  {catArtworks.map(artwork => (
+                    <ArtCard key={artwork.id} artwork={artwork} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      ) : (
+        <>
+          {/* Categories Section */}
+          <section className="categories-section">
+            <div className="section-header">
+              <h2>Our Art Categories</h2>
+              <p>Explore our diverse collection of handcrafted art pieces</p>
+            </div>
+            <div className="categories-grid">
+              {categories.map(category => (
+                <CategoryCard key={category.id} category={category} />
+              ))}
+            </div>
+          </section>
+
+          {/* Featured Artworks Section */}
+          <section className="featured-section">
+            <div className="section-header">
+              <h2>Featured Artworks</h2>
+              <p>Handpicked collection of our finest creations</p>
+            </div>
+            {loading ? (
+              <div className="loading">Loading artworks...</div>
+            ) : featuredArtworks.length > 0 ? (
+              <div className="artworks-grid">
+                {featuredArtworks.map(artwork => (
+                  <ArtCard key={artwork.id} artwork={artwork} />
+                ))}
+              </div>
+            ) : (
+              <div className="no-artworks">
+                <p>No featured artworks available yet.</p>
+              </div>
+            )}
+          </section>
+        </>
+      )}
 
       {/* About Preview Section */}
       <section className="about-preview">
