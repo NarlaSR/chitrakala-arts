@@ -51,6 +51,10 @@ async function getArtworks() {
   // Fetch sizes for each artwork
   const artworks = await Promise.all(result.rows.map(async (artwork) => {
     artwork.sizes = await getArtworkSizes(artwork.id);
+    // Always set artwork.image to a valid URL
+    if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
+      artwork.image = `/api/images/artworks/${artwork.id}`;
+    }
     return artwork;
   }));
   return artworks;
@@ -61,6 +65,10 @@ async function getArtworkById(id) {
   const artwork = result.rows[0];
   if (artwork) {
     artwork.sizes = await getArtworkSizes(artwork.id);
+    // Always set artwork.image to a valid URL
+    if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
+      artwork.image = `/api/images/artworks/${artwork.id}`;
+    }
   }
   return artwork;
 }

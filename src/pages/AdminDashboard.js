@@ -172,6 +172,17 @@ const AdminDashboard = () => {
   const handleEdit = (artwork) => {
     console.log('Editing artwork:', artwork);
     setEditingArtwork(artwork);
+    let sizes = [];
+    if (Array.isArray(artwork.sizes) && artwork.sizes.length > 0) {
+      sizes = artwork.sizes.map(sp => ({
+        size: sp.size_label || '',
+        price: sp.price || ''
+      }));
+    } else if (artwork.dimensions) {
+      sizes = [{ size: artwork.dimensions, price: artwork.price || '' }];
+    } else {
+      sizes = [{ size: '', price: '' }];
+    }
     setFormData({
       title: artwork.title,
       category: artwork.category,
@@ -179,15 +190,14 @@ const AdminDashboard = () => {
       price: artwork.price || '',
       materials: artwork.materials,
       featured: artwork.featured,
-      sizes: Array.isArray(artwork.sizes) && artwork.sizes.length > 0
-        ? artwork.sizes.map(sp => ({
-            size: sp.size_label || '',
-            price: sp.price || ''
-          }))
-        : [{ size: '', price: '' }]
+      sizes
     });
     setImagePreview(artwork.image || '');
     setShowForm(true);
+    // Scroll to top when edit form opens
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 0);
   };
 
   const handleDelete = async (id) => {

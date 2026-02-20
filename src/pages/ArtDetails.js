@@ -105,7 +105,7 @@ const ArtDetails = () => {
                   ))
                 ) : (
                   <li>
-                    <strong>Size:</strong> {artwork.dimensions}
+                    <strong>Size:</strong> {artwork.dimensions} {artwork.price ? (<span>| <strong>Price:</strong> ₹{Number(artwork.price).toLocaleString()}</span>) : null}
                   </li>
                 )}
                 <li>
