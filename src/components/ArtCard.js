@@ -29,11 +29,13 @@ const ArtCard = ({ artwork }) => {
           <p className="art-card-description">{artwork.description}</p>
              {/* Show just one price in the art card footer */}
             <div className="art-card-footer">
-              {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
+              {Array.isArray(artwork.sizes) && artwork.sizes.length > 1 ? (
                 <span className="art-card-price">
                   Price starting from: ₹
                   {Math.min(...artwork.sizes.map(sp => Number(sp.price))).toLocaleString()}
                 </span>
+              ) : Array.isArray(artwork.sizes) && artwork.sizes.length === 1 ? (
+                <span className="art-card-price">₹{Number(artwork.sizes[0].price).toLocaleString()}</span>
               ) : (
                 <span className="art-card-price">₹{artwork.price?.toLocaleString?.() || ''}</span>
               )}

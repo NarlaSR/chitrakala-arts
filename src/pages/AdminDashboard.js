@@ -170,14 +170,21 @@ const AdminDashboard = () => {
   };
 
   const handleEdit = (artwork) => {
+    console.log('Editing artwork:', artwork);
     setEditingArtwork(artwork);
     setFormData({
       title: artwork.title,
       category: artwork.category,
       description: artwork.description,
+      price: artwork.price || '',
       materials: artwork.materials,
       featured: artwork.featured,
-      sizes: Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? artwork.sizes : [{ size: '', price: '' }]
+      sizes: Array.isArray(artwork.sizes) && artwork.sizes.length > 0
+        ? artwork.sizes.map(sp => ({
+            size: sp.size_label || '',
+            price: sp.price || ''
+          }))
+        : [{ size: '', price: '' }]
     });
     setImagePreview(artwork.image || '');
     setShowForm(true);
@@ -338,6 +345,7 @@ const AdminDashboard = () => {
               {/* Multiple sizes/prices UI */}
               <div className="form-group">
                 <label>Sizes & Prices *</label>
+                {console.log('Rendering sizes input:', formData.sizes)}
                 {formData.sizes.map((sp, idx) => (
                   <div className="size-price-row" key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                     <input
