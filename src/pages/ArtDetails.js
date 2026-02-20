@@ -74,22 +74,40 @@ const ArtDetails = () => {
             <div className="art-category-badge">{category.name}</div>
             <h1 className="art-title">{artwork.title}</h1>
             
-            <div className="art-price">
-              <span className="price-label">Price:</span>
-              <span className="price-value">₹{artwork.price.toLocaleString()}</span>
-            </div>
-
+            {/* Show all sizes/prices */}
             <div className="art-description">
               <h3>Description</h3>
               <p>{artwork.description}</p>
             </div>
 
             <div className="art-specifications">
-              <h3>Specifications</h3>
+              <h3>Available Sizes & Prices</h3>
+                <div style={{
+                  background: '#fffbe6',
+                  border: '1px solid #ffe58f',
+                  borderRadius: '6px',
+                  padding: '0.5rem 1rem',
+                  fontWeight: 500,
+                  fontSize: '0.75rem',
+                  color: '#b36b00',
+                  margin: '0.5rem 0 1rem 0'
+                }}>
+                  <span role="img" aria-label="info" style={{marginRight: '0.5rem'}}>ℹ️</span>
+                  Additional shipping charges & applicable sales tax may be added to the price shown
+                </div>
               <ul>
-                <li>
-                  <strong>Size:</strong> {artwork.dimensions}
-                </li>
+                {/* Show all sizes if available */}
+                {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
+                  artwork.sizes.map((sp, idx) => (
+                    <li key={idx}>
+                      <strong>Size:</strong> {sp.size_label} | <strong>Price:</strong> ₹{Number(sp.price).toLocaleString()}
+                    </li>
+                  ))
+                ) : (
+                  <li>
+                    <strong>Size:</strong> {artwork.dimensions} {artwork.price ? (<span>| <strong>Price:</strong> ₹{Number(artwork.price).toLocaleString()}</span>) : null}
+                  </li>
+                )}
                 <li>
                   <strong>Materials:</strong> {artwork.materials}
                 </li>

@@ -38,6 +38,8 @@ const allowedOrigins = [
   'http://localhost:5000',
   'https://chitrakalaarts-production.up.railway.app',
   'https://chitrakala-arts.vercel.app', // Add your actual Vercel frontend URL
+  'https://chitrakala-arts-bkclleiho-sanjays-projects-7230cec0.vercel.app', // Added preview Vercel URL
+  'https://chitrakala-arts-git-cka-6-mult-516191-sanjays-projects-7230cec0.vercel.app', // Added new preview Vercel URL
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
@@ -346,28 +348,45 @@ app.get('/api/artworks/:id', async (req, res) => {
 // Create new artwork (admin only)
 app.post('/api/artworks', authenticateToken, upload.single('image'), async (req, res) => {
   try {
+    // Debug: log incoming request body
+    console.log('POST /api/artworks request body:', req.body);
     // Validate required fields
     if (!validateString(req.body.title, 2, 255)) {
+      console.error('Validation failed: title');
       return res.status(400).json({ error: 'Title must be between 2 and 255 characters' });
     }
     if (!validateString(req.body.category, 2, 50)) {
+      console.error('Validation failed: category');
       return res.status(400).json({ error: 'Category must be between 2 and 50 characters' });
     }
     if (!validateString(req.body.description, 10, 5000)) {
+      console.error('Validation failed: description');
       return res.status(400).json({ error: 'Description must be between 10 and 5000 characters' });
     }
     if (!validatePrice(req.body.price)) {
+      console.error('Validation failed: price', req.body.price);
       return res.status(400).json({ error: 'Invalid price format' });
     }
     if (req.body.size && !validateString(req.body.size, 0, 100)) {
+      console.error('Validation failed: size');
       return res.status(400).json({ error: 'Dimensions must be less than 100 characters' });
     }
     if (req.body.materials && !validateString(req.body.materials, 0, 255)) {
+      console.error('Validation failed: materials');
       return res.status(400).json({ error: 'Materials must be less than 255 characters' });
     }
 
     const artworkId = `art-${Date.now()}`;
-    
+    // Parse sizes array from request
+    let sizes = [];
+    if (req.body.sizes) {
+      try {
+        sizes = typeof req.body.sizes === 'string' ? JSON.parse(req.body.sizes) : req.body.sizes;
+      } catch (e) {
+        console.error('Failed to parse sizes:', req.body.sizes);
+        sizes = [];
+      }
+    }
     const newArtwork = {
       id: artworkId,
       title: req.body.title.trim(),
@@ -377,11 +396,10 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       dimensions: req.body.size?.trim() || '',
       materials: req.body.materials?.trim() || '',
       image: req.file ? `${BASE_URL}/api/images/artworks/${artworkId}` : '',
-      featured: req.body.featured === 'true'
+      featured: req.body.featured === 'true',
+      sizes
     };
-
     const artwork = await db.createArtwork(newArtwork);
-    
     // Store image in database if uploaded
     if (req.file) {
       const imageBuffer = fs.readFileSync(req.file.path);
@@ -390,10 +408,10 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       // Delete temporary file
       fs.unlinkSync(req.file.path);
     }
-    
     res.status(201).json(artwork);
   } catch (error) {
     console.error('Error creating artwork:', error);
+    console.error('Request body at error:', req.body);
     res.status(500).json({ error: 'Failed to create artwork' });
   }
 });
@@ -427,6 +445,15 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       return res.status(400).json({ error: 'Materials must be less than 255 characters' });
     }
 
+    // Parse sizes array from request
+    let sizes = [];
+    if (req.body.sizes) {
+      try {
+        sizes = typeof req.body.sizes === 'string' ? JSON.parse(req.body.sizes) : req.body.sizes;
+      } catch (e) {
+        sizes = [];
+      }
+    }
     const updatedArtwork = {
       title: req.body.title?.trim() || existingArtwork.title,
       category: req.body.category?.trim() || existingArtwork.category,
@@ -435,7 +462,8 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       dimensions: req.body.size?.trim() || existingArtwork.dimensions,
       materials: req.body.materials?.trim() || existingArtwork.materials,
       featured: req.body.featured !== undefined ? req.body.featured === 'true' : existingArtwork.featured,
-      image: existingArtwork.image
+      image: existingArtwork.image,
+      sizes
     };
 
     // Update image if new one is uploaded
