@@ -34,10 +34,11 @@ const WishlistModal = ({ open, onClose }) => {
         timestamp: formTimestamp
       };
       // Use absolute backend URL for local dev to avoid CORS issues
-      const backendUrl =
-        window.location.hostname === 'localhost'
-          ? 'http://localhost:5000/api/contact/send-message'
-          : '/api/contact/send-message';
+      // Use Railway backend URL in production, localhost in development
+      const isLocal = window.location.hostname === 'localhost';
+      const backendUrl = isLocal
+        ? 'http://localhost:5000/api/contact/send-message'
+        : 'https://chitrakalaarts-production.up.railway.app/api/contact/send-message';
       const res = await fetch(backendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
