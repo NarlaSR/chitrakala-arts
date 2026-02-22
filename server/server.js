@@ -37,6 +37,7 @@ const allowedOrigins = [
   'http://localhost:3001',
   'http://localhost:5000',
   'https://chitrakalaarts-production.up.railway.app',
+  'https://www.chitrakala-arts.com', // Add your actual domain
   'https://chitrakala-arts.vercel.app', // Add your actual Vercel frontend URL
   'https://chitrakala-arts-bkclleiho-sanjays-projects-7230cec0.vercel.app', // Added preview Vercel URL
   'https://chitrakala-arts-git-cka-6-mult-516191-sanjays-projects-7230cec0.vercel.app', // Added new preview Vercel URL
