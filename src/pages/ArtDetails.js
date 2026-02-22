@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useWishlist } from '../context/WishlistContext';
 import { useParams, Link } from 'react-router-dom';
 import { getCategoryById } from '../data/artData';
 import { artworksAPI } from '../services/api';
@@ -8,6 +9,8 @@ const ArtDetails = () => {
   const { artId } = useParams();
   const [artwork, setArtwork] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { addToWishlist, wishlist } = useWishlist();
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     const loadArtwork = async () => {
@@ -118,9 +121,21 @@ const ArtDetails = () => {
             </div>
 
             <div className="art-actions">
-              <button className="btn-primary">Contact for Purchase</button>
-              <button className="btn-secondary">Add to Wishlist</button>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  addToWishlist(artwork);
+                  setShowToast(true);
+                  setTimeout(() => setShowToast(false), 2000);
+                }}
+                disabled={wishlist.some(item => item.id === artwork.id)}
+              >
+                {wishlist.some(item => item.id === artwork.id) ? 'Added to Wishlist' : 'Add to Wishlist'}
+              </button>
             </div>
+            {showToast && (
+              <div className="wishlist-toast">Added to Wishlist!</div>
+            )}
 
             <div className="art-note">
               <p>

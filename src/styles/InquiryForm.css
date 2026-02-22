@@ -1,0 +1,51 @@
+.inquiry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+}
+
+.inquiry-form label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 500;
+  color: #333;
+}
+
+.inquiry-form input,
+.inquiry-form textarea {
+  margin-top: 0.3rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.inquiry-form textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.inquiry-form button {
+  background: var(--primary-color, #2d6cdf);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: background 0.2s;
+}
+
+.inquiry-form button:disabled {
+  background: #aaa;
+  cursor: not-allowed;
+}
+
+.inquiry-error {
+  color: #e74c3c;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
