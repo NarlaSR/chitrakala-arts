@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useHomeView } from '../context/HomeViewContext';
 import { useWishlist } from '../context/WishlistContext';
 import WishlistModal from './WishlistModal';
 import { Link } from 'react-router-dom';
@@ -6,6 +7,7 @@ import '../styles/Header.css';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { setShowAllGrouped } = useHomeView();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -18,7 +20,7 @@ const Header = () => {
   return (
     <header className="header">
       <div className="header-container">
-        <Link to="/" className="logo">
+        <Link to="/" className="logo" onClick={() => setShowAllGrouped(false)}>
           <h1>Chitra Kala Sanskriti</h1>
         </Link>
 
@@ -29,7 +31,7 @@ const Header = () => {
         </button>
 
         <nav className={`nav ${isMenuOpen ? 'active' : ''}`}>
-          <Link to="/" onClick={() => setIsMenuOpen(false)}>Home</Link>
+          <Link to="/" onClick={() => { setIsMenuOpen(false); setShowAllGrouped(false); }}>Home</Link>
           <span className="nav-divider">|</span>
           <Link to="/category/dot-mandala" onClick={() => setIsMenuOpen(false)}>Dot Mandala</Link>
           <span className="nav-divider">|</span>

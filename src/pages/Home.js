@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { useHomeView } from '../context/HomeViewContext';
 import CategoryCard from '../components/CategoryCard';
 import ArtCard from '../components/ArtCard';
 import { categories } from '../data/artData';
@@ -9,8 +10,15 @@ import '../styles/Home.css';
 const Home = () => {
   const [featuredArtworks, setFeaturedArtworks] = useState([]);
   const [allArtworks, setAllArtworks] = useState([]);
-  const [showAllGrouped, setShowAllGrouped] = useState(false);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const { showAllGrouped, setShowAllGrouped } = useHomeView();
+  // Reset showAllGrouped if route is "/"
+  useEffect(() => {
+    if (location.pathname === "/") {
+      setShowAllGrouped(false);
+    }
+  }, [location.pathname, setShowAllGrouped]);
 
   useEffect(() => {
     const loadArtworks = async () => {
