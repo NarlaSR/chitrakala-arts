@@ -96,7 +96,7 @@ const ArtDetails = () => {
                   margin: '0.5rem 0 1rem 0'
                 }}>
                   <span role="img" aria-label="info" style={{marginRight: '0.5rem'}}>ℹ️</span>
-                  Additional shipping charges & applicable sales tax may be added to the price shown
+                  Price excludes shipping and applicable taxes. Please contact us for a detailed quote.
                 </div>
               <ul>
                 {/* Show all sizes if available */}

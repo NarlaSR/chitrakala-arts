@@ -61,9 +61,9 @@ const Home = () => {
       {/* Explore All Artworks Grouped by Category - SN*/}
       {showAllGrouped ? (
         <section className="explore-all-section">
-          <div className="section-header">
+          <div className="section-header sticky-header">
             <h2>Explore All Artworks</h2>
-            <button className="hero-cta" style={{marginTop: '1rem'}} onClick={() => setShowAllGrouped(false)}>
+            <button className="hero-cta back-to-home-btn" onClick={() => setShowAllGrouped(false)}>
               Back to Home
             </button>
           </div>
@@ -72,7 +72,7 @@ const Home = () => {
             if (catArtworks.length === 0) return null;
             return (
               <div key={category.id} className="category-group">
-                <h3 className="category-group-heading">{category.name}</h3>
+                <h3 className="category-group-heading highlighted-category">{category.name}</h3>
                 <div className="artworks-grid">
                   {catArtworks.map(artwork => (
                     <ArtCard key={artwork.id} artwork={artwork} />

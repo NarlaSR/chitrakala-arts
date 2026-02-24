@@ -1,3 +1,37 @@
+.highlighted-category {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #222;
+  background: #ffe082;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--white);
+  padding: 1rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.back-to-home-btn {
+  position: sticky;
+  top: 1rem;
+  margin-left: 2rem;
+}
+
+.back-to-home-btn {
+  position: relative;
+  top: 0;
+  margin-left: 2rem;
+}
 .home {
   width: 100%;
 }

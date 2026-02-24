@@ -145,11 +145,14 @@ const initializeDefaultAdmin = async () => {
   try {
     const users = await db.getUsers();
     if (users.length === 0) {
-      const defaultPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+      const defaultPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+      if (!defaultPassword) {
+        throw new Error('DEFAULT_ADMIN_PASSWORD environment variable is required for admin setup.');
+      }
       const hashedPassword = await bcrypt.hash(defaultPassword, 10);
       await db.createUser('admin-1', 'admin', hashedPassword, 'admin');
       console.log('✅ Default admin created - username: admin');
-      console.warn('⚠️  IMPORTANT: Change default admin password immediately!');
+      console.warn('⚠️  IMPORTANT: Admin password is set from environment variable. Keep it secure!');
     }
   } catch (error) {
     console.error('Error initializing admin:', error);
@@ -603,7 +606,12 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
 
     // Get admin emails from database
     const contactData = await db.getContact();
-    const adminEmails = contactData?.emails || ['snarla369@gmail.com'];
+    const adminEmails = contactData?.emails || ['chitrakala.sanskriti@gmail.com'];
+
+    // Determine recipient email: env > db > default
+    const envEmail = process.env.INQUIRY_EMAIL;
+    const fallbackEmail = process.env.INQUIRY_EMAIL_FALLBACK;
+    const recipientEmail = [envEmail || adminEmails[0] || 'chitrakala.sanskriti@gmail.com'];
 
         // Sanitize user input to prevent XSS
     const sanitizeHTML = (str) => {
@@ -641,16 +649,38 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       `
     };
 
-    const recipientEmail = [adminEmails[0]];
-    
     const result = await resend.emails.send({
-      from: 'Chitrakala Arts <onboarding@resend.dev>',
+      from: 'Chitrakala Arts <info@chitrakala-arts.com>',
       to: recipientEmail,
       replyTo: email,
       subject: `New Contact Form: ${subject}`,
       html: mailOptions.html
     });
 
+    // Log the full result for debugging
+    console.log('Full Resend API response:', JSON.stringify(result, null, 2));
+    if (result.error) {
+      console.warn('Primary email failed:', result.error);
+      // Try fallback email if configured
+      if (fallbackEmail) {
+        const fallbackResult = await resend.emails.send({
+          from: 'Chitrakala Arts <info@chitrakala-arts.com>',
+          to: [fallbackEmail],
+          replyTo: email,
+          subject: `New Contact Form: ${subject}`,
+          html: mailOptions.html
+        });
+        console.log('Fallback Resend API response:', JSON.stringify(fallbackResult, null, 2));
+        if (fallbackResult.error) {
+          console.error('Fallback email also failed:', fallbackResult.error);
+          return res.status(500).json({ error: 'Failed to send inquiry email. Please try again later. Or contact us directly at chitrakala.sanskriti@gmail.com' });
+        } else {
+          return res.json({ message: 'Message sent successfully to fallback email.' });
+        }
+      } else {
+        return res.status(500).json({ error: 'Failed to send inquiry email. Please try again later. Or contact us directly at chitrakala.sanskriti@gmail.com' });
+      }
+    }
     console.log('Email sent successfully via Resend. ID:', result.data?.id || result.id || 'N/A');
     res.json({ message: 'Message sent successfully!' });
   } catch (error) {

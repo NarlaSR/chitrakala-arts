@@ -1,11 +1,13 @@
 # MULTIPLE IMAGES PER ARTWORK FEATURE PLAN
 
 ## Overview
+
 Enable support for uploading, storing, and displaying multiple images for each artwork. All images will be managed in PostgreSQL for consistency with current architecture.
 
 ---
 
 ## 1. Database Changes (PostgreSQL)
+
 - **Add artwork_images table:**
   - `id` (PK)
   - `artwork_id` (FK to artworks)
@@ -27,6 +29,7 @@ CREATE TABLE artwork_images (
 ---
 
 ## 2. Backend/API Changes
+
 - **Upload Endpoint:**
   - Accept multiple image files for each artwork (e.g., `multer.array('images')`).
   - Store each image in artwork_images table with correct artwork_id and order.
@@ -38,6 +41,7 @@ CREATE TABLE artwork_images (
 ---
 
 ## 3. Admin Dashboard (Frontend)
+
 - **Artwork Form:**
   - Allow uploading multiple images (input type="file" with `multiple`).
   - Show previews of all selected images.
@@ -48,6 +52,7 @@ CREATE TABLE artwork_images (
 ---
 
 ## 4. Art Details Page (Frontend)
+
 - **Display:**
   - Show all images for an artwork (carousel/gallery/thumbnails).
   - Allow users to click thumbnails for larger view.
@@ -55,11 +60,13 @@ CREATE TABLE artwork_images (
 ---
 
 ## 5. Migration/Legacy Handling
+
 - For existing artworks, migrate the single image to artwork_images as the first image.
 
 ---
 
 ## 6. Robustness & Best Practices
+
 - Validate image types and sizes on frontend and backend.
 - Ensure atomic updates (all images saved or none).
 - Clean up removed images from storage/server.
@@ -68,16 +75,17 @@ CREATE TABLE artwork_images (
 
 ## Summary Table
 
-| Layer         | Change                                                                 |
-|---------------|-----------------------------------------------------------------------|
-| Database      | Add artwork_images table, migrate single images                       |
-| Backend API   | Accept multiple images, return all images, support CRUD for images    |
-| Admin UI      | Multi-image upload, preview, remove, reorder                         |
-| Art Details   | Display all images (carousel/gallery)                                 |
+| Layer       | Change                                                             |
+| ----------- | ------------------------------------------------------------------ |
+| Database    | Add artwork_images table, migrate single images                    |
+| Backend API | Accept multiple images, return all images, support CRUD for images |
+| Admin UI    | Multi-image upload, preview, remove, reorder                       |
+| Art Details | Display all images (carousel/gallery)                              |
 
 ---
 
 ## Next Steps
+
 - Start with database migration and backend API changes.
 - Update admin dashboard for multi-image upload.
 - Update art details page for multi-image display.

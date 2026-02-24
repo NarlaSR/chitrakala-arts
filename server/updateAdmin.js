@@ -8,8 +8,11 @@ async function updateAdminCredentials() {
   try {
     await initializeDatabase();
     
-    const newUsername = 'msuchitra';
-    const newPassword = 'sonu@786';
+    const newUsername = process.env.ADMIN_USERNAME;
+    const newPassword = process.env.ADMIN_PASSWORD;
+    if (!newUsername || !newPassword) {
+      throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD environment variables are required.');
+    }
     
     // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -23,6 +26,7 @@ async function updateAdminCredentials() {
     console.log('✅ Admin credentials updated successfully!');
     console.log(`   Username: ${newUsername}`);
     console.log(`   Password: ${newPassword}`);
+    console.warn('⚠️  Credentials are set from environment variables. Keep them secure!');
     console.log('\n⚠️  Please save these credentials in a secure location!');
     
   } catch (error) {
