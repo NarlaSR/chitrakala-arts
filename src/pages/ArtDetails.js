@@ -12,7 +12,7 @@ const ArtDetails = () => {
   const [artwork, setArtwork] = useState(null);
   const [loading, setLoading] = useState(true);
   const { addToWishlist, wishlist } = useWishlist();
-  const { countryCode, currency } = useCurrency();
+  const { countryCode } = useCurrency();
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
