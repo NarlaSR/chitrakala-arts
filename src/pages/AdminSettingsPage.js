@@ -27,9 +27,18 @@ const AdminSettingsPage = () => {
     },
     showSocial: true
   });
+  
+  // Pricing settings state
+  const [pricingSettings, setPricingSettings] = useState({
+    fx_rate: 83,
+    usd_multiplier: 1.75
+  });
+  const [fetchingFxRate, setFetchingFxRate] = useState(false);
+  const [recalculatingPrices, setRecalculatingPrices] = useState(false);
 
   useEffect(() => {
     fetchSettings();
+    fetchPricingSettings();
   }, []);
 
   const fetchSettings = async () => {
@@ -135,6 +144,124 @@ const AdminSettingsPage = () => {
       alert('Error updating site settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Pricing settings functions
+  const fetchPricingSettings = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/pricing-settings`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPricingSettings({
+          fx_rate: data.fx_rate,
+          usd_multiplier: data.usd_multiplier
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching pricing settings:', error);
+    }
+  };
+
+  const handlePricingChange = (field, value) => {
+    setPricingSettings(prev => ({
+      ...prev,
+      [field]: parseFloat(value) || 0
+    }));
+  };
+
+  const handleSavePricingSettings = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/pricing-settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(pricingSettings)
+      });
+
+      if (response.ok) {
+        alert('Pricing settings updated successfully!');
+      } else {
+        alert('Failed to update pricing settings');
+      }
+    } catch (error) {
+      console.error('Error updating pricing settings:', error);
+      alert('Error updating pricing settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleFetchLatestFxRate = async () => {
+    setFetchingFxRate(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/pricing-settings/fetch-fx-rate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPricingSettings(prev => ({
+          ...prev,
+          fx_rate: data.fx_rate
+        }));
+        alert(`Latest FX rate fetched: ${data.fx_rate} INR/USD\nFetched from: ${data.source}\nLast updated: ${new Date(data.last_updated).toLocaleString()}`);
+      } else {
+        alert('Failed to fetch latest FX rate');
+      }
+    } catch (error) {
+      console.error('Error fetching FX rate:', error);
+      alert('Error fetching FX rate');
+    } finally {
+      setFetchingFxRate(false);
+    }
+  };
+
+  const handleRecalculateAllPrices = async () => {
+    const confirmed = window.confirm(
+      `This will recalculate USD prices for ALL artworks using:\n\n` +
+      `FX Rate: ${pricingSettings.fx_rate} INR/USD\n` +
+      `USD Multiplier: ${pricingSettings.usd_multiplier}x\n\n` +
+      `Are you sure you want to continue?`
+    );
+
+    if (!confirmed) return;
+
+    setRecalculatingPrices(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/artworks/recalculate-prices`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Successfully recalculated prices for ${data.updated} artworks!`);
+      } else {
+        alert('Failed to recalculate prices');
+      }
+    } catch (error) {
+      console.error('Error recalculating prices:', error);
+      alert('Error recalculating prices');
+    } finally {
+      setRecalculatingPrices(false);
     }
   };
 
@@ -311,6 +438,86 @@ const AdminSettingsPage = () => {
               onChange={handleLogoChange}
             />
             <small>Recommended: 150px × 40px, PNG with transparent background, max 2MB</small>
+          </div>
+        </section>
+
+        {/* Pricing Settings */}
+        <section className="settings-section">
+          <h2>Pricing Configuration</h2>
+          <p className="section-description">
+            Configure currency conversion for artwork pricing. INR is the master price; USD is auto-calculated using the formula: <strong>USD = (INR ÷ FX Rate) × USD Multiplier</strong>
+          </p>
+
+          <div className="form-group">
+            <label htmlFor="fxRate">FX Rate (INR per USD)</label>
+            <input
+              type="number"
+              id="fxRate"
+              step="0.01"
+              min="1"
+              value={pricingSettings.fx_rate}
+              onChange={(e) => handlePricingChange('fx_rate', e.target.value)}
+            />
+            <small>Current exchange rate: How many INR equals 1 USD (e.g., 83.25)</small>
+          </div>
+
+          <div className="pricing-actions">
+            <button
+              type="button"
+              className="fetch-fx-button"
+              onClick={handleFetchLatestFxRate}
+              disabled={fetchingFxRate || saving}
+            >
+              {fetchingFxRate ? 'Fetching...' : '🌐 Fetch Latest FX Rate'}
+            </button>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="usdMultiplier">USD Multiplier</label>
+            <input
+              type="number"
+              id="usdMultiplier"
+              step="0.01"
+              min="1"
+              value={pricingSettings.usd_multiplier}
+              onChange={(e) => handlePricingChange('usd_multiplier', e.target.value)}
+            />
+            <small>Markup factor for USD pricing (e.g., 1.75 for 75% markup). Default: 1.75x</small>
+          </div>
+
+          <div className="pricing-example">
+            <strong>Example Calculation:</strong>
+            <p>
+              If an artwork is ₹{(8300).toLocaleString('en-IN')} INR:<br/>
+              USD = (₹8,300 ÷ {pricingSettings.fx_rate}) × {pricingSettings.usd_multiplier} 
+              = ${Math.round((8300 / pricingSettings.fx_rate) * pricingSettings.usd_multiplier)}
+              (after psychological rounding to 9/49/99 endings)
+            </p>
+          </div>
+
+          <div className="pricing-actions-group">
+            <button
+              type="button"
+              className="save-pricing-button"
+              onClick={handleSavePricingSettings}
+              disabled={saving || fetchingFxRate || recalculatingPrices}
+            >
+              {saving ? 'Saving...' : '💾 Save Pricing Settings'}
+            </button>
+
+            <button
+              type="button"
+              className="recalculate-button"
+              onClick={handleRecalculateAllPrices}
+              disabled={saving || fetchingFxRate || recalculatingPrices}
+            >
+              {recalculatingPrices ? 'Recalculating...' : '🔄 Recalculate All Prices'}
+            </button>
+          </div>
+
+          <div className="pricing-warning">
+            <strong>⚠️ Important:</strong> After changing FX rate or multiplier, click "Recalculate All Prices" 
+            to update all existing artworks. New artworks will automatically use the current settings.
           </div>
         </section>
 

@@ -76,6 +76,13 @@ const AdminDashboard = () => {
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
+  
+  // Pricing settings state
+  const [pricingSettings, setPricingSettings] = useState({
+    fx_rate: 83,
+    usd_multiplier: 1.75
+  });
+  const [calculatedUsd, setCalculatedUsd] = useState(0);
 
   useEffect(() => {
     if (!isAdmin()) {
@@ -83,8 +90,19 @@ const AdminDashboard = () => {
       return;
     }
     loadArtworks();
+    loadPricingSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  
+  // Recalculate USD price whenever INR price or pricing settings change
+  useEffect(() => {
+    if (formData.price && pricingSettings.fx_rate && pricingSettings.usd_multiplier) {
+      const usd = calculateUsdPrice(Number(formData.price), pricingSettings.fx_rate, pricingSettings.usd_multiplier);
+      setCalculatedUsd(usd);
+    } else {
+      setCalculatedUsd(0);
+    }
+  }, [formData.price, pricingSettings]);
 
   const loadArtworks = async () => {
     try {
@@ -96,6 +114,52 @@ const AdminDashboard = () => {
       console.error('Failed to load artworks:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPricingSettings = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/pricing-settings`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPricingSettings({
+          fx_rate: data.fx_rate,
+          usd_multiplier: data.usd_multiplier
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching pricing settings:', error);
+    }
+  };
+
+  // Helper function to calculate USD price with psychological rounding
+  const calculateUsdPrice = (inrPrice, fxRate, multiplier) => {
+    if (!inrPrice || !fxRate || !multiplier) return 0;
+    
+    const baseUsd = (inrPrice / fxRate) * multiplier;
+    
+    // Psychological rounding logic (match backend)
+    if (baseUsd < 10) {
+      // Round to .99 (e.g., 7.99)
+      return Math.ceil(baseUsd) - 0.01;
+    } else if (baseUsd < 100) {
+      // Round to .49 or .99 (e.g., 49.99, 59.49)
+      const tens = Math.floor(baseUsd / 10) * 10;
+      const remainder = baseUsd - tens;
+      if (remainder <= 5) {
+        return tens + 4.99;
+      } else {
+        return tens + 9.99;
+      }
+    } else {
+      // Round to .99 (e.g., 149.99, 249.99)
+      return Math.ceil(baseUsd / 10) * 10 - 0.01;
     }
   };
 
@@ -425,7 +489,7 @@ const AdminDashboard = () => {
               {/* Main price field for backend compatibility */}
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="price">Main Price (₹) *</label>
+                  <label htmlFor="price">Master Price (INR) *</label>
                   <input
                     type="number"
                     id="price"
@@ -437,10 +501,28 @@ const AdminDashboard = () => {
                     step="0.01"
                     required
                   />
-                  <small>Required for backend. Use the lowest or default price if multiple sizes.</small>
+                  <small>Base price in Indian Rupees. USD is auto-calculated.</small>
                   {formErrors.price && <div className="form-error">{formErrors.price}</div>}
                 </div>
               </div>
+
+              {/* Auto-calculated USD price display */}
+              {formData.price && (
+                <div className="form-row">
+                  <div className="form-group calculated-usd-display">
+                    <label>Calculated USD Price (Read-only)</label>
+                    <div className="usd-price-box">
+                      <span className="usd-amount">${calculatedUsd.toFixed(2)}</span>
+                      <small className="usd-formula">
+                        Formula: (₹{Number(formData.price).toLocaleString('en-IN')} ÷ {pricingSettings.fx_rate}) × {pricingSettings.usd_multiplier} = ${calculatedUsd.toFixed(2)}
+                      </small>
+                      <small className="usd-note">
+                        Using FX Rate: {pricingSettings.fx_rate} INR/USD | Multiplier: {pricingSettings.usd_multiplier}x
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Multiple sizes/prices UI */}
               <div className="form-group">
@@ -540,7 +622,8 @@ const AdminDashboard = () => {
                 <th>Image</th>
                 <th>Title</th>
                 <th>Category</th>
-                <th>Price</th>
+                <th>Price (INR)</th>
+                <th>Price (USD)</th>
                 <th>Size</th>
                 <th>Featured</th>
                 <th>Actions</th>
@@ -549,7 +632,7 @@ const AdminDashboard = () => {
             <tbody>
               {artworks.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="no-data">
+                  <td colSpan="8" className="no-data">
                     No artworks yet. Add your first artwork!
                   </td>
                 </tr>
@@ -568,7 +651,8 @@ const AdminDashboard = () => {
                     </td>
                     <td>{artwork.title}</td>
                     <td>{artwork.category}</td>
-                    <td>₹{artwork.price.toLocaleString()}</td>
+                    <td>₹{(artwork.price_inr || artwork.price || 0).toLocaleString()}</td>
+                    <td>${artwork.price_usd ? Number(artwork.price_usd).toFixed(2) : '—'}</td>
                     <td>{
                       Array.isArray(artwork.sizes) && artwork.sizes.length > 0
                         ? (artwork.sizes[0].size_label || artwork.sizes[0].size || '')

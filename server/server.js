@@ -11,6 +11,7 @@ const { rateLimit } = require('express-rate-limit');
 const sharp = require('sharp');
 const { initializeDatabase, isDatabaseConfigured } = require('./db');
 const db = require('./dbQueries');
+const { calculateUsdPrice, getPriceForCountry } = require('./priceUtils');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,6 +35,7 @@ app.set('trust proxy', 1);
 
 // CORS configuration - restrict to your domains
 const allowedOrigins = [
+  'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:5000',
   'https://chitrakalaarts-production.up.railway.app',
@@ -387,6 +389,12 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
     }
 
     const artworkId = `art-${Date.now()}`;
+    
+    // Get current pricing settings for USD calculation
+    const pricingSettings = await db.getPricingSettings();
+    const fxRate = parseFloat(pricingSettings.fx_rate || 83);
+    const multiplier = parseFloat(pricingSettings.usd_multiplier || 1.75);
+    
     // Parse sizes array from request
     let sizes = [];
     if (req.body.sizes) {
@@ -397,12 +405,21 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
         sizes = [];
       }
     }
+    
+    // Calculate INR and USD prices
+    const priceInr = parseFloat(req.body.price);
+    const priceUsd = calculateUsdPrice(priceInr, fxRate, multiplier);
+    
     const newArtwork = {
       id: artworkId,
       title: req.body.title.trim(),
       category: req.body.category.trim(),
       description: req.body.description.trim(),
-      price: parseFloat(req.body.price),
+      price: priceInr, // Keep for backward compatibility
+      price_inr: priceInr,
+      price_usd: priceUsd,
+      fx_rate_used: fxRate,
+      multiplier_used: multiplier,
       dimensions: req.body.size?.trim() || '',
       materials: req.body.materials?.trim() || '',
       image: req.file ? `${BASE_URL}/api/images/artworks/${artworkId}` : '',
@@ -455,6 +472,11 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       return res.status(400).json({ error: 'Materials must be less than 255 characters' });
     }
 
+    // Get current pricing settings for USD calculation
+    const pricingSettings = await db.getPricingSettings();
+    const fxRate = parseFloat(pricingSettings.fx_rate || 83);
+    const multiplier = parseFloat(pricingSettings.usd_multiplier || 1.75);
+
     // Parse sizes array from request
     let sizes = [];
     if (req.body.sizes) {
@@ -464,11 +486,29 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
         sizes = [];
       }
     }
+    
+    // Calculate INR and USD prices if price is being updated
+    let priceInr = existingArtwork.price_inr || existingArtwork.price;
+    let priceUsd = existingArtwork.price_usd;
+    let fxRateUsed = existingArtwork.fx_rate_used;
+    let multiplierUsed = existingArtwork.multiplier_used;
+    
+    if (req.body.price) {
+      priceInr = parseFloat(req.body.price);
+      priceUsd = calculateUsdPrice(priceInr, fxRate, multiplier);
+      fxRateUsed = fxRate;
+      multiplierUsed = multiplier;
+    }
+    
     const updatedArtwork = {
       title: req.body.title?.trim() || existingArtwork.title,
       category: req.body.category?.trim() || existingArtwork.category,
       description: req.body.description?.trim() || existingArtwork.description,
-      price: req.body.price ? parseFloat(req.body.price) : existingArtwork.price,
+      price: priceInr, // Keep for backward compatibility
+      price_inr: priceInr,
+      price_usd: priceUsd,
+      fx_rate_used: fxRateUsed,
+      multiplier_used: multiplierUsed,
       dimensions: req.body.size?.trim() || existingArtwork.dimensions,
       materials: req.body.materials?.trim() || existingArtwork.materials,
       featured: req.body.featured !== undefined ? req.body.featured === 'true' : existingArtwork.featured,
@@ -550,6 +590,20 @@ app.get('/api/contact', async (req, res) => {
   } catch (error) {
     console.error('Error reading contact info:', error);
     res.status(500).json({ error: 'Failed to fetch contact information' });
+  }
+});
+
+// Get site settings (for footer and general site info - public)
+app.get('/settings', async (req, res) => {
+  try {
+    const settings = await db.getSettings();
+    if (!settings) {
+      return res.status(404).json({ error: 'Settings not found' });
+    }
+    res.json(settings);
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
 
@@ -731,6 +785,128 @@ app.put('/api/settings', authenticateToken, upload.single('developerLogo'), asyn
   }
 });
 
+// Pricing Settings Routes (Admin only)
+
+// Get pricing settings (admin only)
+app.get('/api/pricing-settings', authenticateToken, async (req, res) => {
+  try {
+    const settings = await db.getPricingSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Error fetching pricing settings:', error);
+    res.status(500).json({ error: 'Failed to fetch pricing settings' });
+  }
+});
+
+// Update pricing settings (admin only)
+app.put('/api/pricing-settings', authenticateToken, async (req, res) => {
+  try {
+    const { fx_rate, usd_multiplier } = req.body;
+    
+    // Validate input
+    if (!fx_rate || !usd_multiplier) {
+      return res.status(400).json({ error: 'FX rate and USD multiplier are required' });
+    }
+    
+    const fxRateNum = parseFloat(fx_rate);
+    const multiplierNum = parseFloat(usd_multiplier);
+    
+    if (isNaN(fxRateNum) || fxRateNum <= 0) {
+      return res.status(400).json({ error: 'Invalid FX rate' });
+    }
+    
+    if (isNaN(multiplierNum) || multiplierNum <= 0) {
+      return res.status(400).json({ error: 'Invalid USD multiplier' });
+    }
+    
+    await db.updatePricingSettings({
+      fx_rate: fxRateNum.toString(),
+      usd_multiplier: multiplierNum.toString()
+    });
+    
+    res.json({ 
+      message: 'Pricing settings updated successfully',
+      fx_rate: fxRateNum,
+      usd_multiplier: multiplierNum
+    });
+  } catch (error) {
+    console.error('Error updating pricing settings:', error);
+    res.status(500).json({ error: 'Failed to update pricing settings' });
+  }
+});
+
+// Fetch latest FX rate from external API (admin only)
+app.post('/api/pricing-settings/fetch-fx-rate', authenticateToken, async (req, res) => {
+  try {
+    // Using exchangerate-api.com (free tier available)
+    const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    if (!response.ok) {
+      throw new Error('Failed to fetch exchange rate');
+    }
+    
+    const data = await response.json();
+    const usdToInrRate = data.rates.INR;
+    
+    if (!usdToInrRate) {
+      throw new Error('INR rate not found in response');
+    }
+    
+    // Return the rate (we store INR to USD, so we need the inverse)
+    const inrToUsdRate = 1 / usdToInrRate;
+    const fxRate = Math.round(usdToInrRate * 100) / 100; // Round to 2 decimals
+    
+    res.json({ 
+      fx_rate: fxRate,
+      source: 'exchangerate-api.com',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error fetching FX rate:', error);
+    res.status(500).json({ error: 'Failed to fetch latest FX rate' });
+  }
+});
+
+// Recalculate USD prices for all artworks (admin only)
+app.post('/api/artworks/recalculate-prices', authenticateToken, async (req, res) => {
+  try {
+    const settings = await db.getPricingSettings();
+    const fxRate = parseFloat(settings.fx_rate);
+    const multiplier = parseFloat(settings.usd_multiplier);
+    
+    if (!fxRate || !multiplier) {
+      return res.status(400).json({ error: 'Pricing settings not configured' });
+    }
+    
+    const artworks = await db.getArtworks();
+    let updatedCount = 0;
+    
+    for (const artwork of artworks) {
+      if (artwork.price_inr) {
+        const priceUsd = calculateUsdPrice(artwork.price_inr, fxRate, multiplier);
+        
+        await db.updateArtwork(artwork.id, {
+          ...artwork,
+          price_usd: priceUsd,
+          fx_rate_used: fxRate,
+          multiplier_used: multiplier
+        });
+        
+        updatedCount++;
+      }
+    }
+    
+    res.json({ 
+      message: `Successfully recalculated prices for ${updatedCount} artworks`,
+      count: updatedCount,
+      fx_rate: fxRate,
+      multiplier: multiplier
+    });
+  } catch (error) {
+    console.error('Error recalculating prices:', error);
+    res.status(500).json({ error: 'Failed to recalculate prices' });
+  }
+});
+
 // About Page Routes
 
 // Get about page content (public)
@@ -793,6 +969,58 @@ app.use((err, req, res, next) => {
     error: isDevelopment ? err.message : 'Internal server error',
     ...(isDevelopment && { stack: err.stack })
   });
+});
+
+// Country Detection Route (for currency display)
+
+// Get user's country based on IP address
+app.get('/api/user/location', async (req, res) => {
+  try {
+    // Get IP address from request
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || 
+                req.connection.remoteAddress || 
+                req.socket.remoteAddress;
+    
+    // For local/development IPs, return a default country
+    if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+      return res.json({ 
+        country_code: 'IN', // Default to India for development
+        country_name: 'India',
+        ip: ip,
+        source: 'local'
+      });
+    }
+    
+    // Use ipapi.co for geolocation (free tier: 1000 requests/day)
+    const response = await fetch(`https://ipapi.co/${ip}/json/`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch location data');
+    }
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.reason || 'Location API error');
+    }
+    
+    res.json({
+      country_code: data.country_code || 'US',
+      country_name: data.country_name || 'United States',
+      ip: ip,
+      source: 'ipapi.co'
+    });
+  } catch (error) {
+    console.error('Error detecting location:', error);
+    // Default to US on error
+    res.json({
+      country_code: 'US',
+      country_name: 'United States',
+      ip: 'unknown',
+      source: 'fallback',
+      error: error.message
+    });
+  }
 });
 
 // 404 handler

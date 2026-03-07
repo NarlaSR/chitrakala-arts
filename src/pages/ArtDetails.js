@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useWishlist } from '../context/WishlistContext';
+import { useCurrency } from '../context/CurrencyContext';
 import { useParams, Link } from 'react-router-dom';
 import { getCategoryById } from '../data/artData';
 import { artworksAPI } from '../services/api';
+import { getPriceForCountry, formatPrice } from '../utils/priceUtils';
 import '../styles/ArtDetails.css';
 
 const ArtDetails = () => {
@@ -10,6 +12,7 @@ const ArtDetails = () => {
   const [artwork, setArtwork] = useState(null);
   const [loading, setLoading] = useState(true);
   const { addToWishlist, wishlist } = useWishlist();
+  const { countryCode, currency } = useCurrency();
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
@@ -99,17 +102,51 @@ const ArtDetails = () => {
                   Price excludes shipping and applicable taxes. Please contact us for a detailed quote.
                 </div>
               <ul>
-                {/* Show all sizes if available */}
+                {/* Show sizes with their prices */}
                 {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
-                  artwork.sizes.map((sp, idx) => (
-                    <li key={idx}>
-                      <strong>Size:</strong> {sp.size_label} | <strong>Price:</strong> ₹{Number(sp.price).toLocaleString()}
-                    </li>
-                  ))
+                  <>
+                    {artwork.sizes.map((sp, idx) => {
+                      // Backend now provides price_usd for each size with psychological rounding
+                      let sizePrice;
+                      if (countryCode === 'IN') {
+                        sizePrice = formatPrice(sp.price, 'INR');
+                      } else if (countryCode === 'US') {
+                        // Use calculated USD price from backend (includes psychological rounding)
+                        sizePrice = formatPrice(sp.price_usd, 'USD');
+                      } else {
+                        // International: apply 15% markup to USD price
+                        sizePrice = formatPrice(sp.price_usd * 1.15, 'USD');
+                      }
+                      
+                      return (
+                        <li key={idx}>
+                          <strong>Size:</strong> {sp.size_label} | <strong>Price:</strong> {sizePrice}
+                        </li>
+                      );
+                    })}
+                    {countryCode !== 'IN' && countryCode !== 'US' && (
+                      <li style={{fontSize: '0.85rem', color: '#666', fontStyle: 'italic'}}>
+                        * Prices include 15% international markup
+                      </li>
+                    )}
+                  </>
                 ) : (
-                  <li>
-                    <strong>Size:</strong> {artwork.dimensions} {artwork.price ? (<span>| <strong>Price:</strong> ₹{Number(artwork.price).toLocaleString()}</span>) : null}
-                  </li>
+                  <>
+                    <li>
+                      <strong>Size:</strong> {artwork.dimensions}
+                    </li>
+                    <li>
+                      <strong>Price:</strong> {(() => {
+                        const { price: displayPrice, currency: displayCurrency } = getPriceForCountry(artwork, countryCode);
+                        return formatPrice(displayPrice, displayCurrency);
+                      })()}
+                      {countryCode !== 'IN' && countryCode !== 'US' && (
+                        <span style={{fontSize: '0.85rem', color: '#666', marginLeft: '0.5rem'}}>
+                          (includes 15% international markup)
+                        </span>
+                      )}
+                    </li>
+                  </>
                 )}
                 <li>
                   <strong>Materials:</strong> {artwork.materials}
