@@ -9,12 +9,14 @@ coverage/
 # Production
 build/
 
+
 # Misc
 .DS_Store
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+server/hash.js
 
 # Logs
 npm-debug.log*
@@ -47,5 +49,6 @@ RESEND_*.md
 # Security-sensitive files
 ADMIN_ACCESS.md
 SECURITY_*.md
+server/.env
 *.key
 *.pem

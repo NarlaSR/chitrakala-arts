@@ -5,14 +5,17 @@ import './styles/index.css';
 import App from './App';
 import { WishlistProvider } from './context/WishlistContext';
 import { HomeViewProvider } from './context/HomeViewContext';
+import { CurrencyProvider } from './context/CurrencyContext';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <WishlistProvider>
-      <HomeViewProvider>
-        <App />
-      </HomeViewProvider>
-    </WishlistProvider>
+    <CurrencyProvider>
+      <WishlistProvider>
+        <HomeViewProvider>
+          <App />
+        </HomeViewProvider>
+      </WishlistProvider>
+    </CurrencyProvider>
   </React.StrictMode>
 );

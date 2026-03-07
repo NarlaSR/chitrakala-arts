@@ -1,4 +1,5 @@
 const { pool }  = require('./db');
+const { calculateUsdPrice } = require('./priceUtils');
 
 // User functions
 async function getUsers() {
@@ -48,12 +49,26 @@ async function updateArtworkSizes(artworkId, sizesArray) {
 }
 async function getArtworks() {
   const result = await pool.query('SELECT * FROM artworks ORDER BY created_at DESC');
+  // Get current pricing settings for auto-calculation
+  const pricingSettings = await getPricingSettings();
+  const fxRate = parseFloat(pricingSettings.fx_rate || 83);
+  const multiplier = parseFloat(pricingSettings.usd_multiplier || 1.75);
+  
   // Fetch sizes for each artwork
   const artworks = await Promise.all(result.rows.map(async (artwork) => {
     artwork.sizes = await getArtworkSizes(artwork.id);
+    // Calculate USD price for each size with psychological rounding
+    artwork.sizes = artwork.sizes.map(size => ({
+      ...size,
+      price_usd: calculateUsdPrice(size.price, fxRate, multiplier)
+    }));
     // Always set artwork.image to a valid URL
     if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
       artwork.image = `/api/images/artworks/${artwork.id}`;
+    }
+    // Auto-calculate price_usd if missing (for old artworks)
+    if (!artwork.price_usd && artwork.price_inr) {
+      artwork.price_usd = calculateUsdPrice(artwork.price_inr, fxRate, multiplier);
     }
     return artwork;
   }));
@@ -61,13 +76,26 @@ async function getArtworks() {
 }
 
 async function getArtworkById(id) {
-  const result = await pool.query('SELECT id, title, category, price, description, dimensions, materials, image, featured, created_at, updated_at FROM artworks WHERE id = $1', [id]);
+  const result = await pool.query('SELECT * FROM artworks WHERE id = $1', [id]);
   const artwork = result.rows[0];
   if (artwork) {
     artwork.sizes = await getArtworkSizes(artwork.id);
+    // Get pricing settings for calculations
+    const pricingSettings = await getPricingSettings();
+    const fxRate = parseFloat(pricingSettings.fx_rate || 83);
+    const multiplier = parseFloat(pricingSettings.usd_multiplier || 1.75);
+    // Calculate USD price for each size with psychological rounding
+    artwork.sizes = artwork.sizes.map(size => ({
+      ...size,
+      price_usd: calculateUsdPrice(size.price, fxRate, multiplier)
+    }));
     // Always set artwork.image to a valid URL
     if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
       artwork.image = `/api/images/artworks/${artwork.id}`;
+    }
+    // Auto-calculate price_usd if missing (for old artworks)
+    if (!artwork.price_usd && artwork.price_inr) {
+      artwork.price_usd = calculateUsdPrice(artwork.price_inr, fxRate, multiplier);
     }
   }
   return artwork;
@@ -75,10 +103,11 @@ async function getArtworkById(id) {
 
 async function createArtwork(artwork) {
   const result = await pool.query(
-    `INSERT INTO artworks (id, title, category, price, description, dimensions, materials, image, featured)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO artworks (id, title, category, price, price_inr, price_usd, fx_rate_used, multiplier_used, description, dimensions, materials, image, featured)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING *`,
-    [artwork.id, artwork.title, artwork.category, artwork.price, artwork.description, 
+    [artwork.id, artwork.title, artwork.category, artwork.price, artwork.price_inr, artwork.price_usd, 
+     artwork.fx_rate_used, artwork.multiplier_used, artwork.description, 
      artwork.dimensions, artwork.materials, artwork.image, artwork.featured]
   );
   // Add sizes if provided
@@ -92,12 +121,14 @@ async function createArtwork(artwork) {
 async function updateArtwork(id, artwork) {
   const result = await pool.query(
     `UPDATE artworks 
-     SET title = $2, category = $3, price = $4, description = $5, 
-         dimensions = $6, materials = $7, image = $8, featured = $9,
+     SET title = $2, category = $3, price = $4, price_inr = $5, price_usd = $6, 
+         fx_rate_used = $7, multiplier_used = $8, description = $9, 
+         dimensions = $10, materials = $11, image = $12, featured = $13,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $1
      RETURNING *`,
-    [id, artwork.title, artwork.category, artwork.price, artwork.description,
+    [id, artwork.title, artwork.category, artwork.price, artwork.price_inr, artwork.price_usd,
+     artwork.fx_rate_used, artwork.multiplier_used, artwork.description,
      artwork.dimensions, artwork.materials, artwork.image, artwork.featured]
   );
   // Update sizes if provided
@@ -352,6 +383,56 @@ async function getLogoImage() {
   return result.rows[0];
 }
 
+// Pricing Settings functions
+async function getPricingSetting(key) {
+  const result = await pool.query(
+    'SELECT value FROM pricing_settings WHERE key = $1',
+    [key]
+  );
+  return result.rows[0]?.value;
+}
+
+async function getPricingSettings() {
+  const result = await pool.query('SELECT key, value FROM pricing_settings');
+  const settings = {};
+  result.rows.forEach(row => {
+    settings[row.key] = row.value;
+  });
+  return settings;
+}
+
+async function updatePricingSetting(key, value) {
+  await pool.query(
+    `INSERT INTO pricing_settings (key, value, updated_at) 
+     VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (key) 
+     DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
+    [key, value]
+  );
+}
+
+async function updatePricingSettings(settings) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const [key, value] of Object.entries(settings)) {
+      await client.query(
+        `INSERT INTO pricing_settings (key, value, updated_at) 
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (key) 
+         DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
+        [key, value]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   getUsers,
   getUserByUsername,
@@ -372,5 +453,9 @@ module.exports = {
   storeAboutImage,
   getAboutImage,
   storeLogoImage,
-  getLogoImage
+  getLogoImage,
+  getPricingSetting,
+  getPricingSettings,
+  updatePricingSetting,
+  updatePricingSettings
 };

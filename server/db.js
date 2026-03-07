@@ -49,7 +49,11 @@ async function initializeDatabase() {
         materials VARCHAR(255),
         image VARCHAR(255),
         featured BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        price_inr NUMERIC(10,2),
+        price_usd NUMERIC(10,2),
+        fx_rate_used NUMERIC(10,4),
+        multiplier_used NUMERIC(10,4)
       )
     `);
 
@@ -125,12 +129,34 @@ async function initializeDatabase() {
       )
     `);
 
+    // Create pricing_settings table for currency configuration
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pricing_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Insert default pricing settings if they don't exist
+    await client.query(`
+      INSERT INTO pricing_settings (key, value) 
+      VALUES 
+        ('fx_rate', '83'),
+        ('usd_multiplier', '1.75')
+      ON CONFLICT (key) DO NOTHING
+    `);
+
     // Add image blob columns if they don't exist
     await client.query(`
       ALTER TABLE artworks 
       ADD COLUMN IF NOT EXISTS image_data BYTEA,
       ADD COLUMN IF NOT EXISTS image_mime_type VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS price_inr NUMERIC(10,2),
+      ADD COLUMN IF NOT EXISTS price_usd NUMERIC(10,2),
+      ADD COLUMN IF NOT EXISTS fx_rate_used NUMERIC(10,4),
+      ADD COLUMN IF NOT EXISTS multiplier_used NUMERIC(10,4)
     `);
 
     await client.query(`
