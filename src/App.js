@@ -13,6 +13,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminAboutPage from './pages/AdminAboutPage';
 import AdminContactPage from './pages/AdminContactPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
+import DebugEnv from './pages/DebugEnv';
 import './styles/App.css';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
             <Route path="/ckk-secure-admin/about" element={<AdminAboutPage />} />
             <Route path="/ckk-secure-admin/contact" element={<AdminContactPage />} />
             <Route path="/ckk-secure-admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/debug-env" element={<DebugEnv />} />
             
             {/* Public Routes */}
             <Route path="/*" element={
