@@ -272,6 +272,9 @@ app.get('/api/images/artworks/:id', async (req, res) => {
     if (!imageData || !imageData.image_data) {
       return res.status(404).json({ error: 'Image not found' });
     }
+    // Set CORS headers for cross-origin image requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
     res.setHeader('Content-Type', imageData.image_mime_type || 'image/jpeg');
     // Disable browser caching so cache-busting works
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -290,6 +293,9 @@ app.get('/api/images/about', async (req, res) => {
     if (!imageData || !imageData.story_image_data) {
       return res.status(404).json({ error: 'Image not found' });
     }
+    // Set CORS headers for cross-origin image requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
     res.setHeader('Content-Type', imageData.story_image_mime_type || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=31536000');
     res.send(imageData.story_image_data);
