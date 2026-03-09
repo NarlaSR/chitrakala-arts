@@ -987,8 +987,11 @@ app.get('/api/user/location', async (req, res) => {
                 req.connection.remoteAddress || 
                 req.socket.remoteAddress;
     
+    console.log(`[Location Detection] IP: ${ip}`);
+    
     // For local/development IPs, return a default country
     if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+      console.log('[Location Detection] Local IP detected, defaulting to India');
       return res.json({ 
         country_code: 'IN', // Default to India for development
         country_name: 'India',
@@ -998,30 +1001,35 @@ app.get('/api/user/location', async (req, res) => {
     }
     
     // Use ipapi.co for geolocation (free tier: 1000 requests/day)
+    console.log(`[Location Detection] Calling ipapi.co for IP: ${ip}`);
     const response = await fetch(`https://ipapi.co/${ip}/json/`);
     
     if (!response.ok) {
+      console.error(`[Location Detection] ipapi.co returned status: ${response.status}`);
       throw new Error('Failed to fetch location data');
     }
     
     const data = await response.json();
     
     if (data.error) {
+      console.error('[Location Detection] ipapi.co error:', data.reason || data.error);
       throw new Error(data.reason || 'Location API error');
     }
     
+    console.log(`[Location Detection] Detected country: ${data.country_code} (${data.country_name})`);
+    
     res.json({
-      country_code: data.country_code || 'US',
-      country_name: data.country_name || 'United States',
+      country_code: data.country_code || 'IN',
+      country_name: data.country_name || 'Unknown',
       ip: ip,
       source: 'ipapi.co'
     });
   } catch (error) {
-    console.error('Error detecting location:', error);
-    // Default to US on error
+    console.error('[Location Detection] Error:', error.message);
+    // Default to IN on error (primary market)
     res.json({
-      country_code: 'US',
-      country_name: 'United States',
+      country_code: 'IN',
+      country_name: 'India',
       ip: 'unknown',
       source: 'fallback',
       error: error.message
