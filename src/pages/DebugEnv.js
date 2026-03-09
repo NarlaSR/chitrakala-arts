@@ -3,7 +3,7 @@ import { useCurrency } from '../context/CurrencyContext';
 
 // Debug page to check environment variables and country detection in production
 const DebugEnv = () => {
-  const { countryCode, currency } = useCurrency();
+  const { currency } = useCurrency();
   const [locationData, setLocationData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
