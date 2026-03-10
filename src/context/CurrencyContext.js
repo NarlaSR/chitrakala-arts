@@ -13,37 +13,49 @@ export const CurrencyProvider = ({ children }) => {
 
   const detectCountry = async () => {
     try {
-      // First check if already detected and stored in sessionStorage
+      // Check cache for instant UI update, but always verify with backend
       const cachedCountry = sessionStorage.getItem('userCountry');
       if (cachedCountry) {
         setCountryCode(cachedCountry);
         setCurrency(cachedCountry === 'IN' ? 'INR' : 'USD');
         setLoading(false);
-        return;
+        // Don't return - continue to verify with backend
       }
 
-      // Call backend API to detect country
+      // Always call backend API to detect country (verify cache or get fresh)
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/user/location`);
       
       if (response.ok) {
         const data = await response.json();
         const detectedCountry = data.country_code || 'IN';
         
-        setCountryCode(detectedCountry);
-        setCurrency(detectedCountry === 'IN' ? 'INR' : 'USD');
-        
-        // Cache in sessionStorage
-        sessionStorage.setItem('userCountry', detectedCountry);
+        // Only update if different from cached value
+        if (detectedCountry !== cachedCountry) {
+          console.log(`[Country Detection] Updating from ${cachedCountry} to ${detectedCountry}`);
+          setCountryCode(detectedCountry);
+          setCurrency(detectedCountry === 'IN' ? 'INR' : 'USD');
+          sessionStorage.setItem('userCountry', detectedCountry);
+        } else if (!cachedCountry) {
+          // First time detection
+          setCountryCode(detectedCountry);
+          setCurrency(detectedCountry === 'IN' ? 'INR' : 'USD');
+          sessionStorage.setItem('userCountry', detectedCountry);
+        }
       } else {
-        // Fallback to India if detection fails
-        setCountryCode('IN');
-        setCurrency('INR');
+        // Fallback to India if detection fails and no cache
+        if (!cachedCountry) {
+          setCountryCode('IN');
+          setCurrency('INR');
+        }
       }
     } catch (error) {
       console.error('Error detecting country:', error);
-      // Fallback to India if detection fails
-      setCountryCode('IN');
-      setCurrency('INR');
+      // Fallback to India if detection fails and no cache
+      const cachedCountry = sessionStorage.getItem('userCountry');
+      if (!cachedCountry) {
+        setCountryCode('IN');
+        setCurrency('INR');
+      }
     } finally {
       setLoading(false);
     }
