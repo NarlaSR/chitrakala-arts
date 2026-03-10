@@ -982,47 +982,65 @@ app.use((err, req, res, next) => {
 // Get user's country based on IP address
 app.get('/api/user/location', async (req, res) => {
   try {
-    // Get IP address from request
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] || 
-                req.connection.remoteAddress || 
-                req.socket.remoteAddress;
+    // Get IP address from request - try multiple headers
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const realIp = req.headers['x-real-ip'];
+    const cfConnectingIp = req.headers['cf-connecting-ip']; // Cloudflare
     
-    console.log(`[Location Detection] IP: ${ip}`);
+    const ip = (forwardedFor?.split(',')[0]?.trim()) || 
+                realIp || 
+                cfConnectingIp ||
+                req.connection?.remoteAddress || 
+                req.socket?.remoteAddress ||
+                req.connection?.socket?.remoteAddress;
+    
+    console.log(`[Location Detection] Headers:`, {
+      'x-forwarded-for': req.headers['x-forwarded-for'],
+      'x-real-ip': req.headers['x-real-ip'],
+      'cf-connecting-ip': req.headers['cf-connecting-ip']
+    });
+    console.log(`[Location Detection] Resolved IP: ${ip}`);
     
     // For local/development IPs, return a default country
     if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
       console.log('[Location Detection] Local IP detected, defaulting to India');
       return res.json({ 
-        country_code: 'IN', // Default to India for development
+        country_code: 'IN',
         country_name: 'India',
-        ip: ip,
+        ip: ip || 'local',
         source: 'local'
       });
     }
+
+    // Clean IPv6 prefix if present (::ffff:xxx.xxx.xxx.xxx)
+    const cleanIp = ip.replace(/^::ffff:/, '');
+    console.log(`[Location Detection] Clean IP: ${cleanIp}`);
     
-    // Use ipapi.co for geolocation (free tier: 1000 requests/day)
-    console.log(`[Location Detection] Calling ipapi.co for IP: ${ip}`);
-    const response = await fetch(`https://ipapi.co/${ip}/json/`);
+    // Use ip-api.com for geolocation (free tier: 45 req/min, no daily limit)
+    console.log(`[Location Detection] Calling ip-api.com for IP: ${cleanIp}`);
+    const apiUrl = `http://ip-api.com/json/${cleanIp}?fields=status,message,country,countryCode,query`;
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
-      console.error(`[Location Detection] ipapi.co returned status: ${response.status}`);
-      throw new Error('Failed to fetch location data');
+      console.error(`[Location Detection] ip-api.com returned status: ${response.status}`);
+      throw new Error(`API returned status ${response.status}`);
     }
     
     const data = await response.json();
+    console.log(`[Location Detection] API Response:`, data);
     
-    if (data.error) {
-      console.error('[Location Detection] ipapi.co error:', data.reason || data.error);
-      throw new Error(data.reason || 'Location API error');
+    if (data.status === 'fail') {
+      console.error('[Location Detection] ip-api.com error:', data.message);
+      throw new Error(data.message || 'Location API error');
     }
     
-    console.log(`[Location Detection] Detected country: ${data.country_code} (${data.country_name})`);
+    console.log(`[Location Detection] Detected country: ${data.countryCode} (${data.country})`);
     
     res.json({
-      country_code: data.country_code || 'IN',
-      country_name: data.country_name || 'Unknown',
-      ip: ip,
-      source: 'ipapi.co'
+      country_code: data.countryCode || 'IN',
+      country_name: data.country || 'Unknown',
+      ip: data.query || cleanIp,
+      source: 'ip-api.com'
     });
   } catch (error) {
     console.error('[Location Detection] Error:', error.message);
