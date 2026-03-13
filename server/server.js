@@ -81,6 +81,35 @@ app.use((req, res, next) => {
   next();
 });
 
+// Update only artwork USD price (admin override)
+app.put('/api/artworks/:id/price', authenticateToken, async (req, res) => {
+  try {
+    const artwork = await db.getArtworkById(req.params.id);
+    if (!artwork) return res.status(404).json({ error: 'Artwork not found' });
+
+    const { price_usd, fx_rate_used, multiplier_used } = req.body;
+    if (price_usd === undefined || price_usd === null || isNaN(Number(price_usd))) {
+      return res.status(400).json({ error: 'Invalid price_usd' });
+    }
+
+    const newUsd = parseFloat(price_usd);
+
+    const updated = await db.updateArtworkPriceUsd(req.params.id, newUsd, fx_rate_used || null, multiplier_used || null);
+    if (!updated) return res.status(500).json({ error: 'Failed to update artwork price' });
+
+    // Normalize updated_at for frontend
+    if (updated && updated.updated_at) {
+      updated.updatedAt = updated.updated_at;
+      delete updated.updated_at;
+    }
+
+    res.json({ message: 'Price updated', artwork: updated });
+  } catch (error) {
+    console.error('Error updating artwork price:', error);
+    res.status(500).json({ error: 'Failed to update artwork price' });
+  }
+});
+
 // Middleware
 app.use(express.json({ limit: '10mb' })); // Limit request body size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

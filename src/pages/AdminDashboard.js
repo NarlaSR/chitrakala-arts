@@ -301,6 +301,25 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleUpdateUsd = async (artwork) => {
+    const current = artwork.price_usd ? Number(artwork.price_usd).toFixed(2) : '';
+    const input = window.prompt(`Enter new USD price for "${artwork.title}" (current: $${current})`, current);
+    if (input === null) return; // cancelled
+    const value = parseFloat(input);
+    if (isNaN(value) || value < 0) {
+      alert('Please enter a valid non-negative number');
+      return;
+    }
+    try {
+      await artworksAPI.updatePrice(artwork.id, value);
+      alert('USD price updated');
+      loadArtworks();
+    } catch (error) {
+      console.error('Failed to update USD price:', error);
+      alert('Failed to update USD price');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       title: '',
@@ -667,8 +686,16 @@ const AdminDashboard = () => {
                         Edit
                       </button>
                       <button
+                        onClick={() => handleUpdateUsd(artwork)}
+                        className="btn-adjust"
+                        style={{ marginLeft: '6px' }}
+                      >
+                        Adjust USD
+                      </button>
+                      <button
                         onClick={() => handleDelete(artwork.id)}
                         className="btn-delete"
+                        style={{ marginLeft: '6px' }}
                       >
                         Delete
                       </button>

@@ -433,6 +433,18 @@ async function updatePricingSettings(settings) {
   }
 }
 
+// Update only the USD price (admin override)
+async function updateArtworkPriceUsd(id, priceUsd, fxRateUsed = null, multiplierUsed = null) {
+  const result = await pool.query(
+    `UPDATE artworks SET price_usd = $2, fx_rate_used = COALESCE($3, fx_rate_used), multiplier_used = COALESCE($4, multiplier_used), updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+    [id, priceUsd, fxRateUsed, multiplierUsed]
+  );
+  if (result.rows[0]) {
+    result.rows[0].sizes = await getArtworkSizes(id);
+  }
+  return result.rows[0];
+}
+
 module.exports = {
   getUsers,
   getUserByUsername,
@@ -458,4 +470,5 @@ module.exports = {
   getPricingSettings,
   updatePricingSetting,
   updatePricingSettings
+  ,updateArtworkPriceUsd
 };

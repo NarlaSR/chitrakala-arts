@@ -64,6 +64,14 @@ export const artworksAPI = {
     const response = await api.delete(`/artworks/${id}`);
     return response.data;
   }
+
+  ,updatePrice: async (id, priceUsd, fxRateUsed = null, multiplierUsed = null) => {
+    const body = { price_usd: priceUsd };
+    if (fxRateUsed !== null) body.fx_rate_used = fxRateUsed;
+    if (multiplierUsed !== null) body.multiplier_used = multiplierUsed;
+    const response = await api.put(`/artworks/${id}/price`, body);
+    return response.data;
+  }
 };
 
 // About Page
