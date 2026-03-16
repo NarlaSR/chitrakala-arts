@@ -55,6 +55,10 @@ app.use(cors({
     console.log('CORS request origin:', origin);
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
+    // Allow all Vercel preview deployments for this project
+    if (origin.endsWith('-sanjays-projects-7230cec0.vercel.app')) {
+      return callback(null, true);
+    }
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
