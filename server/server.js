@@ -81,6 +81,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Body parsing middleware - must be before any routes that read req.body
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // Update only artwork USD price (admin override)
 app.put('/api/artworks/:id/price', authenticateToken, async (req, res) => {
   try {
@@ -110,9 +114,7 @@ app.put('/api/artworks/:id/price', authenticateToken, async (req, res) => {
   }
 });
 
-// Middleware
-app.use(express.json({ limit: '10mb' })); // Limit request body size
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Static file serving
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Ensure uploads directory exists
@@ -229,7 +231,7 @@ const compressImage = async (inputBuffer) => {
 };
 
 // Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
+function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -244,7 +246,7 @@ const authenticateToken = (req, res, next) => {
     req.user = user;
     next();
   });
-};
+}
 
 // Auth Routes
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
@@ -292,6 +294,15 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
 app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
+});
+
+// Temporary debug endpoint to show which DATABASE_URL the running process sees.
+// Returns a masked value so passwords are not exposed. Remove before production.
+app.get('/_whoami-db', (req, res) => {
+  const dbUrl = process.env.DATABASE_URL || '<not set>';
+  // Mask password between ':' and '@' if present
+  const masked = dbUrl.replace(/:(.+)@/, ':****@');
+  res.json({ databaseUrl: masked });
 });
 
 // Image serving routes (serve images from database)
@@ -1030,6 +1041,17 @@ app.get('/api/user/location', async (req, res) => {
     });
     console.log(`[Location Detection] Resolved IP: ${ip}`);
     
+    // In non-production environments, allow FORCE_COUNTRY env var to override detection
+    if (process.env.FORCE_COUNTRY && process.env.NODE_ENV !== 'production') {
+      console.log(`[Location Detection] FORCE_COUNTRY override: ${process.env.FORCE_COUNTRY}`);
+      return res.json({
+        country_code: process.env.FORCE_COUNTRY,
+        country_name: 'Forced (dev override)',
+        ip: ip || 'local',
+        source: 'FORCE_COUNTRY'
+      });
+    }
+
     // For local/development IPs, return a default country
     if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
       console.log('[Location Detection] Local IP detected, defaulting to India');

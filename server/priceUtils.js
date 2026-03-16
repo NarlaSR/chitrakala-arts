@@ -22,13 +22,21 @@ function psychologicalRound(price) {
   }
   
   if (price < 50) {
-    // Round to nearest x9 (e.g., 9, 19, 29, 39, 49)
-    return Math.ceil(price / 10) * 10 - 1;
+    // Round to nearest psychological price point (x5 and x9 endings)
+    // Price points: 15, 19, 25, 29, 35, 39, 45, 49
+    // Example: 22.69 → 25 (closer to 25 than to 19 or 29)
+    const points = [15, 19, 25, 29, 35, 39, 45, 49];
+    return points.reduce((nearest, point) =>
+      Math.abs(point - price) < Math.abs(nearest - price) ? point : nearest
+    );
   }
   
   if (price < 100) {
-    // Round to nearest x9.99 (e.g., 49.99, 59.99, 69.99, 79.99, 89.99, 99.99)
-    return Math.ceil(price / 10) * 10 - 0.01;
+    // Round to nearest x9 whole number (e.g., 59, 69, 79, 89, 99)
+    const points = [55, 59, 65, 69, 75, 79, 85, 89, 95, 99];
+    return points.reduce((nearest, point) =>
+      Math.abs(point - price) < Math.abs(nearest - price) ? point : nearest
+    );
   }
   
   if (price < 500) {

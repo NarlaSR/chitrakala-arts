@@ -48,6 +48,7 @@ RESEND_*.md
 
 # Security-sensitive files
 ADMIN_ACCESS.md
+server/.env
 SECURITY_*.md
 server/.env
 *.key
