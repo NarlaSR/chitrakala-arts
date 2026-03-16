@@ -28,7 +28,7 @@ const Footer = () => {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/settings`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/settings`);
       if (response.ok) {
         const data = await response.json();
         setSettings(data);
