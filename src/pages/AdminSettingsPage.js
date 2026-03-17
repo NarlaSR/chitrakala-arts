@@ -44,7 +44,7 @@ const AdminSettingsPage = () => {
   const fetchSettings = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/settings`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/settings`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -120,7 +120,7 @@ const AdminSettingsPage = () => {
         formData.append('developerLogo', logoFile);
       }
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/settings`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -244,7 +244,24 @@ const AdminSettingsPage = () => {
     setRecalculatingPrices(true);
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/artworks/recalculate-prices`, {
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+      // Always save current form values first so the server uses the right FX rate
+      const saveResponse = await fetch(`${apiBase}/api/pricing-settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(pricingSettings)
+      });
+
+      if (!saveResponse.ok) {
+        alert('Failed to save pricing settings before recalculating. Please try again.');
+        return;
+      }
+
+      const response = await fetch(`${apiBase}/api/artworks/recalculate-prices`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -253,7 +270,7 @@ const AdminSettingsPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Successfully recalculated prices for ${data.updated} artworks!`);
+        alert(`Successfully recalculated prices for ${data.count} artworks!`);
       } else {
         alert('Failed to recalculate prices');
       }

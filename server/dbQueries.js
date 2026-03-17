@@ -56,19 +56,22 @@ async function getArtworks() {
   
   // Fetch sizes for each artwork
   const artworks = await Promise.all(result.rows.map(async (artwork) => {
+    // Use per-artwork stored rates so UI only changes after explicit recalculate
+    const artFxRate = artwork.fx_rate_used ? parseFloat(artwork.fx_rate_used) : fxRate;
+    const artMultiplier = artwork.multiplier_used ? parseFloat(artwork.multiplier_used) : multiplier;
     artwork.sizes = await getArtworkSizes(artwork.id);
-    // Calculate USD price for each size with psychological rounding
+    // Calculate USD price for each size using the artwork's own stored rates
     artwork.sizes = artwork.sizes.map(size => ({
       ...size,
-      price_usd: calculateUsdPrice(size.price, fxRate, multiplier)
+      price_usd: calculateUsdPrice(size.price, artFxRate, artMultiplier)
     }));
     // Always set artwork.image to a valid URL
     if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
       artwork.image = `/api/images/artworks/${artwork.id}`;
     }
-    // Auto-calculate price_usd if missing (for old artworks)
+    // Auto-calculate price_usd if missing (for old artworks without stored rates)
     if (!artwork.price_usd && artwork.price_inr) {
-      artwork.price_usd = calculateUsdPrice(artwork.price_inr, fxRate, multiplier);
+      artwork.price_usd = calculateUsdPrice(artwork.price_inr, artFxRate, artMultiplier);
     }
     return artwork;
   }));
@@ -80,22 +83,25 @@ async function getArtworkById(id) {
   const artwork = result.rows[0];
   if (artwork) {
     artwork.sizes = await getArtworkSizes(artwork.id);
-    // Get pricing settings for calculations
+    // Get pricing settings as fallback for artworks without stored rates
     const pricingSettings = await getPricingSettings();
     const fxRate = parseFloat(pricingSettings.fx_rate || 83);
     const multiplier = parseFloat(pricingSettings.usd_multiplier || 1.75);
-    // Calculate USD price for each size with psychological rounding
+    // Use per-artwork stored rates so UI only changes after explicit recalculate
+    const artFxRate = artwork.fx_rate_used ? parseFloat(artwork.fx_rate_used) : fxRate;
+    const artMultiplier = artwork.multiplier_used ? parseFloat(artwork.multiplier_used) : multiplier;
+    // Calculate USD price for each size using the artwork's own stored rates
     artwork.sizes = artwork.sizes.map(size => ({
       ...size,
-      price_usd: calculateUsdPrice(size.price, fxRate, multiplier)
+      price_usd: calculateUsdPrice(size.price, artFxRate, artMultiplier)
     }));
     // Always set artwork.image to a valid URL
     if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
       artwork.image = `/api/images/artworks/${artwork.id}`;
     }
-    // Auto-calculate price_usd if missing (for old artworks)
+    // Auto-calculate price_usd if missing (for old artworks without stored rates)
     if (!artwork.price_usd && artwork.price_inr) {
-      artwork.price_usd = calculateUsdPrice(artwork.price_inr, fxRate, multiplier);
+      artwork.price_usd = calculateUsdPrice(artwork.price_inr, artFxRate, artMultiplier);
     }
   }
   return artwork;
@@ -433,6 +439,18 @@ async function updatePricingSettings(settings) {
   }
 }
 
+// Update only the USD price (admin override)
+async function updateArtworkPriceUsd(id, priceUsd, fxRateUsed = null, multiplierUsed = null) {
+  const result = await pool.query(
+    `UPDATE artworks SET price_usd = $2, fx_rate_used = COALESCE($3, fx_rate_used), multiplier_used = COALESCE($4, multiplier_used), updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+    [id, priceUsd, fxRateUsed, multiplierUsed]
+  );
+  if (result.rows[0]) {
+    result.rows[0].sizes = await getArtworkSizes(id);
+  }
+  return result.rows[0];
+}
+
 module.exports = {
   getUsers,
   getUserByUsername,
@@ -458,4 +476,5 @@ module.exports = {
   getPricingSettings,
   updatePricingSetting,
   updatePricingSettings
+  ,updateArtworkPriceUsd
 };

@@ -55,6 +55,10 @@ app.use(cors({
     console.log('CORS request origin:', origin);
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
+    // Allow all Vercel preview deployments for this project
+    if (origin.endsWith('-sanjays-projects-7230cec0.vercel.app')) {
+      return callback(null, true);
+    }
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -81,9 +85,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware
-app.use(express.json({ limit: '10mb' })); // Limit request body size
+// Body parsing middleware - must be before any routes that read req.body
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Update only artwork USD price (admin override)
+app.put('/api/artworks/:id/price', authenticateToken, async (req, res) => {
+  try {
+    const artwork = await db.getArtworkById(req.params.id);
+    if (!artwork) return res.status(404).json({ error: 'Artwork not found' });
+
+    const { price_usd, fx_rate_used, multiplier_used } = req.body;
+    if (price_usd === undefined || price_usd === null || isNaN(Number(price_usd))) {
+      return res.status(400).json({ error: 'Invalid price_usd' });
+    }
+
+    const newUsd = parseFloat(price_usd);
+
+    const updated = await db.updateArtworkPriceUsd(req.params.id, newUsd, fx_rate_used || null, multiplier_used || null);
+    if (!updated) return res.status(500).json({ error: 'Failed to update artwork price' });
+
+    // Normalize updated_at for frontend
+    if (updated && updated.updated_at) {
+      updated.updatedAt = updated.updated_at;
+      delete updated.updated_at;
+    }
+
+    res.json({ message: 'Price updated', artwork: updated });
+  } catch (error) {
+    console.error('Error updating artwork price:', error);
+    res.status(500).json({ error: 'Failed to update artwork price' });
+  }
+});
+
+// Static file serving
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Ensure uploads directory exists
@@ -200,7 +235,7 @@ const compressImage = async (inputBuffer) => {
 };
 
 // Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
+function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -215,7 +250,7 @@ const authenticateToken = (req, res, next) => {
     req.user = user;
     next();
   });
-};
+}
 
 // Auth Routes
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
@@ -263,6 +298,15 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
 app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
+});
+
+// Temporary debug endpoint to show which DATABASE_URL the running process sees.
+// Returns a masked value so passwords are not exposed. Remove before production.
+app.get('/_whoami-db', (req, res) => {
+  const dbUrl = process.env.DATABASE_URL || '<not set>';
+  // Mask password between ':' and '@' if present
+  const masked = dbUrl.replace(/:(.+)@/, ':****@');
+  res.json({ databaseUrl: masked });
 });
 
 // Image serving routes (serve images from database)
@@ -1001,6 +1045,17 @@ app.get('/api/user/location', async (req, res) => {
     });
     console.log(`[Location Detection] Resolved IP: ${ip}`);
     
+    // In non-production environments, allow FORCE_COUNTRY env var to override detection
+    if (process.env.FORCE_COUNTRY && process.env.NODE_ENV !== 'production') {
+      console.log(`[Location Detection] FORCE_COUNTRY override: ${process.env.FORCE_COUNTRY}`);
+      return res.json({
+        country_code: process.env.FORCE_COUNTRY,
+        country_name: 'Forced (dev override)',
+        ip: ip || 'local',
+        source: 'FORCE_COUNTRY'
+      });
+    }
+
     // For local/development IPs, return a default country
     if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
       console.log('[Location Detection] Local IP detected, defaulting to India');

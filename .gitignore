@@ -48,7 +48,13 @@ RESEND_*.md
 
 # Security-sensitive files
 ADMIN_ACCESS.md
+server/.env
 SECURITY_*.md
 server/.env
 *.key
 *.pem
+
+# Database dumps
+*.backup
+*.dump
+*.sql.gz

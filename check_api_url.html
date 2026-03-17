@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check API URL in Production</title>
+</head>
+<body>
+    <h1>API URL Test</h1>
+    <p>Open this file in production site console to check what API URL is being used</p>
+    <pre id="result"></pre>
+    <script>
+        // Paste this in the browser console on www.chitrakala-arts.com
+        console.log('Checking API configuration...');
+        console.log('process.env.REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+        
+        // Try to see what's in the window object
+        console.log('Window location:', window.location.href);
+        
+        // Check if there's a config object
+        console.log('All env vars:', process.env);
+    </script>
+</body>
+</html>

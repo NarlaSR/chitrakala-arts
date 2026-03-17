@@ -16,36 +16,7 @@
  * @returns {number} - The psychologically rounded price
  */
 function psychologicalRound(price) {
-  if (price < 10) {
-    // For very small prices, round to nearest .99
-    return Math.ceil(price) - 0.01;
-  }
-  
-  if (price < 50) {
-    // Round to nearest x9 (e.g., 9, 19, 29, 39, 49)
-    return Math.ceil(price / 10) * 10 - 1;
-  }
-  
-  if (price < 100) {
-    // Round to nearest x9.99 (e.g., 49.99, 59.99, 69.99, 79.99, 89.99, 99.99)
-    return Math.ceil(price / 10) * 10 - 0.01;
-  }
-  
-  if (price < 500) {
-    // Round to nearest x49 or x99 in hundreds (e.g., 149, 199, 249, 299, etc.)
-    const hundreds = Math.floor(price / 100);
-    const remainder = price % 100;
-    
-    if (remainder < 50) {
-      return hundreds * 100 + 49;
-    } else {
-      return hundreds * 100 + 99;
-    }
-  }
-  
-  // For larger prices, round to nearest x99 in hundreds
-  const hundreds = Math.floor(price / 100);
-  return hundreds * 100 + 99;
+  return Math.round(price);
 }
 
 /**
