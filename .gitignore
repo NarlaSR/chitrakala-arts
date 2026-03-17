@@ -53,3 +53,8 @@ SECURITY_*.md
 server/.env
 *.key
 *.pem
+
+# Database dumps
+*.backup
+*.dump
+*.sql.gz
