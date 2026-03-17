@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCurrency } from '../context/CurrencyContext';
-import { getFormattedPriceForCountry } from '../utils/priceUtils';
+import { getFormattedPriceForCountry, getStartingPriceForCountry, formatPrice } from '../utils/priceUtils';
 import '../styles/ArtCard.css';
 
 // Fixed: Use full URLs from backend directly
@@ -13,8 +13,11 @@ const ArtCard = ({ artwork }) => {
     ? `${artwork.image}?t=${artwork.updatedAt || Date.now()}`
     : '/assets/images/placeholder.jpg';
   
-  // Get formatted price for user's country
-  const formattedPrice = getFormattedPriceForCountry(artwork, countryCode);
+  // For multi-size artworks show "Prices from X", otherwise show single price
+  const startingPrice = getStartingPriceForCountry(artwork, countryCode);
+  const formattedPrice = startingPrice
+    ? `Prices from ${formatPrice(startingPrice.price, startingPrice.currency)}`
+    : getFormattedPriceForCountry(artwork, countryCode);
   
   return (
     <div className="art-card">

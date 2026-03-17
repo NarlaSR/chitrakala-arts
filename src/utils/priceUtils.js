@@ -79,6 +79,35 @@ export const getFormattedPriceForCountry = (artwork, countryCode) => {
 };
 
 /**
+ * Get the minimum starting price for a multi-size artwork based on country.
+ * Returns null if artwork has 0 or 1 sizes (use regular price instead).
+ * @param {object} artwork - Artwork object with sizes array
+ * @param {string} countryCode - Two-letter country code
+ * @returns {{ price: number, currency: string } | null}
+ */
+export const getStartingPriceForCountry = (artwork, countryCode) => {
+  const sizes = artwork.sizes;
+  if (!sizes || !Array.isArray(sizes) || sizes.length <= 1) return null;
+
+  if (countryCode === 'IN') {
+    const prices = sizes.map(s => Number(s.price)).filter(p => !isNaN(p) && p > 0);
+    if (!prices.length) return null;
+    return { price: Math.min(...prices), currency: 'INR' };
+  }
+
+  // USD (US) or other countries (15% markup)
+  const usdPrices = sizes.map(s => Number(s.price_usd)).filter(p => !isNaN(p) && p > 0);
+  if (usdPrices.length) {
+    const minUsd = Math.min(...usdPrices);
+    return { price: countryCode === 'US' ? minUsd : minUsd * 1.15, currency: 'USD' };
+  }
+
+  // Fallback to INR
+  const prices = sizes.map(s => Number(s.price)).filter(p => !isNaN(p) && p > 0);
+  return prices.length ? { price: Math.min(...prices), currency: 'INR' } : null;
+};
+
+/**
  * Get price range for artworks with multiple sizes
  * @param {array} sizes - Array of size/price objects
  * @param {string} currency - 'INR' or 'USD'
