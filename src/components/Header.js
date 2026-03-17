@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useHomeView } from '../context/HomeViewContext';
 import { useWishlist } from '../context/WishlistContext';
 import WishlistModal from './WishlistModal';
 import { Link } from 'react-router-dom';
+import { categoriesAPI } from '../services/api';
 import '../styles/Header.css';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
   const { setShowAllGrouped } = useHomeView();
 
   const toggleMenu = () => {
@@ -14,8 +16,13 @@ const Header = () => {
   };
 
   const { wishlist } = useWishlist();
-  // Placeholder for modal open state (to be implemented)
   const [showWishlist, setShowWishlist] = useState(false);
+
+  useEffect(() => {
+    categoriesAPI.getAll()
+      .then(setCategories)
+      .catch(err => console.error('Failed to load categories:', err));
+  }, []);
 
   return (
     <header className="header">
@@ -32,12 +39,12 @@ const Header = () => {
 
         <nav className={`nav ${isMenuOpen ? 'active' : ''}`}>
           <Link to="/" onClick={() => { setIsMenuOpen(false); setShowAllGrouped(false); }}>Home</Link>
-          <span className="nav-divider">|</span>
-          <Link to="/category/dot-mandala" onClick={() => setIsMenuOpen(false)}>Dot Mandala</Link>
-          <span className="nav-divider">|</span>
-          <Link to="/category/lippan-art" onClick={() => setIsMenuOpen(false)}>Lippan Art</Link>
-          <span className="nav-divider">|</span>
-          <Link to="/category/textile-design" onClick={() => setIsMenuOpen(false)}>Textile Art</Link>
+          {categories.map((cat, idx) => (
+            <React.Fragment key={cat.id}>
+              <span className="nav-divider">|</span>
+              <Link to={`/category/${cat.id}`} onClick={() => setIsMenuOpen(false)}>{cat.name}</Link>
+            </React.Fragment>
+          ))}
           <span className="nav-divider">|</span>
           <Link to="/about" onClick={() => setIsMenuOpen(false)}>About</Link>
           <span className="nav-divider">|</span>

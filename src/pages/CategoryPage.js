@@ -1,32 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import ArtCard from '../components/ArtCard';
-import { getCategoryById } from '../data/artData';
-import { artworksAPI } from '../services/api';
+import { artworksAPI, categoriesAPI } from '../services/api';
 import '../styles/CategoryPage.css';
 
 const CategoryPage = () => {
   const { categoryId } = useParams();
-  const category = getCategoryById(categoryId);
+  const [category, setCategory] = useState(null);
   const [artworks, setArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    const loadArtworks = async () => {
+    const loadData = async () => {
       try {
-        const data = await artworksAPI.getAll();
-        const filtered = data.filter(art => art.category === categoryId);
-        setArtworks(filtered);
+        const [categoryData, artworksData] = await Promise.all([
+          categoriesAPI.getById(categoryId),
+          artworksAPI.getAll()
+        ]);
+        if (!categoryData) {
+          setNotFound(true);
+        } else {
+          setCategory(categoryData);
+          setArtworks(artworksData.filter(art => art.category === categoryId));
+        }
       } catch (error) {
-        console.error('Failed to load artworks:', error);
+        if (error.response?.status === 404) {
+          setNotFound(true);
+        } else {
+          console.error('Failed to load category data:', error);
+        }
       } finally {
         setLoading(false);
       }
     };
-    loadArtworks();
+    loadData();
   }, [categoryId]);
 
-  if (!category) {
+  if (loading) {
+    return (
+      <div className="category-page">
+        <div className="container">
+          <div className="loading">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound || !category) {
     return (
       <div className="category-page">
         <div className="container">
@@ -47,15 +68,14 @@ const CategoryPage = () => {
       </div>
 
       <div className="container">
+        <Link to="/" className="back-to-home-link">← Back to Home</Link>
         <div className="category-content">
           <div className="category-header">
             <h2>Collection</h2>
             <p>{artworks.length} artwork(s) available</p>
           </div>
 
-          {loading ? (
-            <div className="loading">Loading artworks...</div>
-          ) : artworks.length > 0 ? (
+          {artworks.length > 0 ? (
             <div className="artworks-grid">
               {artworks.map(artwork => (
                 <ArtCard key={artwork.id} artwork={artwork} />

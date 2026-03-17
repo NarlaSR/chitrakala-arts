@@ -171,6 +171,28 @@ async function initializeDatabase() {
       ADD COLUMN IF NOT EXISTS logo_mime_type VARCHAR(50)
     `);
 
+    // Create categories table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        display_order INTEGER DEFAULT 0,
+        image VARCHAR(255)
+      )
+    `);
+
+    // Seed existing categories (preserves existing artwork category foreign values)
+    await client.query(`
+      INSERT INTO categories (id, name, description, display_order, image) VALUES
+        ('dot-mandala', 'Dot Mandala Art', 'Intricate dot patterns creating beautiful mandala designs, combining precision and creativity.', 1, '/assets/images/categories/dot-mandala.png'),
+        ('lippan-art', 'Lippan Art', 'Traditional mirror and clay work art from Gujarat, featuring stunning geometric patterns.', 2, '/assets/images/categories/lippan-art.png'),
+        ('textile-design', 'Textile Art', 'Hand-painted and designed textile pieces that blend tradition with contemporary aesthetics.', 3, '/assets/images/categories/textile-design.png')
+      ON CONFLICT (id) DO UPDATE SET
+        image = EXCLUDED.image
+      WHERE categories.image IS NULL OR categories.image = ''
+    `);
+
     await client.query('COMMIT');
     console.log('✅ Database schema initialized successfully');
   } catch (error) {

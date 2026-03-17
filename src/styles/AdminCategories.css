@@ -1,0 +1,282 @@
+/* ── Admin Categories Page ─────────────────────────────────────── */
+
+.admin-categories-page {
+  min-height: 100vh;
+  background: #f8f5f0;
+  padding: 2rem 1rem;
+}
+
+.admin-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Header */
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.admin-header h1 {
+  font-size: 1.75rem;
+  color: #2c1810;
+  margin: 0;
+}
+
+/* Flash messages */
+.admin-error {
+  background: #fde8e8;
+  color: #c0392b;
+  border: 1px solid #f5c6c6;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-success {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Table */
+.categories-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+}
+
+.categories-table th,
+.categories-table td {
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e8ddd4;
+  vertical-align: top;
+}
+
+.categories-table th {
+  font-weight: 600;
+  color: #5a3a2c;
+  background: #fdf6ef;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.description-cell {
+  max-width: 280px;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.image-cell {
+  width: 70px;
+  text-align: center;
+}
+
+.cat-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #e8ddd4;
+}
+
+.no-image {
+  color: #bbb;
+  font-size: 1rem;
+}
+
+.no-categories {
+  color: #888;
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+
+/* Inline edit inputs */
+.inline-input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.inline-input--narrow {
+  width: 70px;
+}
+
+.inline-textarea {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+/* Action buttons */
+.actions {
+  white-space: nowrap;
+}
+
+.actions button {
+  margin-right: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.btn-edit {
+  background: #e8a857;
+  color: #fff;
+}
+
+.btn-edit:hover {
+  background: #d4913e;
+}
+
+.btn-delete {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.btn-delete:hover {
+  background: #c0392b;
+}
+
+.btn-save {
+  background: #27ae60;
+  color: #fff;
+}
+
+.btn-save:hover {
+  background: #1e8449;
+}
+
+.btn-cancel {
+  background: #bdc3c7;
+  color: #333;
+}
+
+.btn-cancel:hover {
+  background: #a0a8ae;
+}
+
+/* Add form section */
+.add-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e8ddd4;
+}
+
+.add-form h2 {
+  font-size: 1.25rem;
+  color: #2c1810;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 180px;
+}
+
+.form-group--narrow {
+  flex: 0 0 100px;
+  min-width: 80px;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #5a3a2c;
+  margin-bottom: 0.3rem;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.form-group small {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: #888;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Shared button variants */
+.btn-primary {
+  background: #8b4513;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #6b3410;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: #8b4513;
+  border: 1px solid #8b4513;
+  border-radius: 6px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: #fdf6ef;
+}
+
+code {
+  background: #f4f0ec;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  color: #8b4513;
+}

@@ -3,13 +3,13 @@ import { Link, useLocation } from 'react-router-dom';
 import { useHomeView } from '../context/HomeViewContext';
 import CategoryCard from '../components/CategoryCard';
 import ArtCard from '../components/ArtCard';
-import { categories } from '../data/artData';
-import { artworksAPI } from '../services/api';
+import { artworksAPI, categoriesAPI } from '../services/api';
 import '../styles/Home.css';
 
 const Home = () => {
   const [featuredArtworks, setFeaturedArtworks] = useState([]);
   const [allArtworks, setAllArtworks] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const location = useLocation();
   const { showAllGrouped, setShowAllGrouped } = useHomeView();
@@ -21,19 +21,22 @@ const Home = () => {
   }, [location.pathname, setShowAllGrouped]);
 
   useEffect(() => {
-    const loadArtworks = async () => {
+    const loadData = async () => {
       try {
-        const data = await artworksAPI.getAll();
-        setAllArtworks(data);
-        const featured = data.filter(art => art.featured);
-        setFeaturedArtworks(featured);
+        const [artworksData, categoriesData] = await Promise.all([
+          artworksAPI.getAll(),
+          categoriesAPI.getAll()
+        ]);
+        setAllArtworks(artworksData);
+        setFeaturedArtworks(artworksData.filter(art => art.featured));
+        setCategories(categoriesData);
       } catch (error) {
-        console.error('Failed to load artworks:', error);
+        console.error('Failed to load data:', error);
       } finally {
         setLoading(false);
       }
     };
-    loadArtworks();
+    loadData();
   }, []);
 
   return (
