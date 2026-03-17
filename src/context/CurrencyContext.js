@@ -3,8 +3,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 const CurrencyContext = createContext();
 
 export const CurrencyProvider = ({ children }) => {
-  const [countryCode, setCountryCode] = useState('IN'); // Default to India
-  const [currency, setCurrency] = useState('INR');
+  const [countryCode, setCountryCode] = useState('US'); // Default to US
+  const [currency, setCurrency] = useState('USD');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export const CurrencyProvider = ({ children }) => {
       
       if (response.ok) {
         const data = await response.json();
-        const detectedCountry = data.country_code || 'IN';
+        const detectedCountry = data.country_code || 'US';
         
         // Only update if different from cached value
         if (detectedCountry !== cachedCountry) {
@@ -42,19 +42,19 @@ export const CurrencyProvider = ({ children }) => {
           sessionStorage.setItem('userCountry', detectedCountry);
         }
       } else {
-        // Fallback to India if detection fails and no cache
+        // Fallback to US if detection fails and no cache
         if (!cachedCountry) {
-          setCountryCode('IN');
-          setCurrency('INR');
+          setCountryCode('US');
+          setCurrency('USD');
         }
       }
     } catch (error) {
       console.error('Error detecting country:', error);
-      // Fallback to India if detection fails and no cache
+      // Fallback to US if detection fails and no cache
       const cachedCountry = sessionStorage.getItem('userCountry');
       if (!cachedCountry) {
-        setCountryCode('IN');
-        setCurrency('INR');
+        setCountryCode('US');
+        setCurrency('USD');
       }
     } finally {
       setLoading(false);

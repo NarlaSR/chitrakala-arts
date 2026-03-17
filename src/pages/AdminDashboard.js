@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { artworksAPI } from '../services/api';
+import { artworksAPI, categoriesAPI } from '../services/api';
 import '../styles/AdminDashboard.css';
 
 // MULTISIZE TEST: This is a trivial change to force a redeploy and confirm the latest code is deployed.
@@ -62,12 +62,13 @@ const AdminDashboard = () => {
     setBulkResults([]);
     setBulkIds('');
   };
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingArtwork, setEditingArtwork] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
-    category: 'dot-mandala',
+    category: '',
     description: '',
     price: '',
     materials: '',
@@ -91,6 +92,12 @@ const AdminDashboard = () => {
     }
     loadArtworks();
     loadPricingSettings();
+    categoriesAPI.getAll()
+      .then(data => {
+        setCategories(data);
+        setFormData(prev => ({ ...prev, category: prev.category || (data[0]?.id ?? '') }));
+      })
+      .catch(err => console.error('Failed to load categories:', err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
@@ -346,6 +353,30 @@ const AdminDashboard = () => {
 
   return (
     <div className="admin-dashboard">
+      <div className="admin-header">
+        <h1>Admin Dashboard</h1>
+        <div className="admin-actions">
+          <button onClick={() => navigate('/ckk-secure-admin/categories')} className="btn-secondary">
+            Manage Categories
+          </button>
+          <button onClick={() => navigate('/ckk-secure-admin/about')} className="btn-secondary">
+            Edit About Page
+          </button>
+          <button onClick={() => navigate('/ckk-secure-admin/contact')} className="btn-secondary">
+            Edit Contact Info
+          </button>
+          <button onClick={() => navigate('/ckk-secure-admin/settings')} className="btn-secondary">
+            Site Settings
+          </button>
+          <button onClick={() => navigate('/')} className="btn-secondary">
+            View Site
+          </button>
+          <button onClick={handleLogout} className="btn-logout">
+            Logout
+          </button>
+        </div>
+      </div>
+
       {/* Bulk Art Lookup Section */}
       <div className="bulk-art-lookup" style={{ marginBottom: '2rem', background: '#f9f9f9', padding: '1rem', borderRadius: '8px', position: 'relative' }}>
         <h2>Bulk Art Lookup (Paste Art IDs)</h2>
@@ -411,27 +442,6 @@ const AdminDashboard = () => {
           </div>
         )}
       </div>
-      <div className="admin-header">
-        <h1>Admin Dashboard</h1>
-        <div className="admin-actions">
-          <button onClick={() => navigate('/ckk-secure-admin/about')} className="btn-secondary">
-            Edit About Page
-          </button>
-          <button onClick={() => navigate('/ckk-secure-admin/contact')} className="btn-secondary">
-            Edit Contact Info
-          </button>
-          <button onClick={() => navigate('/ckk-secure-admin/settings')} className="btn-secondary">
-            Site Settings
-          </button>
-          <button onClick={() => navigate('/')} className="btn-secondary">
-            View Site
-          </button>
-          <button onClick={handleLogout} className="btn-logout">
-            Logout
-          </button>
-        </div>
-      </div>
-
       <div className="dashboard-content">
         <div className="dashboard-toolbar">
           <h2>Manage Artworks</h2>
@@ -472,9 +482,9 @@ const AdminDashboard = () => {
                     onBlur={e => validateField('category', e.target.value)}
                     required
                   >
-                    <option value="dot-mandala">Dot Mandala Art</option>
-                    <option value="lippan-art">Lippan Art</option>
-                    <option value="textile-design">Textile Designing</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
                   </select>
                   {formErrors.category && <div className="form-error">{formErrors.category}</div>}
                 </div>

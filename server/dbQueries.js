@@ -19,6 +19,52 @@ async function createUser(id, username, password, role) {
   );
 }
 
+// Category functions
+async function getCategories() {
+  const result = await pool.query('SELECT * FROM categories ORDER BY display_order ASC, name ASC');
+  return result.rows;
+}
+
+async function getCategoryById(id) {
+  const result = await pool.query('SELECT * FROM categories WHERE id = $1', [id]);
+  return result.rows[0] || null;
+}
+
+async function createCategory({ id, name, description, display_order, image }) {
+  const result = await pool.query(
+    `INSERT INTO categories (id, name, description, display_order, image)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [id, name, description || null, display_order || 0, image || null]
+  );
+  return result.rows[0];
+}
+
+async function updateCategory(id, { name, description, display_order, image }) {
+  const result = await pool.query(
+    `UPDATE categories
+     SET name = $2, description = $3, display_order = $4, image = $5
+     WHERE id = $1
+     RETURNING *`,
+    [id, name, description || null, display_order || 0, image || null]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteCategory(id) {
+  // Prevent deletion if artworks reference this category
+  const artworkCount = await pool.query(
+    'SELECT COUNT(*) FROM artworks WHERE category = $1',
+    [id]
+  );
+  if (parseInt(artworkCount.rows[0].count, 10) > 0) {
+    const err = new Error('Cannot delete category — artworks are assigned to it');
+    err.code = 'CATEGORY_IN_USE';
+    throw err;
+  }
+  await pool.query('DELETE FROM categories WHERE id = $1', [id]);
+}
+
 // Artwork functions
 // Artwork sizes functions
 async function addArtworkSizes(artworkId, sizesArray) {
@@ -455,6 +501,11 @@ module.exports = {
   getUsers,
   getUserByUsername,
   createUser,
+  getCategories,
+  getCategoryById,
+  createCategory,
+  updateCategory,
+  deleteCategory,
   getArtworks,
   getArtworkById,
   createArtwork,

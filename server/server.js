@@ -154,7 +154,17 @@ const upload = multer({
 });
 
 // Configure Resend for email sending (HTTP-based, bypasses Railway SMTP blocking)
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazily initialized so missing RESEND_API_KEY doesn't crash the server on startup
+let resend = null;
+function getResend() {
+  if (!resend) {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY is not configured');
+    }
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 // Rate limiter for contact form (3 submissions per hour per IP)
 const contactLimiter =
@@ -627,6 +637,79 @@ app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ─── Category Routes ────────────────────────────────────────────────────────
+
+// GET /api/categories — public
+app.get('/api/categories', async (req, res) => {
+  try {
+    const categories = await db.getCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// GET /api/categories/:id — public
+app.get('/api/categories/:id', async (req, res) => {
+  try {
+    const category = await db.getCategoryById(req.params.id);
+    if (!category) return res.status(404).json({ error: 'Category not found' });
+    res.json(category);
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    res.status(500).json({ error: 'Failed to fetch category' });
+  }
+});
+
+// POST /api/categories — admin only
+app.post('/api/categories', authenticateToken, async (req, res) => {
+  try {
+    const { id, name, description, display_order, image } = req.body;
+    if (!id || !name) return res.status(400).json({ error: 'id and name are required' });
+    // Validate slug format
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) {
+      return res.status(400).json({ error: 'id must be a lowercase slug (e.g. "my-category")' });
+    }
+    const category = await db.createCategory({ id, name, description, display_order, image });
+    res.status(201).json(category);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'A category with that id already exists' });
+    }
+    console.error('Error creating category:', error);
+    res.status(500).json({ error: 'Failed to create category' });
+  }
+});
+
+// PUT /api/categories/:id — admin only
+app.put('/api/categories/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, display_order, image } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const category = await db.updateCategory(req.params.id, { name, description, display_order, image });
+    if (!category) return res.status(404).json({ error: 'Category not found' });
+    res.json(category);
+  } catch (error) {
+    console.error('Error updating category:', error);
+    res.status(500).json({ error: 'Failed to update category' });
+  }
+});
+
+// DELETE /api/categories/:id — admin only
+app.delete('/api/categories/:id', authenticateToken, async (req, res) => {
+  try {
+    await db.deleteCategory(req.params.id);
+    res.json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    if (error.code === 'CATEGORY_IN_USE') {
+      return res.status(409).json({ error: error.message });
+    }
+    console.error('Error deleting category:', error);
+    res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
 // Contact Page Routes
 
 // Get contact info (public)
@@ -753,7 +836,7 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       `
     };
 
-    const result = await resend.emails.send({
+    const result = await getResend().emails.send({
       from: 'Chitrakala Arts <info@chitrakala-arts.com>',
       to: recipientEmail,
       replyTo: email,
@@ -767,7 +850,7 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
       console.warn('Primary email failed:', result.error);
       // Try fallback email if configured
       if (fallbackEmail) {
-        const fallbackResult = await resend.emails.send({
+        const fallbackResult = await getResend().emails.send({
           from: 'Chitrakala Arts <info@chitrakala-arts.com>',
           to: [fallbackEmail],
           replyTo: email,
@@ -1058,10 +1141,10 @@ app.get('/api/user/location', async (req, res) => {
 
     // For local/development IPs, return a default country
     if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
-      console.log('[Location Detection] Local IP detected, defaulting to India');
+      console.log('[Location Detection] Local IP detected, defaulting to US');
       return res.json({ 
-        country_code: 'IN',
-        country_name: 'India',
+        country_code: 'US',
+        country_name: 'United States',
         ip: ip || 'local',
         source: 'local'
       });
