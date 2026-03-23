@@ -1184,8 +1184,8 @@ app.get('/api/user/location', async (req, res) => {
     console.error('[Location Detection] Error:', error.message);
     // Default to IN on error (primary market)
     res.json({
-      country_code: 'IN',
-      country_name: 'India',
+      country_code: 'US',
+      country_name: 'United States',
       ip: 'unknown',
       source: 'fallback',
       error: error.message
