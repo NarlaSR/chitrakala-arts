@@ -24,11 +24,14 @@ export const CurrencyProvider = ({ children }) => {
 
       // Always call backend API to detect country (verify cache or get fresh)
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/user/location`);
-      
       if (response.ok) {
         const data = await response.json();
         const detectedCountry = data.country_code || 'US';
-        
+        // Only update if not fallback
+        if (data.source === 'fallback') {
+          console.warn('[Currency] Location API returned fallback. Not updating country/currency.');
+          return;
+        }
         // Only update if different from cached value
         if (detectedCountry !== cachedCountry) {
           console.log(`[Country Detection] Updating from ${cachedCountry} to ${detectedCountry}`);
