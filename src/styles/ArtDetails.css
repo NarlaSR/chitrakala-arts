@@ -157,7 +157,7 @@
   margin: 0;
 }
 
-@media (max-width: 968px) {
+@media (max-width: 768px) {
   .art-details-content {
     grid-template-columns: 1fr;
     gap: 2rem;
@@ -169,5 +169,29 @@
 
   .art-actions {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .art-details {
+    padding: 1.5rem 0 3rem;
+  }
+
+  .art-title {
+    font-size: 1.6rem;
+  }
+
+  .price-value {
+    font-size: 1.5rem;
+  }
+
+  .art-category-badge {
+    font-size: 1rem;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 0.8rem 1rem;
+    font-size: 0.95rem;
   }
 }
