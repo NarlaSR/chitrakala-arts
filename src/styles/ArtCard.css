@@ -98,3 +98,29 @@
   font-size: 0.9rem;
   color: var(--text-light);
 }
+
+@media (max-width: 768px) {
+  .art-card-image {
+    height: 220px;
+  }
+
+  .art-card-content {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .art-card-image {
+    height: 180px;
+  }
+
+  .art-card-title {
+    font-size: 1.1rem;
+  }
+
+  .art-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

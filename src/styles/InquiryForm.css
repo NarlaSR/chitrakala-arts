@@ -49,3 +49,15 @@
   font-size: 0.95rem;
   margin-bottom: 0.5rem;
 }
+
+@media (max-width: 768px) {
+  .inquiry-form input,
+  .inquiry-form textarea {
+    font-size: 16px;
+  }
+
+  .inquiry-form button {
+    width: 100%;
+    padding: 0.8rem 1.5rem;
+  }
+}

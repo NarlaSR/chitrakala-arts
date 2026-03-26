@@ -210,3 +210,33 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 480px) {
+  .hero {
+    padding: 3rem 1rem;
+  }
+
+  .hero-logo,
+  .hero-logo-placeholder {
+    width: 140px;
+    height: 140px;
+    font-size: 2.8rem;
+  }
+
+  .hero-title {
+    font-size: 1.7rem;
+  }
+
+  .hero-subtitle {
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .about-preview {
+    padding: 3rem 1rem;
+  }
+
+  .about-preview h2 {
+    font-size: 1.8rem;
+  }
+}

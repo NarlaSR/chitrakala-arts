@@ -94,3 +94,21 @@
 .category-card:hover .category-card-cta {
   color: var(--secondary-color);
 }
+
+@media (max-width: 768px) {
+  .category-card-image {
+    height: 180px;
+  }
+
+  .category-card-overlay h3 {
+    font-size: 1.2rem;
+  }
+
+  .category-placeholder-icon {
+    font-size: 2.5rem;
+  }
+
+  .category-placeholder p {
+    font-size: 1rem;
+  }
+}
