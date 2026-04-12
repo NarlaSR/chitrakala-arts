@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useHomeView } from '../context/HomeViewContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useCurrency } from '../context/CurrencyContext';
 import WishlistModal from './WishlistModal';
 import { Link } from 'react-router-dom';
 import { categoriesAPI } from '../services/api';
@@ -17,6 +18,12 @@ const Header = () => {
 
   const { wishlist } = useWishlist();
   const [showWishlist, setShowWishlist] = useState(false);
+  const { countryCode } = useCurrency();
+
+  const isIndia = countryCode === 'IN';
+  const siteName = isIndia ? 'ChitraKala Sanskriti' : 'Sainar Chitrakala Ventures';
+  const logoSrc = isIndia ? '/assets/images/logo.png' : '/assets/images/sainar-logo.png';
+  const logoAlt = isIndia ? 'ChitraKala Sanskriti' : 'Sainar Chitrakala Ventures';
 
   useEffect(() => {
     categoriesAPI.getAll()
@@ -28,7 +35,19 @@ const Header = () => {
     <header className="header">
       <div className="header-container">
         <Link to="/" className="logo" onClick={() => setShowAllGrouped(false)}>
-          <h1>Chitra Kala Sanskriti</h1>
+          <img
+            src={logoSrc}
+            alt={logoAlt}
+            className="logo-image"
+            onError={(e) => {
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
+          />
+          <div className="logo-placeholder" style={{ display: 'none' }}>
+            {isIndia ? 'CKS' : 'SCV'}
+          </div>
+          <h1>{siteName}</h1>
         </Link>
 
         <button className="mobile-menu-toggle" onClick={toggleMenu}>

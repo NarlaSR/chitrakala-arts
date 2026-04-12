@@ -21,6 +21,18 @@
   opacity: 0.95;
 }
 
+.about-partner-banner {
+  max-width: 900px;
+  margin: -1.5rem auto 2.5rem;
+  padding: 1.2rem 1.8rem;
+  background-color: #fff8f0;
+  border-left: 4px solid var(--primary-color);
+  border-radius: 4px;
+  font-size: 0.97rem;
+  line-height: 1.7;
+  color: var(--text-dark);
+}
+
 .about-section {
   max-width: 900px;
   margin: 0 auto 3rem;

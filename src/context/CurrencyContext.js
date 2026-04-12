@@ -13,6 +13,15 @@ export const CurrencyProvider = ({ children }) => {
 
   const detectCountry = async () => {
     try {
+      // Dev override: ?geo=IN or ?geo=US in URL skips API detection
+      const geoOverride = new URLSearchParams(window.location.search).get('geo');
+      if (geoOverride) {
+        setCountryCode(geoOverride);
+        setCurrency(geoOverride === 'IN' ? 'INR' : 'USD');
+        setLoading(false);
+        return;
+      }
+
       // Check cache for instant UI update, but always verify with backend
       const cachedCountry = sessionStorage.getItem('userCountry');
       if (cachedCountry) {
