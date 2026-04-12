@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useHomeView } from '../context/HomeViewContext';
+import { useCurrency } from '../context/CurrencyContext';
 import CategoryCard from '../components/CategoryCard';
 import ArtCard from '../components/ArtCard';
 import { artworksAPI, categoriesAPI } from '../services/api';
@@ -13,6 +14,17 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const location = useLocation();
   const { showAllGrouped, setShowAllGrouped } = useHomeView();
+  const { countryCode } = useCurrency();
+
+  const isIndia = countryCode === 'IN';
+
+  const heroTitle = isIndia
+    ? 'Welcome to ChitraKala Sanskriti'
+    : 'Authentic Indian Art, Curated for You';
+
+  const heroSubtitle = isIndia
+    ? 'Discover exquisite handcrafted artworks that blend tradition with contemporary design'
+    : 'Discover exquisite handcrafted artworks brought to you by Sainar Chitrakala Ventures (USA) in collaboration with Chitrakala Sanskriti (India)—where timeless traditions meet contemporary design.';
   // Reset showAllGrouped if route is "/"
   useEffect(() => {
     if (location.pathname === "/") {
@@ -46,20 +58,20 @@ const Home = () => {
         <div className="hero-content">
           <div className="hero-logo-container">
             <img 
-              src="/assets/images/logo.png" 
-              alt="Chitra's Kala Sanskriti" 
+              src={isIndia ? '/assets/images/logo.png' : '/assets/images/sainar-logo.png'}
+              alt={isIndia ? "ChitraKala Sanskriti" : "Sainar Chitrakala Ventures"}
               className="hero-logo"
               onError={(e) => {
                 e.target.style.display = 'none';
                 e.target.nextSibling.style.display = 'flex';
               }}
             />
-            <div className="hero-logo-placeholder" style={{display: 'none'}}>CKK</div>
+            <div className="hero-logo-placeholder" style={{display: 'none'}}>{isIndia ? 'CKS' : 'SCV'}</div>
           </div>
           <div className="hero-text">
-            <h1 className="hero-title">Welcome to Chitra Kala Sanskriti</h1>
+            <h1 className="hero-title">{heroTitle}</h1>
             <p className="hero-subtitle">
-              Discover exquisite handcrafted artworks that blend tradition with contemporary design
+              {heroSubtitle}
             </p>
             <button className="hero-cta" onClick={() => setShowAllGrouped(true)}>
               Explore Collection
@@ -134,15 +146,32 @@ const Home = () => {
       {/* About Preview Section */}
       <section className="about-preview">
         <div className="about-preview-content">
-          <h2>About Our Craft</h2>
-          <p>
-            At Chitrakala Arts, we celebrate the beauty of traditional Indian art forms 
-            through contemporary expression. Each piece is meticulously handcrafted with 
-            passion, precision, and a deep respect for artistic heritage.
-          </p>
-          <Link to="/about" className="about-cta">
-            Learn More About Us
-          </Link>
+          {isIndia ? (
+            <>
+              <h2>About Our Craft</h2>
+              <p>
+                At Chitrakala Arts, we celebrate the beauty of traditional Indian art forms
+                through contemporary expression. Each piece is meticulously handcrafted with
+                passion, precision, and a deep respect for artistic heritage.
+              </p>
+              <Link to="/about" className="about-cta">
+                Learn More About Us
+              </Link>
+            </>
+          ) : (
+            <>
+              <h2>Meet the Artists Behind the Work</h2>
+              <p>
+                The artworks you see here are handcrafted by <strong>Chitrakala Sanskriti</strong>,
+                a studio based in India dedicated to preserving traditional art forms — from
+                intricate Dot Mandala to Lippan and textile design. Sainar Chitrakala Ventures
+                brings their creations to you in the USA.
+              </p>
+              <Link to="/about" className="about-cta">
+                Discover Chitrakala Sanskriti →
+              </Link>
+            </>
+          )}
         </div>
       </section>
     </div>

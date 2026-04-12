@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useCurrency } from '../context/CurrencyContext';
 import '../styles/Footer.css';
 
 const Footer = () => {
@@ -25,6 +26,13 @@ const Footer = () => {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  const { countryCode } = useCurrency();
+
+  const displayName = countryCode === 'IN' ? settings.siteName : 'Sainar Chitrakala Ventures';
+  const displayCopyright = countryCode === 'IN'
+    ? '© {year} Chitrakala Sanskriti. All rights reserved.'
+    : '© {year} Sainar Chitrakala Ventures. All rights reserved.';
 
   const fetchSettings = async () => {
     try {
@@ -54,7 +62,7 @@ const Footer = () => {
     <footer className="footer">
       <div className="footer-container">
         <div className="footer-section">
-          <h3>{settings.siteName}</h3>
+          <h3>{displayName}</h3>
           <p>{settings.tagline}</p>
         </div>
         
@@ -99,7 +107,7 @@ const Footer = () => {
       </div>
       
       <div className="footer-bottom">
-        <p>{formatCopyright(settings.copyright)}</p>
+        <p>{formatCopyright(displayCopyright)}</p>
         {settings.developer.showCredit && settings.developer.name && (
           <div className="developer-credit">
             <span>Designed & Developed by </span>

@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { aboutAPI } from '../services/api';
+import { useCurrency } from '../context/CurrencyContext';
 import '../styles/About.css';
 
 const About = () => {
   const [aboutData, setAboutData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { countryCode } = useCurrency();
+
+  const isIndia = countryCode === 'IN';
+
+  const aboutHeroTitle = isIndia
+    ? 'About ChitraKala Sanskriti'
+    : 'About Sainar Chitrakala Ventures';
+
+  const aboutHeroSubtitle = isIndia
+    ? 'Where tradition meets contemporary artistry'
+    : 'Bringing authentic Indian art to the American market';
 
   useEffect(() => {
     const loadAboutData = async () => {
@@ -43,9 +55,20 @@ const About = () => {
   return (
     <div className="about-page">
       <div className="about-hero">
-        <h1>About Chitrakala Arts</h1>
-        <p>Where tradition meets contemporary artistry</p>
+        <h1>{aboutHeroTitle}</h1>
+        <p>{aboutHeroSubtitle}</p>
       </div>
+
+      {!isIndia && (
+        <div className="about-partner-banner">
+          <p>
+            The artworks on this site are created by <strong>Chitrakala Sanskriti</strong> (India),
+            our founding partner studio. <strong>Sainar Chitrakala Ventures</strong> (USA) exclusively
+            curates and distributes their handcrafted works to customers across the United States.
+            The story below is theirs.
+          </p>
+        </div>
+      )}
 
       <div className="container">
         <section className="about-section">
