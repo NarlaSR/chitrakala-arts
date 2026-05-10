@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useParams, Link } from 'react-router-dom';
-import { getCategoryById } from '../data/artData';
-import { artworksAPI } from '../services/api';
+import { artworksAPI, categoriesAPI } from '../services/api';
 import { getPriceForCountry, formatPrice } from '../utils/priceUtils';
 import '../styles/ArtDetails.css';
 
 const ArtDetails = () => {
   const { artId } = useParams();
   const [artwork, setArtwork] = useState(null);
+  const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const { addToWishlist, wishlist } = useWishlist();
   const { countryCode } = useCurrency();
@@ -20,6 +20,23 @@ const ArtDetails = () => {
       try {
         const data = await artworksAPI.getById(artId);
         setArtwork(data);
+
+        if (data?.category) {
+          // Category value may be stored as ID (recommended) or display name in older records.
+          try {
+            const categoryById = await categoriesAPI.getById(data.category);
+            setCategory(categoryById || null);
+          } catch {
+            const allCategories = await categoriesAPI.getAll();
+            const categoryValue = String(data.category).trim().toLowerCase();
+            const matched = allCategories.find(
+              (cat) =>
+                String(cat.id).trim().toLowerCase() === categoryValue ||
+                String(cat.name).trim().toLowerCase() === categoryValue
+            );
+            setCategory(matched || null);
+          }
+        }
       } catch (error) {
         console.error('Failed to load artwork:', error);
       } finally {
@@ -51,7 +68,8 @@ const ArtDetails = () => {
     );
   }
 
-  const category = getCategoryById(artwork.category);
+  const categoryLabel = category?.name || artwork.category || 'Gallery';
+  const categoryPath = category?.id || artwork.category;
   // Add cache-busting query string to image URL
   const imageUrl = artwork.image
     ? `${artwork.image}?t=${artwork.updatedAt || Date.now()}`
@@ -60,8 +78,8 @@ const ArtDetails = () => {
   return (
     <div className="art-details">
       <div className="container">
-        <Link to={`/category/${artwork.category}`} className="back-link">
-          ← Back to {category?.name || 'Gallery'}
+        <Link to={`/category/${categoryPath}`} className="back-link">
+          ← Back to {categoryLabel}
         </Link>
 
         <div className="art-details-content">
@@ -77,7 +95,7 @@ const ArtDetails = () => {
           </div>
 
           <div className="art-details-info">
-            <div className="art-category-badge">{category?.name || 'Gallery'}</div>
+            <div className="art-category-badge">{categoryLabel}</div>
             <h1 className="art-title">{artwork.title}</h1>
             
             {/* Show all sizes/prices */}
@@ -152,7 +170,7 @@ const ArtDetails = () => {
                   <strong>Materials:</strong> {artwork.materials}
                 </li>
                 <li>
-                  <strong>Category:</strong> {category?.name || 'Gallery'}
+                  <strong>Category:</strong> {categoryLabel}
                 </li>
               </ul>
             </div>
