@@ -61,7 +61,7 @@ const ArtDetails = () => {
     <div className="art-details">
       <div className="container">
         <Link to={`/category/${artwork.category}`} className="back-link">
-          ← Back to {category.name}
+          ← Back to {category?.name || 'Gallery'}
         </Link>
 
         <div className="art-details-content">
@@ -77,7 +77,7 @@ const ArtDetails = () => {
           </div>
 
           <div className="art-details-info">
-            <div className="art-category-badge">{category.name}</div>
+            <div className="art-category-badge">{category?.name || 'Gallery'}</div>
             <h1 className="art-title">{artwork.title}</h1>
             
             {/* Show all sizes/prices */}
@@ -152,7 +152,7 @@ const ArtDetails = () => {
                   <strong>Materials:</strong> {artwork.materials}
                 </li>
                 <li>
-                  <strong>Category:</strong> {category.name}
+                  <strong>Category:</strong> {category?.name || 'Gallery'}
                 </li>
               </ul>
             </div>
