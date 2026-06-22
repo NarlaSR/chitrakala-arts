@@ -12,6 +12,7 @@ const sharp = require('sharp');
 const { initializeDatabase, isDatabaseConfigured } = require('./db');
 const db = require('./dbQueries');
 const { calculateUsdPrice, getPriceForCountry } = require('./priceUtils');
+const inventorySync = require('./inventorySync');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -153,6 +154,25 @@ const upload = multer({
   }
 });
 
+const xlsxUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: function (req, file, cb) {
+    const allowedExtensions = ['.xlsx', '.xls'];
+    const extname = allowedExtensions.includes(path.extname(file.originalname).toLowerCase());
+    const allowedMimeTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'application/octet-stream'
+    ];
+    const mimetype = allowedMimeTypes.includes(file.mimetype);
+    if (extname && mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Only XLSX or XLS spreadsheet files are allowed.'));
+  }
+});
+
 // Configure Resend for email sending (HTTP-based, bypasses Railway SMTP blocking)
 // Lazily initialized so missing RESEND_API_KEY doesn't crash the server on startup
 let resend = null;
@@ -165,6 +185,206 @@ function getResend() {
   }
   return resend;
 }
+
+// Inventory sync preview route: Phase 1 preview-only endpoint
+app.post(
+  '/api/admin/inventory-sync/preview',
+  authenticateToken,
+  xlsxUpload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ error: 'XLSX file upload is required' });
+      }
+
+      const pricingSettings = await db.getPricingSettings();
+      const categories = await db.getCategories();
+      const categoriesById = new Set(categories.map(category => category.id));
+
+      const parseResult = inventorySync.parseInventoryMasterWorkbook(req.file.buffer);
+      if (parseResult.errors.length > 0) {
+        return res.status(400).json({
+          summary: {
+            totalRows: 0,
+            toUpdate: 0,
+            reviewOnly: 0,
+            noChange: 0,
+            blocked: 0,
+            warnings: parseResult.errors.length
+          },
+          errors: parseResult.errors,
+          updates: [],
+          reviewRows: [],
+          blockedRows: [],
+          warnings: []
+        });
+      }
+
+      const rows = parseResult.rows.filter(row => !inventorySync.isRowEmpty(row.data));
+      const summary = {
+        totalRows: rows.length,
+        toUpdate: 0,
+        reviewOnly: 0,
+        noChange: 0,
+        blocked: 0,
+        warnings: 0
+      };
+      const updates = [];
+      const reviewRows = [];
+      const blockedRows = [];
+      const warnings = [];
+
+      const appendWarnings = (rowNumber, artworkId, items) => {
+        for (const item of items) {
+          if (!item) continue;
+          if (typeof item === 'string') {
+            warnings.push({ rowNumber, artworkId, message: item });
+          } else if (typeof item === 'object') {
+            const { field = null, message = null, type = null, workbookValue = null, liveDbValue = null } = item;
+            warnings.push({ rowNumber, artworkId, field, message, type, workbookValue, liveDbValue });
+          }
+        }
+      };
+
+      for (const row of rows) {
+        const rowData = row.data;
+        const action = inventorySync.normalizeString(rowData['Sync Action']);
+        const dbId = inventorySync.normalizeString(rowData['DB id']);
+        const rowResult = {
+          rowNumber: row.rowNumber,
+          artworkId: dbId,
+          syncAction: action,
+          errors: [],
+          warnings: [],
+          staleData: [],
+          changes: []
+        };
+
+        if (!action) {
+          rowResult.errors.push('Sync Action is required');
+        } else if (!inventorySync.SUPPORTED_SYNC_ACTIONS.includes(action)) {
+          rowResult.errors.push(`Unsupported Sync Action '${action}'`);
+        }
+
+        if (action === 'CREATE' || action === 'ARCHIVE') {
+          rowResult.errors.push(`${action} is blocked in Phase 1`);
+        }
+
+        if (['UPDATE', 'REVIEW', 'NO_CHANGE'].includes(action)) {
+          if (!dbId) {
+            rowResult.errors.push('DB id is required for UPDATE, REVIEW, and NO_CHANGE rows');
+          }
+        }
+
+        let liveArtwork = null;
+        if (dbId && rowResult.errors.length === 0) {
+          liveArtwork = await db.getArtworkById(dbId);
+          if (!liveArtwork) {
+            rowResult.errors.push(`Artwork with DB id '${dbId}' not found`);
+          }
+        }
+
+        if (liveArtwork) {
+          const staleFields = [
+            { workbook: 'DB title', live: liveArtwork.title, field: 'title', type: 'string' },
+            { workbook: 'DB category_slug', live: liveArtwork.category, field: 'category', type: 'string' },
+            { workbook: 'DB description', live: liveArtwork.description, field: 'description', type: 'string' },
+            { workbook: 'DB materials', live: liveArtwork.materials, field: 'materials', type: 'string' },
+            { workbook: 'DB price_inr', live: liveArtwork.price_inr, field: 'price_inr', type: 'number' },
+            { workbook: 'DB featured', live: liveArtwork.featured, field: 'featured', type: 'boolean' }
+          ];
+
+          for (const check of staleFields) {
+            const stale = inventorySync.buildStaleComparison(rowData[check.workbook], check.live, check.field, check.type);
+            if (stale) {
+              rowResult.staleData.push(stale);
+            }
+          }
+        }
+
+        if (liveArtwork && action === 'UPDATE') {
+          const updateResult = inventorySync.buildSupportedUpdates(rowData, liveArtwork, categoriesById, pricingSettings);
+          rowResult.changes = updateResult.changes;
+          rowResult.warnings = updateResult.warnings;
+          if (!updateResult.hasSupportedField) {
+            rowResult.errors.push('UPDATE rows must contain at least one supported corrected field');
+          }
+        }
+
+        if (action === 'NO_CHANGE') {
+          if (inventorySync.hasSupportedCorrections(rowData)) {
+            rowResult.warnings.push('NO_CHANGE row has corrected values populated');
+          }
+        }
+
+        if (action === 'REVIEW') {
+          rowResult.warnings.push('REVIEW rows are review-only and will not be applied in Phase 1');
+        }
+
+        if (rowResult.errors.length > 0) {
+          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
+          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
+          blockedRows.push(rowResult);
+          summary.blocked += 1;
+          continue;
+        }
+
+        if (rowResult.staleData.length > 0) {
+          rowResult.warnings.push('Workbook data is stale compared to live DB');
+        }
+
+        if (action === 'NO_CHANGE') {
+          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
+          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
+          summary.noChange += 1;
+          reviewRows.push(rowResult);
+          continue;
+        }
+
+        if (action === 'REVIEW') {
+          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
+          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
+          summary.reviewOnly += 1;
+          reviewRows.push(rowResult);
+          continue;
+        }
+
+        if (action === 'UPDATE') {
+          if (rowResult.changes.length === 0) {
+            rowResult.warnings.push('UPDATE row has no effective changes');
+            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
+            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
+            reviewRows.push(rowResult);
+          } else {
+            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
+            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
+            summary.toUpdate += 1;
+            updates.push(rowResult);
+          }
+          continue;
+        }
+
+        // Fallback for unexpected row states
+        rowResult.errors.push('Unable to classify row into preview categories');
+        blockedRows.push(rowResult);
+        summary.blocked += 1;
+      }
+
+      summary.warnings = warnings.length;
+
+      return res.json({
+        summary,
+        updates,
+        reviewRows,
+        blockedRows,
+        warnings
+      });
+    } catch (error) {
+      console.error('Inventory sync preview error:', error);
+      return res.status(500).json({ error: 'Failed to process inventory sync preview' });
+    }
+  }
+);
 
 // Rate limiter for contact form (3 submissions per hour per IP)
 const contactLimiter =
