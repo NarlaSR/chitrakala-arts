@@ -1,0 +1,11 @@
+﻿Area,Current Finding,Status,Action Needed
+Multiplier,Business owner confirmed multiplier = 2.25,Confirmed,Use 2.25 going forward; treat 1.75 as outdated/historical
+FX Rate,Workbook/export baseline appears to use 92.40 INR/USD,Confirmed,Current INR/USD is 94.40
+9 UPDATE rows,INV-03-02 validated Corrected_* fields and preview returns 9 update candidates,Validated,Confirm invoice/purchase-price support for corrected INR values
+Invoice support,Invoice/purchase support not found in reviewed workbook data,Needs business input,Business owner must confirm purchase/invoice values
+Customs,No confirmed customs assumption found,Needs business input,Define customs cost assumption
+Shipping,No confirmed shipping assumption found,Needs business input,Define shipping cost assumption
+Overhead,No confirmed overhead assumption found,Needs business input,Define overhead cost assumption
+Margin floor,No minimum margin floor found,Blocked,Define minimum acceptable margin before automated pricing commit
+DB writes,No DB writes performed,Confirmed,None
+Backend changes,No backend changes made,Confirmed,None
