@@ -1,0 +1,679 @@
+﻿{
+    "summary":  {
+                    "totalRows":  36,
+                    "toUpdate":  9,
+                    "reviewOnly":  0,
+                    "noChange":  27,
+                    "blocked":  0,
+                    "warnings":  1
+                },
+    "updates":  [
+                    {
+                        "rowNumber":  4,
+                        "artworkId":  "art-1770419460850",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "description",
+                                            "from":  "A captivating hand-painted round dot mandala artwork created in serene shades of blue and soft peach. Layers of intricate dot work and flowing floral patterns come together in perfect harmony, evoking a sense of calm, warmth, and balance. The soothing blue tones bring tranquility, while the peach accents add a gentle glow, making this piece both peaceful and uplifting.\r\nEach mandala is carefully painted by hand, ensuring every artwork is unique. Perfect as a statement wall décor, shelf display, or meditation centerpiece, this mandala adds refined beauty to living rooms, bedrooms, yoga spaces, or creative corners. It also makes a thoughtful handmade gift for housewarmings, weddings, festivals, or special occasions.\r\n18\" - Rs 6200\r\n24\"  Rs 8000\r\n36\" Rs 16000",
+                                            "to":  "A captivating hand-painted round dot mandala artwork created in serene shades of blue and soft peach. Layers of intricate dot work and flowing floral patterns come together in perfect harmony, evoking a sense of calm, warmth, and balance. The soothing blue tones bring tranquility, while the peach accents add a gentle glow, making this piece both peaceful and uplifting. Each mandala is carefully painted by hand, ensuring every artwork is unique. Perfect as a statement wall décor, shelf display, or meditation centerpiece, this mandala adds refined beauty to living rooms, bedrooms, yoga spaces, or creative corners. It also makes a thoughtful handmade gift for housewarmings, weddings, festivals, or special occasions."
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  7,
+                        "artworkId":  "art-1770775579766",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "materials",
+                                            "from":  "wood",
+                                            "to":  "Wood"
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  17,
+                        "artworkId":  "art-1771030980031",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "materials",
+                                            "from":  "Pure Wrinkle Cr",
+                                            "to":  "Pure Wrinkle Crepe"
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  22,
+                        "artworkId":  "art-1771102194181",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "title",
+                                            "from":  "Coaster Set (4 pieces)",
+                                            "to":  "Dot Mandala Coaster Set – Variety Pack (4 pieces)"
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  23,
+                        "artworkId":  "art-1771102482592",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "title",
+                                            "from":  "Decorative Wall Panel",
+                                            "to":  "Lippan Decorative Wall Panel – Style A"
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  24,
+                        "artworkId":  "art-1771102578812",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "materials",
+                                            "from":  "Wood",
+                                            "to":  "Wood, Clay and Mirrors"
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  25,
+                        "artworkId":  "art-1771102688340",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+                                         {
+                                             "field":  "price_inr",
+                                             "message":  "USD price is recalculated by the backend and will be handled in a future commit phase."
+                                         }
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "price_inr",
+                                            "from":  "1200.00",
+                                            "to":  1500
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  30,
+                        "artworkId":  "art-1771903835260",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "materials",
+                                            "from":  "wood",
+                                            "to":  "Wood"
+                                        }
+                                    ]
+                    },
+                    {
+                        "rowNumber":  31,
+                        "artworkId":  "art-1771904016600",
+                        "syncAction":  "UPDATE",
+                        "errors":  [
+
+                                   ],
+                        "warnings":  [
+
+                                     ],
+                        "staleData":  [
+
+                                      ],
+                        "changes":  [
+                                        {
+                                            "field":  "materials",
+                                            "from":  "wood",
+                                            "to":  "Wood"
+                                        }
+                                    ]
+                    }
+                ],
+    "reviewRows":  [
+                       {
+                           "rowNumber":  2,
+                           "artworkId":  "art-1770419263598",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  3,
+                           "artworkId":  "art-1770419392051",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  5,
+                           "artworkId":  "art-1770771760544",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  6,
+                           "artworkId":  "art-1770771970545",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  8,
+                           "artworkId":  "art-1770777152872",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  9,
+                           "artworkId":  "art-1770778179564",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  10,
+                           "artworkId":  "art-1770778384172",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  11,
+                           "artworkId":  "art-1770778509370",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  12,
+                           "artworkId":  "art-1770778808201",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  13,
+                           "artworkId":  "art-1770779054676",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  14,
+                           "artworkId":  "art-1770779208267",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  15,
+                           "artworkId":  "art-1770933508740",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  16,
+                           "artworkId":  "art-1771030266195",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  18,
+                           "artworkId":  "art-1771031213758",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  19,
+                           "artworkId":  "art-1771033398626",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  20,
+                           "artworkId":  "art-1771101879286",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  21,
+                           "artworkId":  "art-1771101978525",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  26,
+                           "artworkId":  "art-1771454920479",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  27,
+                           "artworkId":  "art-1771902788998",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  28,
+                           "artworkId":  "art-1771903158477",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  29,
+                           "artworkId":  "art-1771903526915",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  32,
+                           "artworkId":  "art-1772897507182",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  33,
+                           "artworkId":  "art-1772899719136",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  34,
+                           "artworkId":  "art-1772942427729",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  35,
+                           "artworkId":  "art-1772991773037",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  36,
+                           "artworkId":  "art-1778384480649",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       },
+                       {
+                           "rowNumber":  37,
+                           "artworkId":  "art-1778384550442",
+                           "syncAction":  "NO_CHANGE",
+                           "errors":  [
+
+                                      ],
+                           "warnings":  [
+
+                                        ],
+                           "staleData":  [
+
+                                         ],
+                           "changes":  [
+
+                                       ]
+                       }
+                   ],
+    "blockedRows":  [
+
+                    ],
+    "warnings":  [
+                     {
+                         "rowNumber":  25,
+                         "artworkId":  "art-1771102688340",
+                         "field":  "price_inr",
+                         "message":  "USD price is recalculated by the backend and will be handled in a future commit phase.",
+                         "type":  null,
+                         "workbookValue":  null,
+                         "liveDbValue":  null
+                     }
+                 ]
+}
