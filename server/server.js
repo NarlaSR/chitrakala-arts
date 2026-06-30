@@ -332,15 +332,6 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
 });
 
-// Temporary debug endpoint to show which DATABASE_URL the running process sees.
-// Returns a masked value so passwords are not exposed. Remove before production.
-app.get('/_whoami-db', (req, res) => {
-  const dbUrl = process.env.DATABASE_URL || '<not set>';
-  // Mask password between ':' and '@' if present
-  const masked = dbUrl.replace(/:(.+)@/, ':****@');
-  res.json({ databaseUrl: masked });
-});
-
 // Image serving routes (serve images from database)
 app.get('/api/images/artworks/:id', async (req, res) => {
   try {
