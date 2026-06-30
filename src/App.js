@@ -14,6 +14,8 @@ import AdminAboutPage from './pages/AdminAboutPage';
 import AdminContactPage from './pages/AdminContactPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
 import AdminCategoriesPage from './pages/AdminCategoriesPage';
+import AdminInventorySync from './pages/AdminInventorySync';
+import AdminReviewQueue from './pages/AdminReviewQueue';
 import DebugEnv from './pages/DebugEnv';
 import './styles/App.css';
 
@@ -30,6 +32,8 @@ function App() {
             <Route path="/ckk-secure-admin/contact" element={<AdminContactPage />} />
             <Route path="/ckk-secure-admin/settings" element={<AdminSettingsPage />} />
             <Route path="/ckk-secure-admin/categories" element={<AdminCategoriesPage />} />
+            <Route path="/ckk-secure-admin/inventory-sync" element={<AdminInventorySync />} />
+            <Route path="/ckk-secure-admin/review-queue" element={<AdminReviewQueue />} />
             <Route path="/debug-env" element={<DebugEnv />} />
             
             {/* Public Routes */}
