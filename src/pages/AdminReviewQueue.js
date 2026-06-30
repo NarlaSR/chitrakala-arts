@@ -32,6 +32,7 @@ const AdminReviewQueue = () => {
   const [editSaving,   setEditSaving]   = useState(false);
   const [editError,    setEditError]    = useState('');
   const [actionMsg,    setActionMsg]    = useState('');
+  const [brokenImageIds, setBrokenImageIds] = useState(() => new Set());
 
   useEffect(() => {
     if (!authLoading && !isAdmin()) navigate('/ckk-secure-admin');
@@ -243,9 +244,18 @@ const AdminReviewQueue = () => {
                       <td>{artwork.dimensions || '—'}</td>
                       <td>{artwork.materials || '—'}</td>
                       <td className="rq-td-thumb">
-                        {artwork.image && (artwork.image.startsWith('http') || artwork.image.startsWith('/api/'))
-                          ? <img src={artwork.image} alt={artwork.title} className="rq-thumb" />
-                          : <span className="rq-thumb-placeholder">—</span>}
+                        {artwork.image
+                          && (artwork.image.startsWith('http') || artwork.image.startsWith('/api/'))
+                          && !brokenImageIds.has(artwork.id)
+                          ? (
+                            <img
+                              src={artwork.image}
+                              alt={artwork.title}
+                              className="rq-thumb"
+                              onError={() => setBrokenImageIds(prev => new Set(prev).add(artwork.id))}
+                            />
+                          )
+                          : <span className="rq-thumb-placeholder">No image</span>}
                       </td>
                       <td className="rq-td-sku">{artwork.image_filename || '—'}</td>
                       <td className="rq-td-center" style={{display:'none'}}>

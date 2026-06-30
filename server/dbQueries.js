@@ -106,8 +106,14 @@ async function enrichArtworkRows(rows) {
       ...size,
       price_usd: calculateUsdPrice(size.price, artFxRate, artMultiplier),
     }));
-    if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
+    if (artwork.image && /^https?:\/\//.test(artwork.image)) {
+      // already an absolute URL — leave as-is
+    } else if (artwork.image_data) {
+      // real stored image data exists — point at the serving endpoint
       artwork.image = `/api/images/artworks/${artwork.id}`;
+    } else {
+      // no real image data — don't fabricate a URL that will 404
+      artwork.image = null;
     }
     if (!artwork.price_usd && artwork.price_inr) {
       artwork.price_usd = calculateUsdPrice(artwork.price_inr, artFxRate, artMultiplier);
