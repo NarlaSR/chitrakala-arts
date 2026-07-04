@@ -9,10 +9,9 @@ const bcrypt = require('bcryptjs');
 const { Resend } = require('resend');
 const { rateLimit } = require('express-rate-limit');
 const sharp = require('sharp');
-const { initializeDatabase, isDatabaseConfigured } = require('./db');
+const { initializeDatabase, isDatabaseConfigured, pool } = require('./db');
 const db = require('./dbQueries');
 const { calculateUsdPrice, getPriceForCountry } = require('./priceUtils');
-const inventorySync = require('./inventorySync');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -67,7 +66,7 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -154,25 +153,6 @@ const upload = multer({
   }
 });
 
-const xlsxUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: function (req, file, cb) {
-    const allowedExtensions = ['.xlsx', '.xls'];
-    const extname = allowedExtensions.includes(path.extname(file.originalname).toLowerCase());
-    const allowedMimeTypes = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-      'application/octet-stream'
-    ];
-    const mimetype = allowedMimeTypes.includes(file.mimetype);
-    if (extname && mimetype) {
-      return cb(null, true);
-    }
-    cb(new Error('Only XLSX or XLS spreadsheet files are allowed.'));
-  }
-});
-
 // Configure Resend for email sending (HTTP-based, bypasses Railway SMTP blocking)
 // Lazily initialized so missing RESEND_API_KEY doesn't crash the server on startup
 let resend = null;
@@ -185,206 +165,6 @@ function getResend() {
   }
   return resend;
 }
-
-// Inventory sync preview route: Phase 1 preview-only endpoint
-app.post(
-  '/api/admin/inventory-sync/preview',
-  authenticateToken,
-  xlsxUpload.single('file'),
-  async (req, res) => {
-    try {
-      if (!req.file || !req.file.buffer) {
-        return res.status(400).json({ error: 'XLSX file upload is required' });
-      }
-
-      const pricingSettings = await db.getPricingSettings();
-      const categories = await db.getCategories();
-      const categoriesById = new Set(categories.map(category => category.id));
-
-      const parseResult = inventorySync.parseInventoryMasterWorkbook(req.file.buffer);
-      if (parseResult.errors.length > 0) {
-        return res.status(400).json({
-          summary: {
-            totalRows: 0,
-            toUpdate: 0,
-            reviewOnly: 0,
-            noChange: 0,
-            blocked: 0,
-            warnings: parseResult.errors.length
-          },
-          errors: parseResult.errors,
-          updates: [],
-          reviewRows: [],
-          blockedRows: [],
-          warnings: []
-        });
-      }
-
-      const rows = parseResult.rows.filter(row => !inventorySync.isRowEmpty(row.data));
-      const summary = {
-        totalRows: rows.length,
-        toUpdate: 0,
-        reviewOnly: 0,
-        noChange: 0,
-        blocked: 0,
-        warnings: 0
-      };
-      const updates = [];
-      const reviewRows = [];
-      const blockedRows = [];
-      const warnings = [];
-
-      const appendWarnings = (rowNumber, artworkId, items) => {
-        for (const item of items) {
-          if (!item) continue;
-          if (typeof item === 'string') {
-            warnings.push({ rowNumber, artworkId, message: item });
-          } else if (typeof item === 'object') {
-            const { field = null, message = null, type = null, workbookValue = null, liveDbValue = null } = item;
-            warnings.push({ rowNumber, artworkId, field, message, type, workbookValue, liveDbValue });
-          }
-        }
-      };
-
-      for (const row of rows) {
-        const rowData = row.data;
-        const action = inventorySync.normalizeString(rowData['Sync Action']);
-        const dbId = inventorySync.normalizeString(rowData['DB id']);
-        const rowResult = {
-          rowNumber: row.rowNumber,
-          artworkId: dbId,
-          syncAction: action,
-          errors: [],
-          warnings: [],
-          staleData: [],
-          changes: []
-        };
-
-        if (!action) {
-          rowResult.errors.push('Sync Action is required');
-        } else if (!inventorySync.SUPPORTED_SYNC_ACTIONS.includes(action)) {
-          rowResult.errors.push(`Unsupported Sync Action '${action}'`);
-        }
-
-        if (action === 'CREATE' || action === 'ARCHIVE') {
-          rowResult.errors.push(`${action} is blocked in Phase 1`);
-        }
-
-        if (['UPDATE', 'REVIEW', 'NO_CHANGE'].includes(action)) {
-          if (!dbId) {
-            rowResult.errors.push('DB id is required for UPDATE, REVIEW, and NO_CHANGE rows');
-          }
-        }
-
-        let liveArtwork = null;
-        if (dbId && rowResult.errors.length === 0) {
-          liveArtwork = await db.getArtworkById(dbId);
-          if (!liveArtwork) {
-            rowResult.errors.push(`Artwork with DB id '${dbId}' not found`);
-          }
-        }
-
-        if (liveArtwork) {
-          const staleFields = [
-            { workbook: 'DB title', live: liveArtwork.title, field: 'title', type: 'string' },
-            { workbook: 'DB category_slug', live: liveArtwork.category, field: 'category', type: 'string' },
-            { workbook: 'DB description', live: liveArtwork.description, field: 'description', type: 'string' },
-            { workbook: 'DB materials', live: liveArtwork.materials, field: 'materials', type: 'string' },
-            { workbook: 'DB price_inr', live: liveArtwork.price_inr, field: 'price_inr', type: 'number' },
-            { workbook: 'DB featured', live: liveArtwork.featured, field: 'featured', type: 'boolean' }
-          ];
-
-          for (const check of staleFields) {
-            const stale = inventorySync.buildStaleComparison(rowData[check.workbook], check.live, check.field, check.type);
-            if (stale) {
-              rowResult.staleData.push(stale);
-            }
-          }
-        }
-
-        if (liveArtwork && action === 'UPDATE') {
-          const updateResult = inventorySync.buildSupportedUpdates(rowData, liveArtwork, categoriesById, pricingSettings);
-          rowResult.changes = updateResult.changes;
-          rowResult.warnings = updateResult.warnings;
-          if (!updateResult.hasSupportedField) {
-            rowResult.errors.push('UPDATE rows must contain at least one supported corrected field');
-          }
-        }
-
-        if (action === 'NO_CHANGE') {
-          if (inventorySync.hasSupportedCorrections(rowData)) {
-            rowResult.warnings.push('NO_CHANGE row has corrected values populated');
-          }
-        }
-
-        if (action === 'REVIEW') {
-          rowResult.warnings.push('REVIEW rows are review-only and will not be applied in Phase 1');
-        }
-
-        if (rowResult.errors.length > 0) {
-          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
-          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
-          blockedRows.push(rowResult);
-          summary.blocked += 1;
-          continue;
-        }
-
-        if (rowResult.staleData.length > 0) {
-          rowResult.warnings.push('Workbook data is stale compared to live DB');
-        }
-
-        if (action === 'NO_CHANGE') {
-          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
-          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
-          summary.noChange += 1;
-          reviewRows.push(rowResult);
-          continue;
-        }
-
-        if (action === 'REVIEW') {
-          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
-          appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
-          summary.reviewOnly += 1;
-          reviewRows.push(rowResult);
-          continue;
-        }
-
-        if (action === 'UPDATE') {
-          if (rowResult.changes.length === 0) {
-            rowResult.warnings.push('UPDATE row has no effective changes');
-            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
-            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
-            reviewRows.push(rowResult);
-          } else {
-            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.warnings);
-            appendWarnings(row.rowNumber, rowResult.artworkId, rowResult.staleData);
-            summary.toUpdate += 1;
-            updates.push(rowResult);
-          }
-          continue;
-        }
-
-        // Fallback for unexpected row states
-        rowResult.errors.push('Unable to classify row into preview categories');
-        blockedRows.push(rowResult);
-        summary.blocked += 1;
-      }
-
-      summary.warnings = warnings.length;
-
-      return res.json({
-        summary,
-        updates,
-        reviewRows,
-        blockedRows,
-        warnings
-      });
-    } catch (error) {
-      console.error('Inventory sync preview error:', error);
-      return res.status(500).json({ error: 'Failed to process inventory sync preview' });
-    }
-  }
-);
 
 // Rate limiter for contact form (3 submissions per hour per IP)
 const contactLimiter =
@@ -431,6 +211,28 @@ const validateString = (str, minLength = 1, maxLength = 1000) => {
   if (typeof str !== 'string') return false;
   const trimmed = str.trim();
   return trimmed.length >= minLength && trimmed.length <= maxLength;
+};
+
+// ── Inventory-specific validation helpers ──────────────────────────────────
+
+// Shared approved status set — used by both PUT and PATCH endpoints.
+const ALLOWED_ARTWORK_STATUSES = new Set([
+  'NEEDS_REVIEW', 'IN_STOCK', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED',
+]);
+
+// Valid new-format SKU: CKS-YYYY-(DM|LA|MM|WA|TA|MA)-(SM|MD|LG|XL)-NNNNN
+// Rejects old format (CKS-DM-SM-2026-0001) and retired codes (MW).
+const VALID_SKU_PATTERN = /^CKS-\d{4}-(DM|LA|MM|WA|TA|MA)-(SM|MD|LG|XL)-\d{5}$/;
+
+const isValidInventorySku = (sku) => VALID_SKU_PATTERN.test(sku);
+
+// Returns the integer value, null if not supplied, or { error } if invalid.
+const validateQuantity = (val) => {
+  if (val === undefined || val === null || val === '') return null; // not provided
+  const n = Number(val);
+  if (!Number.isInteger(n)) return { error: 'Quantity must be a whole number.' };
+  if (n < 0) return { error: 'Quantity cannot be negative.' };
+  return n; // 0 is valid (out-of-stock quantity)
 };
 
 const validateEmail = (email) => {
@@ -530,15 +332,6 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
 });
 
-// Temporary debug endpoint to show which DATABASE_URL the running process sees.
-// Returns a masked value so passwords are not exposed. Remove before production.
-app.get('/_whoami-db', (req, res) => {
-  const dbUrl = process.env.DATABASE_URL || '<not set>';
-  // Mask password between ':' and '@' if present
-  const masked = dbUrl.replace(/:(.+)@/, ':****@');
-  res.json({ databaseUrl: masked });
-});
-
 // Image serving routes (serve images from database)
 app.get('/api/images/artworks/:id', async (req, res) => {
   try {
@@ -614,26 +407,37 @@ app.get('/api/artworks', async (req, res) => {
   }
 });
 
-// Get artwork by ID (public)
+// Get artwork by ID (public — only IN_STOCK artworks are accessible)
 app.get('/api/artworks/:id', async (req, res) => {
   try {
-    const artwork = await db.getArtworkById(req.params.id);
-    
+    const artwork = await db.getArtworkById(req.params.id, true);
     if (!artwork) {
       return res.status(404).json({ error: 'Artwork not found' });
     }
-    
-    // Debug: log full artwork object
-    // Remove image_data from response and always add updatedAt (even if null)
-    if (artwork) {
-      if ('image_data' in artwork) delete artwork.image_data;
-      artwork.updatedAt = artwork.updated_at || null;
-      delete artwork.updated_at;
-    }
+    if ('image_data' in artwork) delete artwork.image_data;
+    artwork.updatedAt = artwork.updated_at || null;
+    delete artwork.updated_at;
     res.json(artwork);
   } catch (error) {
     console.error('Error reading artwork:', error);
     res.status(500).json({ error: 'Failed to fetch artwork' });
+  }
+});
+
+// Get all artworks — admin only, returns all statuses including NEEDS_REVIEW
+app.get('/api/admin/artworks', authenticateToken, async (req, res) => {
+  try {
+    const artworks = await db.getArtworksAdmin();
+    const transformed = artworks.map(artwork => {
+      if ('image_data' in artwork) delete artwork.image_data;
+      artwork.updatedAt = artwork.updated_at || null;
+      delete artwork.updated_at;
+      return artwork;
+    });
+    res.json(transformed);
+  } catch (error) {
+    console.error('Error reading artworks (admin):', error);
+    res.status(500).json({ error: 'Failed to fetch artworks' });
   }
 });
 
@@ -780,20 +584,67 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       multiplierUsed = multiplier;
     }
     
+    // Validate status (if provided)
+    if (req.body.status && !ALLOWED_ARTWORK_STATUSES.has(req.body.status)) {
+      return res.status(400).json({
+        error: `Invalid status. Allowed values: ${[...ALLOWED_ARTWORK_STATUSES].join(', ')}`,
+      });
+    }
+
+    // Validate SKU (if provided).
+    // Blank SKU in request = explicitly clear it. Missing SKU = preserve existing.
+    let finalSku = existingArtwork.sku ?? null; // default: preserve
+    if (req.body.sku !== undefined) {
+      const rawSku = req.body.sku?.trim() || null;
+      if (rawSku) {
+        if (!isValidInventorySku(rawSku)) {
+          return res.status(400).json({
+            error: 'Invalid SKU format. Expected CKS-YYYY-CODE-SIZE-00001 with a valid Art Work code (DM, LA, MM, WA, TA, MA) and size code (SM, MD, LG, XL).',
+          });
+        }
+        const skuOwner = await db.getArtworkBySku(rawSku);
+        if (skuOwner && skuOwner.id !== req.params.id) {
+          return res.status(409).json({ error: 'SKU already exists on another artwork.' });
+        }
+      }
+      finalSku = rawSku; // null = explicitly clear; non-null = validated value
+    }
+
+    // Validate quantity (if provided).
+    // Blank/missing = preserve existing. Explicit value = validate and use.
+    let finalQuantity = existingArtwork.quantity ?? null;
+    if (req.body.quantity !== undefined && req.body.quantity !== '') {
+      const qResult = validateQuantity(req.body.quantity);
+      if (qResult && typeof qResult === 'object' && qResult.error) {
+        return res.status(400).json({ error: qResult.error });
+      }
+      finalQuantity = qResult;
+    }
+
     const updatedArtwork = {
-      title: req.body.title?.trim() || existingArtwork.title,
-      category: req.body.category?.trim() || existingArtwork.category,
-      description: req.body.description?.trim() || existingArtwork.description,
-      price: priceInr, // Keep for backward compatibility
-      price_inr: priceInr,
-      price_usd: priceUsd,
-      fx_rate_used: fxRateUsed,
+      title:          req.body.title?.trim()       || existingArtwork.title,
+      category:       req.body.category?.trim()    || existingArtwork.category,
+      description:    req.body.description?.trim() || existingArtwork.description,
+      price:          priceInr,
+      price_inr:      priceInr,
+      price_usd:      priceUsd,
+      fx_rate_used:   fxRateUsed,
       multiplier_used: multiplierUsed,
-      dimensions: req.body.size?.trim() || existingArtwork.dimensions,
-      materials: req.body.materials?.trim() || existingArtwork.materials,
-      featured: req.body.featured !== undefined ? req.body.featured === 'true' : existingArtwork.featured,
-      image: existingArtwork.image,
-      sizes
+      dimensions:     req.body.size?.trim()        || existingArtwork.dimensions,
+      materials:      req.body.materials?.trim()   || existingArtwork.materials,
+      featured:       req.body.featured !== undefined ? req.body.featured === 'true' : existingArtwork.featured,
+      image:          existingArtwork.image,
+      sizes,
+      // New fields: server resolves final value (merge with existing), no DB-level COALESCE ambiguity
+      status:         req.body.status || existingArtwork.status || null,
+      quantity:       finalQuantity,
+      sku:            finalSku,
+      image_filename: req.body.image_filename !== undefined
+                        ? (req.body.image_filename?.trim() || null)
+                        : (existingArtwork.image_filename ?? null),
+      notes:          req.body.notes !== undefined
+                        ? (req.body.notes?.trim() || null)
+                        : (existingArtwork.notes ?? null),
     };
 
     // Update image if new one is uploaded
@@ -854,6 +705,24 @@ app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error deleting artwork:', error);
     res.status(500).json({ error: 'Failed to delete artwork' });
+  }
+});
+
+// PATCH /api/admin/artworks/:id/status — update artwork status only (admin only)
+app.patch('/api/admin/artworks/:id/status', authenticateToken, async (req, res) => {
+  const { status } = req.body;
+  if (!status || !ALLOWED_ARTWORK_STATUSES.has(status)) {
+    return res.status(400).json({
+      error: `Invalid or missing status. Allowed values: ${[...ALLOWED_ARTWORK_STATUSES].join(', ')}`,
+    });
+  }
+  try {
+    const artwork = await db.updateArtworkStatus(req.params.id, status);
+    if (!artwork) return res.status(404).json({ error: 'Artwork not found' });
+    res.json(artwork);
+  } catch (err) {
+    console.error('Error updating artwork status:', err);
+    res.status(500).json({ error: 'Failed to update artwork status' });
   }
 });
 
@@ -1230,7 +1099,7 @@ app.post('/api/artworks/recalculate-prices', authenticateToken, async (req, res)
       return res.status(400).json({ error: 'Pricing settings not configured' });
     }
     
-    const artworks = await db.getArtworks();
+    const artworks = await db.getArtworksAdmin();
     let updatedCount = 0;
     
     for (const artwork of artworks) {
@@ -1412,6 +1281,400 @@ app.get('/api/user/location', async (req, res) => {
     });
   }
 });
+
+// --- Inventory Sync ---
+const { parseInventoryBuffer, ARTWORK_CATEGORY_MAP } = require('./inventoryParser');
+const AdmZip = require('adm-zip');
+
+// Converts an inventory SKU to a clean, lowercase database artwork ID.
+function buildInventoryArtworkId(sku) {
+  const s = String(sku || '').trim().toLowerCase();
+  if (!s) throw new Error('Cannot build artwork id: SKU is empty');
+  return s.startsWith('cks-') ? s : `cks-${s}`;
+}
+
+const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+// Multer config accepts workbook + optional ZIP or individual image files (all in memory).
+const inventoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB — ZIP with images can be large
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (file.fieldname === 'file'     && ['.xlsx', '.xls'].includes(ext)) return cb(null, true);
+    if (file.fieldname === 'imageZip' && ext === '.zip')                   return cb(null, true);
+    if (file.fieldname === 'images'   && ALLOWED_IMAGE_EXTS.has(ext))      return cb(null, true);
+    cb(new Error(`File type "${ext}" not accepted for field "${file.fieldname}"`));
+  },
+});
+
+/**
+ * Build a Map<lowercaseFilename, Buffer> from uploaded image files and/or a ZIP.
+ * Returns { imageMap, errors } where errors are blocking issues (duplicate filenames).
+ */
+function buildImageMap(reqFiles) {
+  const imageMap = new Map(); // key: lowercase basename, value: Buffer
+  const errors   = [];
+
+  // Direct image uploads (field: images)
+  for (const f of reqFiles?.images || []) {
+    const name = path.basename(f.originalname).toLowerCase().trim();
+    if (!name || !ALLOWED_IMAGE_EXTS.has(path.extname(name))) continue;
+    if (imageMap.has(name)) {
+      errors.push(`Duplicate uploaded image filename "${name}" — match would be ambiguous. Remove one and re-upload.`);
+    } else {
+      imageMap.set(name, f.buffer);
+    }
+  }
+
+  // ZIP upload (field: imageZip)
+  for (const zipFile of reqFiles?.imageZip || []) {
+    let zip;
+    try { zip = new AdmZip(zipFile.buffer); } catch { continue; }
+    for (const entry of zip.getEntries()) {
+      if (entry.isDirectory) continue;
+      const rawName  = entry.entryName;
+      // Zip-slip protection: reject entries with path traversal or absolute paths
+      if (rawName.includes('..') || rawName.startsWith('/') || rawName.startsWith('\\')) {
+        errors.push(`ZIP entry "${rawName}" rejected — unsafe path.`);
+        continue;
+      }
+      const name = path.basename(rawName).toLowerCase().trim();
+      if (!name || !ALLOWED_IMAGE_EXTS.has(path.extname(name))) continue;
+      if (imageMap.has(name)) {
+        errors.push(`Duplicate image filename "${name}" in ZIP — match would be ambiguous. Remove one and re-upload.`);
+      } else {
+        imageMap.set(name, entry.getData());
+      }
+    }
+  }
+
+  return { imageMap, errors };
+}
+
+app.post(
+  '/api/admin/inventory-sync/preview',
+  authenticateToken,
+  inventoryUpload.fields([
+    { name: 'file',     maxCount: 1   },
+    { name: 'imageZip', maxCount: 1   },
+    { name: 'images',   maxCount: 200 },
+  ]),
+  async (req, res) => {
+    try {
+      const workbookFile = req.files?.file?.[0];
+      if (!workbookFile) {
+        return res.status(400).json({ error: 'No workbook uploaded. Field name must be "file".' });
+      }
+
+      const { rows, detectedColumns, missingColumns } =
+        parseInventoryBuffer(workbookFile.buffer, workbookFile.originalname);
+
+      // Build image map from optional uploaded images/ZIP (no writes during preview)
+      const { imageMap, errors: imageMapErrors } = buildImageMap(req.files);
+
+      // Read-only check: does artworks.sku column exist yet?
+      let skuColumnExists = false;
+      if (isDatabaseConfigured()) {
+        try {
+          const col = await pool.query(
+            `SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'artworks' AND column_name = 'sku'`
+          );
+          skuColumnExists = col.rows.length > 0;
+        } catch (_) { /* DB unavailable — treat as no SKU column */ }
+      }
+
+      const batchWarnings = [];
+      if (!skuColumnExists) {
+        batchWarnings.push(
+          'artworks table has no sku column — CREATE/UPDATE classification is not yet available. ' +
+          'Valid rows are classified as CREATE_CANDIDATE. ' +
+          'See docs/inventory-sync/INV-01-preview-endpoint.md for the recommended schema migration.'
+        );
+      }
+
+      // If SKU column exists, fetch matching SKUs from DB (no writes)
+      const existingSkus = new Set();
+      if (skuColumnExists) {
+        const validSkus = rows
+          .filter(r => r.sku && r.errors.length === 0)
+          .map(r => r.sku);
+        if (validSkus.length > 0) {
+          const found = await pool.query(
+            'SELECT sku FROM artworks WHERE sku = ANY($1)',
+            [validSkus]
+          );
+          found.rows.forEach(r => existingSkus.add(r.sku));
+        }
+      }
+
+      // Block preview if duplicate image filenames make matching ambiguous
+      if (imageMapErrors.length > 0) {
+        return res.status(400).json({ error: imageMapErrors.join('; ') });
+      }
+
+      // Classify each row and compute image status
+      const referencedImageNames = new Set();
+      const classifiedRows = rows.map(row => {
+        let classification;
+        if (row.errors.length > 0) {
+          classification = 'ERROR';
+        } else if (!skuColumnExists) {
+          classification = row.warnings.length > 0 ? 'REVIEW' : 'CREATE_CANDIDATE';
+        } else if (existingSkus.has(row.sku)) {
+          classification = row.warnings.length > 0 ? 'REVIEW' : 'UPDATE';
+        } else {
+          classification = row.warnings.length > 0 ? 'REVIEW' : 'CREATE';
+        }
+        // Image match status per row
+        let imageStatus = 'not_provided';
+        if (row.imageFilename) {
+          const key = row.imageFilename.toLowerCase();
+          if (imageMap.has(key)) {
+            imageStatus = 'matched';
+            referencedImageNames.add(key);
+          } else {
+            imageStatus = 'missing';
+          }
+        }
+        return { ...row, classification, imageStatus };
+      });
+
+      // Find uploaded images not referenced by any workbook row
+      const unreferencedImages = [...imageMap.keys()].filter(k => !referencedImageNames.has(k));
+      if (unreferencedImages.length > 0) {
+        batchWarnings.push(
+          `${unreferencedImages.length} uploaded image(s) not referenced by any workbook row: ${unreferencedImages.join(', ')}`
+        );
+      }
+
+      const summary = {
+        totalRows:   classifiedRows.length,
+        createCount: classifiedRows.filter(
+          r => r.classification === 'CREATE' || r.classification === 'CREATE_CANDIDATE'
+        ).length,
+        updateCount: classifiedRows.filter(r => r.classification === 'UPDATE').length,
+        reviewCount: classifiedRows.filter(r => r.classification === 'REVIEW').length,
+        errorCount:  classifiedRows.filter(r => r.classification === 'ERROR').length,
+      };
+
+      const imageSummary = {
+        rowsWithImageFilename: classifiedRows.filter(r => r.imageFilename).length,
+        matched:               classifiedRows.filter(r => r.imageStatus === 'matched').length,
+        missing:               classifiedRows.filter(r => r.imageStatus === 'missing').length,
+        notProvided:           classifiedRows.filter(r => r.imageStatus === 'not_provided').length,
+        unreferencedUploaded:  unreferencedImages.length,
+      };
+
+      return res.json({
+        summary,
+        imageSummary,
+        rows: classifiedRows,
+        warnings: batchWarnings,
+        detectedColumns,
+        missingColumns,
+      });
+    } catch (err) {
+      console.error('Inventory preview error:', err);
+      return res.status(500).json({ error: 'Failed to process inventory file' });
+    }
+  }
+);
+
+// --- Inventory Sync: apply/import (local dev only — no production use) ---
+app.post(
+  '/api/admin/inventory-sync/apply',
+  authenticateToken,
+  inventoryUpload.fields([
+    { name: 'file',     maxCount: 1   },
+    { name: 'imageZip', maxCount: 1   },
+    { name: 'images',   maxCount: 200 },
+  ]),
+  async (req, res) => {
+    const workbookFile = req.files?.file?.[0];
+    if (!workbookFile) {
+      return res.status(400).json({ error: 'No workbook uploaded. Field name must be "file".' });
+    }
+
+    // Build image map from optional image uploads — block on duplicate filenames
+    const { imageMap, errors: imageMapErrors } = buildImageMap(req.files);
+    if (imageMapErrors.length > 0) {
+      return res.status(400).json({ error: imageMapErrors.join('; ') });
+    }
+
+    // 1. Parse workbook — always revalidate server-side
+    const { rows } = parseInventoryBuffer(workbookFile.buffer, workbookFile.originalname);
+
+    // 2. Apply-level validation: unknown Art Work codes block import
+    //    (preview warns; apply errors because category is NOT NULL in DB)
+    for (const row of rows) {
+      if (row.artWorkCode && !ARTWORK_CATEGORY_MAP[row.artWorkCode] && !row.errors.length) {
+        row.errors.push(
+          `Unknown Art Work code "${row.artWorkCode}" — no category mapping exists and category is required for import. ` +
+          `Known codes: ${Object.keys(ARTWORK_CATEGORY_MAP).join(', ')}.`
+        );
+      }
+    }
+
+    // 3a. Catch duplicate SKUs within the batch (e.g. explicit + auto-generated collision)
+    const batchSkuMap = new Map(); // sku → first rowNumber that claimed it
+    for (const row of rows) {
+      if (row.sku && row.errors.length === 0) {
+        if (batchSkuMap.has(row.sku)) {
+          row.errors.push(
+            `Duplicate SKU "${row.sku}" in this upload — first seen on row ${batchSkuMap.get(row.sku)}. ` +
+            'Each SKU must be unique within the batch.'
+          );
+        } else {
+          batchSkuMap.set(row.sku, row.rowNumber);
+        }
+      }
+    }
+
+    // 3b. Block entire batch if any row has errors
+    const errorRows = rows.filter(r => r.errors.length > 0);
+    if (errorRows.length > 0) {
+      return res.status(422).json({
+        error: 'Batch blocked — fix all errors before applying.',
+        summary: {
+          totalRows: rows.length,
+          createdCount: 0,
+          updatedCount: 0,
+          skippedCount: 0,
+          errorCount: errorRows.length,
+        },
+        errorRows: errorRows.map(r => ({ rowNumber: r.rowNumber, errors: r.errors })),
+      });
+    }
+
+    // 4. Fetch pricing settings once for this batch
+    let fxRate, multiplier;
+    try {
+      const settings = await db.getPricingSettings();
+      fxRate     = parseFloat(settings.fx_rate       || 83);
+      multiplier = parseFloat(settings.usd_multiplier || 1.75);
+    } catch (err) {
+      return res.status(500).json({ error: 'Cannot read pricing settings — DB may be unavailable.' });
+    }
+
+    // 5. Look up which SKUs already exist in the DB (read-only)
+    const candidateSkus = rows.map(r => r.sku).filter(Boolean);
+    let existingSkuSet = new Set();
+    if (candidateSkus.length > 0) {
+      const found = await pool.query('SELECT sku FROM artworks WHERE sku = ANY($1)', [candidateSkus]);
+      found.rows.forEach(r => existingSkuSet.add(r.sku));
+    }
+
+    // 6. Classify and prepare each row
+    const toCreate = [];
+    const toUpdate = [];
+    for (const row of rows) {
+      const category = ARTWORK_CATEGORY_MAP[row.artWorkCode];
+      const priceUsd = calculateUsdPrice(row.priceInr, fxRate, multiplier);
+      const artworkId = buildInventoryArtworkId(row.sku);
+
+      const payload = {
+        id:             artworkId,
+        title:          row.itemDescription,
+        category,
+        priceInr:       row.priceInr,
+        priceUsd,
+        fxRateUsed:     fxRate,
+        multiplierUsed: multiplier,
+        description:    row.longDescription   || null,
+        dimensions:     row.dimensions        || null,
+        materials:      row.materials         || null,
+        imageFilename:  row.imageFilename     || null,
+        notes:          row.notes             || null,
+        sku:            row.sku,
+        quantity:       row.quantity,
+      };
+
+      if (existingSkuSet.has(row.sku)) {
+        toUpdate.push({ rowNumber: row.rowNumber, payload });
+      } else {
+        toCreate.push({ rowNumber: row.rowNumber, payload });
+      }
+    }
+
+    // 7. Single transaction — all-or-nothing for row data
+    const client = await pool.connect();
+    const created = [];
+    const updated = [];
+    try {
+      await client.query('BEGIN');
+
+      for (const { rowNumber, payload } of toCreate) {
+        const inserted = await db.createArtworkFromInventory(payload, client);
+        created.push({ rowNumber, sku: inserted.sku, artworkId: inserted.id, title: inserted.title });
+      }
+
+      for (const { rowNumber, payload } of toUpdate) {
+        const patched = await db.updateArtworkFromInventory(payload.sku, payload, client);
+        updated.push({ rowNumber, sku: patched.sku, artworkId: patched.id, title: patched.title });
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('Inventory apply error — rolled back:', err);
+      return res.status(500).json({ error: 'Import failed — transaction rolled back. No data was changed.' });
+    } finally {
+      client.release();
+    }
+
+    // 8. Process matched images (outside the row-data transaction — images are best-effort).
+    //    Row data has already been committed. Image failures are reported clearly
+    //    but do NOT roll back artwork rows — the row is visible in NEEDS_REVIEW
+    //    and the admin can upload the image manually via the Review Queue.
+    const allProcessed = [...created, ...updated];
+    const imageResults = {
+      stored:  0,
+      skipped: 0,   // no image filename / no matching upload — expected, not an error
+      failed:  [],  // tried to store but threw — reported in response
+    };
+    for (const { artworkId, sku } of allProcessed) {
+      const row = rows.find(r => r.sku === sku && r.imageFilename);
+      if (!row?.imageFilename) { imageResults.skipped++; continue; }
+      const imageKey = row.imageFilename.toLowerCase();
+      if (!imageMap.has(imageKey)) { imageResults.skipped++; continue; }
+      try {
+        const rawBuffer        = imageMap.get(imageKey);
+        const compressedBuffer = await compressImage(rawBuffer);
+        await db.storeArtworkImage(artworkId, compressedBuffer, 'image/jpeg');
+        await pool.query(
+          'UPDATE artworks SET image = $1 WHERE id = $2',
+          [`${BASE_URL}/api/images/artworks/${artworkId}`, artworkId]
+        );
+        imageResults.stored++;
+      } catch (imgErr) {
+        const msg = imgErr.message || 'Unknown error';
+        console.error(`Image store failed for ${artworkId} (sku: ${sku}):`, msg);
+        imageResults.failed.push({ artworkId, sku, imageFilename: row.imageFilename, error: msg });
+      }
+    }
+
+    return res.json({
+      summary: {
+        totalRows:     rows.length,
+        createdCount:  created.length,
+        updatedCount:  updated.length,
+        skippedCount:  0,
+        errorCount:    0,
+        imagesStored:  imageResults.stored,
+        imagesFailed:  imageResults.failed.length,
+      },
+      created,
+      updated,
+      skipped: [],
+      errors:  [],
+      // Clearly report any image storage failures so the admin knows
+      // which artworks need their image uploaded manually via Review Queue.
+      imageFailures: imageResults.failed.length > 0 ? imageResults.failed : undefined,
+    });
+  }
+);
 
 // 404 handler
 app.use((req, res) => {

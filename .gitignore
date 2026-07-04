@@ -10,6 +10,9 @@ coverage/
 build/
 
 
+# Claude Code tooling (session-local, not project-standard)
+.claude/
+
 # Misc
 .DS_Store
 .env.local
@@ -17,6 +20,7 @@ build/
 .env.test.local
 .env.production.local
 server/hash.js
+preview-response.json
 
 # Logs
 npm-debug.log*
@@ -58,3 +62,11 @@ server/.env
 *.backup
 *.dump
 *.sql.gz
+
+# Local-only test workbooks (corrected copies for dev testing — not for commit)
+__test_workbooks/
+
+# Inventory sync test output
+preview-response.json
+preview-response-db.json
+preview-response-prod-snapshot.json

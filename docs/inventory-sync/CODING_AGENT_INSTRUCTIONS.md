@@ -1,5 +1,7 @@
 # Chitrakala Arts - Coding Agent Instructions: Inventory Spreadsheet Sync
 
+> **Note:** This document describes an earlier preview-only phase and is superseded by the ISYNC-01 through ISYNC-10 implementation for the active staging workflow.
+
 ## Purpose
 
 Build a safe admin-only inventory spreadsheet sync workflow for Chitrakala Arts.

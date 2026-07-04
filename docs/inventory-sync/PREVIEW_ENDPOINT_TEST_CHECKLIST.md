@@ -1,5 +1,7 @@
 # Inventory Sync Preview Endpoint Manual Test Checklist
 
+> **Note:** This document describes an earlier preview-only phase and is superseded by the ISYNC-01 through ISYNC-10 implementation for the active staging workflow.
+
 This file documents manual validation steps for the Phase 1 inventory sync preview endpoint.
 
 ## Endpoint

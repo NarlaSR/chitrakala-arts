@@ -93,64 +93,60 @@ async function updateArtworkSizes(artworkId, sizesArray) {
   await deleteArtworkSizes(artworkId);
   await addArtworkSizes(artworkId, sizesArray);
 }
-async function getArtworks() {
-  const result = await pool.query('SELECT * FROM artworks ORDER BY created_at DESC');
-  // Get current pricing settings for auto-calculation
+// Shared enrichment: fetch sizes, calculate USD prices, normalise image URL.
+async function enrichArtworkRows(rows) {
   const pricingSettings = await getPricingSettings();
-  const fxRate = parseFloat(pricingSettings.fx_rate || 83);
+  const fxRate     = parseFloat(pricingSettings.fx_rate       || 83);
   const multiplier = parseFloat(pricingSettings.usd_multiplier || 1.75);
-  
-  // Fetch sizes for each artwork
-  const artworks = await Promise.all(result.rows.map(async (artwork) => {
-    // Use per-artwork stored rates so UI only changes after explicit recalculate
-    const artFxRate = artwork.fx_rate_used ? parseFloat(artwork.fx_rate_used) : fxRate;
+  return Promise.all(rows.map(async (artwork) => {
+    const artFxRate     = artwork.fx_rate_used    ? parseFloat(artwork.fx_rate_used)    : fxRate;
     const artMultiplier = artwork.multiplier_used ? parseFloat(artwork.multiplier_used) : multiplier;
     artwork.sizes = await getArtworkSizes(artwork.id);
-    // Calculate USD price for each size using the artwork's own stored rates
     artwork.sizes = artwork.sizes.map(size => ({
       ...size,
-      price_usd: calculateUsdPrice(size.price, artFxRate, artMultiplier)
+      price_usd: calculateUsdPrice(size.price, artFxRate, artMultiplier),
     }));
-    // Always set artwork.image to a valid URL
-    if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
+    if (artwork.image && /^https?:\/\//.test(artwork.image)) {
+      // already an absolute URL — leave as-is
+    } else if (artwork.image_data) {
+      // real stored image data exists — point at the serving endpoint
       artwork.image = `/api/images/artworks/${artwork.id}`;
+    } else {
+      // no real image data — don't fabricate a URL that will 404
+      artwork.image = null;
     }
-    // Auto-calculate price_usd if missing (for old artworks without stored rates)
     if (!artwork.price_usd && artwork.price_inr) {
       artwork.price_usd = calculateUsdPrice(artwork.price_inr, artFxRate, artMultiplier);
     }
     return artwork;
   }));
-  return artworks;
 }
 
-async function getArtworkById(id) {
-  const result = await pool.query('SELECT * FROM artworks WHERE id = $1', [id]);
+// Public-facing: only artworks with status = 'IN_STOCK' are returned.
+async function getArtworks() {
+  const result = await pool.query(
+    "SELECT * FROM artworks WHERE status = 'IN_STOCK' ORDER BY created_at DESC"
+  );
+  return enrichArtworkRows(result.rows);
+}
+
+// Admin-facing: returns all artworks regardless of status.
+async function getArtworksAdmin() {
+  const result = await pool.query('SELECT * FROM artworks ORDER BY created_at DESC');
+  return enrichArtworkRows(result.rows);
+}
+
+// publicOnly = true → returns null if the artwork is not IN_STOCK (used by public API).
+// publicOnly = false (default) → returns any artwork by id (used by admin routes).
+async function getArtworkById(id, publicOnly = false) {
+  const query = publicOnly
+    ? "SELECT * FROM artworks WHERE id = $1 AND status = 'IN_STOCK'"
+    : 'SELECT * FROM artworks WHERE id = $1';
+  const result = await pool.query(query, [id]);
   const artwork = result.rows[0];
-  if (artwork) {
-    artwork.sizes = await getArtworkSizes(artwork.id);
-    // Get pricing settings as fallback for artworks without stored rates
-    const pricingSettings = await getPricingSettings();
-    const fxRate = parseFloat(pricingSettings.fx_rate || 83);
-    const multiplier = parseFloat(pricingSettings.usd_multiplier || 1.75);
-    // Use per-artwork stored rates so UI only changes after explicit recalculate
-    const artFxRate = artwork.fx_rate_used ? parseFloat(artwork.fx_rate_used) : fxRate;
-    const artMultiplier = artwork.multiplier_used ? parseFloat(artwork.multiplier_used) : multiplier;
-    // Calculate USD price for each size using the artwork's own stored rates
-    artwork.sizes = artwork.sizes.map(size => ({
-      ...size,
-      price_usd: calculateUsdPrice(size.price, artFxRate, artMultiplier)
-    }));
-    // Always set artwork.image to a valid URL
-    if (!artwork.image || !/^https?:\/\//.test(artwork.image)) {
-      artwork.image = `/api/images/artworks/${artwork.id}`;
-    }
-    // Auto-calculate price_usd if missing (for old artworks without stored rates)
-    if (!artwork.price_usd && artwork.price_inr) {
-      artwork.price_usd = calculateUsdPrice(artwork.price_inr, artFxRate, artMultiplier);
-    }
-  }
-  return artwork;
+  if (!artwork) return null;
+  const [enriched] = await enrichArtworkRows([artwork]);
+  return enriched;
 }
 
 async function createArtwork(artwork) {
@@ -172,18 +168,27 @@ async function createArtwork(artwork) {
 
 async function updateArtwork(id, artwork) {
   const result = await pool.query(
-    `UPDATE artworks 
-     SET title = $2, category = $3, price = $4, price_inr = $5, price_usd = $6, 
-         fx_rate_used = $7, multiplier_used = $8, description = $9, 
+    `UPDATE artworks
+     SET title = $2, category = $3, price = $4, price_inr = $5, price_usd = $6,
+         fx_rate_used = $7, multiplier_used = $8, description = $9,
          dimensions = $10, materials = $11, image = $12, featured = $13,
+         status         = $14,
+         quantity       = $15,
+         sku            = $16,
+         image_filename = $17,
+         notes          = $18,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $1
      RETURNING *`,
     [id, artwork.title, artwork.category, artwork.price, artwork.price_inr, artwork.price_usd,
      artwork.fx_rate_used, artwork.multiplier_used, artwork.description,
-     artwork.dimensions, artwork.materials, artwork.image, artwork.featured]
+     artwork.dimensions, artwork.materials, artwork.image, artwork.featured,
+     artwork.status       ?? null,
+     artwork.quantity     ?? null,
+     artwork.sku          ?? null,
+     artwork.image_filename ?? null,
+     artwork.notes        ?? null]
   );
-  // Update sizes if provided
   if (artwork.sizes && Array.isArray(artwork.sizes)) {
     await updateArtworkSizes(id, artwork.sizes);
   }
@@ -191,8 +196,104 @@ async function updateArtwork(id, artwork) {
   return result.rows[0];
 }
 
+// Update only the status field — used by the admin review queue publish/archive actions.
+async function updateArtworkStatus(id, status) {
+  const ALLOWED = new Set(['NEEDS_REVIEW', 'IN_STOCK', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED']);
+  if (!ALLOWED.has(status)) throw new Error(`Invalid status: ${status}`);
+  const result = await pool.query(
+    'UPDATE artworks SET status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+    [id, status]
+  );
+  return result.rows[0] || null;
+}
+
 async function deleteArtwork(id) {
   await pool.query('DELETE FROM artworks WHERE id = $1', [id]);
+}
+
+// ── Inventory import helpers ──────────────────────────────────────────────────
+
+// Look up an artwork by SKU. Used by the apply endpoint to classify CREATE vs UPDATE.
+async function getArtworkBySku(sku) {
+  const result = await pool.query('SELECT id, sku, status FROM artworks WHERE sku = $1', [sku]);
+  return result.rows[0] || null;
+}
+
+// Insert a new artwork row from an inventory import.
+// `client` is a pg transaction client; pass pool to run outside a transaction.
+async function createArtworkFromInventory(data, client) {
+  const q = client || pool;
+  const result = await q.query(
+    `INSERT INTO artworks (
+       id, title, category, price, price_inr, price_usd,
+       fx_rate_used, multiplier_used, description, dimensions,
+       materials, image, featured, sku, quantity, status,
+       image_filename, notes, created_at, updated_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6,
+       $7, $8, $9, $10,
+       $11, NULL, false, $12, $13, 'NEEDS_REVIEW',
+       $14, $15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+     ) RETURNING id, title, sku, status`,
+    [
+      data.id, data.title, data.category,
+      data.priceInr,          // price (legacy — same as priceInr)
+      data.priceInr,          // price_inr
+      data.priceUsd,          // price_usd
+      data.fxRateUsed, data.multiplierUsed,
+      data.description, data.dimensions,
+      data.materials,
+      data.sku, data.quantity,
+      data.imageFilename, data.notes,
+    ]
+  );
+  return result.rows[0];
+}
+
+// Patch an existing artwork by SKU from an inventory import.
+// Only updates fields that are provided (non-null). Never changes sku, title, category, image, featured, status, id.
+// `client` is a pg transaction client; pass pool to run outside a transaction.
+async function updateArtworkFromInventory(sku, data, client) {
+  const q      = client || pool;
+  const params = [sku];
+
+  // Always-updated fields
+  params.push(data.quantity);      const qIdx       = params.length; // $2
+  params.push(data.priceInr);      const priceIdx    = params.length; // $3
+  params.push(data.priceUsd);      const priceUsdIdx = params.length; // $4
+  params.push(data.fxRateUsed);    const fxIdx       = params.length; // $5
+  params.push(data.multiplierUsed); const multIdx    = params.length; // $6
+
+  const sets = [
+    `quantity        = $${qIdx}`,
+    `price           = $${priceIdx}`,
+    `price_inr       = $${priceIdx}`,
+    `price_usd       = $${priceUsdIdx}`,
+    `fx_rate_used    = $${fxIdx}`,
+    `multiplier_used = $${multIdx}`,
+    'updated_at = CURRENT_TIMESTAMP',
+  ];
+
+  // Conditionally-updated fields (only when the uploaded row supplied a value)
+  const optionals = [
+    ['description',    data.description],
+    ['dimensions',     data.dimensions],
+    ['materials',      data.materials],
+    ['image_filename', data.imageFilename],
+    ['notes',          data.notes],
+  ];
+  for (const [col, val] of optionals) {
+    if (val !== null && val !== undefined) {
+      params.push(val);
+      sets.push(`${col} = $${params.length}`);
+    }
+  }
+
+  const result = await q.query(
+    `UPDATE artworks SET ${sets.join(', ')} WHERE sku = $1 RETURNING id, title, sku, status`,
+    params
+  );
+  return result.rows[0] || null;
 }
 
 // About page functions
@@ -507,6 +608,7 @@ module.exports = {
   updateCategory,
   deleteCategory,
   getArtworks,
+  getArtworksAdmin,
   getArtworkById,
   createArtwork,
   updateArtwork,
@@ -526,6 +628,10 @@ module.exports = {
   getPricingSetting,
   getPricingSettings,
   updatePricingSetting,
-  updatePricingSettings
-  ,updateArtworkPriceUsd
+  updatePricingSettings,
+  updateArtworkPriceUsd,
+  getArtworkBySku,
+  createArtworkFromInventory,
+  updateArtworkFromInventory,
+  updateArtworkStatus,
 };

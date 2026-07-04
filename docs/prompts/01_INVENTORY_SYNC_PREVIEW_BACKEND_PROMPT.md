@@ -1,5 +1,7 @@
 # Prompt 01: Build Inventory Sync Preview Backend Endpoint
 
+> **Note:** This document describes an earlier preview-only phase and is superseded by the ISYNC-01 through ISYNC-10 implementation for the active staging workflow.
+
 ## Context
 
 We are adding a safe spreadsheet-to-PostgreSQL inventory sync workflow for the Chitrakala Arts admin console.

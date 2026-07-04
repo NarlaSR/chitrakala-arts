@@ -356,6 +356,12 @@ const AdminDashboard = () => {
       <div className="admin-header">
         <h1>Admin Dashboard</h1>
         <div className="admin-actions">
+          <button onClick={() => navigate('/ckk-secure-admin/inventory-sync')} className="btn-secondary">
+            Inventory Sync
+          </button>
+          <button onClick={() => navigate('/ckk-secure-admin/review-queue')} className="btn-secondary">
+            Review Queue
+          </button>
           <button onClick={() => navigate('/ckk-secure-admin/categories')} className="btn-secondary">
             Manage Categories
           </button>
@@ -413,21 +419,25 @@ const AdminDashboard = () => {
                   {bulkResults.map(artwork => (
                     <tr key={artwork.id}>
                       <td style={{ textAlign: 'center', border: '1px solid #ddd', padding: '8px' }}>
-                        <div style={{ position: 'relative', display: 'inline-block' }}>
-                          <img
-                            src={artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')}
-                            alt={artwork.title}
-                            className="artwork-thumbnail"
-                            style={{ userSelect: 'none', maxWidth: '60px', maxHeight: '60px', borderRadius: '6px', transition: 'box-shadow 0.2s' }}
-                            onMouseEnter={() => setHoveredImg(artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : ''))}
-                            onMouseLeave={() => setHoveredImg(null)}
-                          />
-                          {hoveredImg === (artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')) && (
-                            <div style={{ position: 'absolute', left: '110%', top: '50%', transform: 'translateY(-50%)', zIndex: 10, background: '#fff', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', padding: '6px' }}>
-                              <img src={hoveredImg} alt="Preview" style={{ maxWidth: '220px', maxHeight: '220px', borderRadius: '8px' }} />
-                            </div>
-                          )}
-                        </div>
+                        {artwork.image ? (
+                          <div style={{ position: 'relative', display: 'inline-block' }}>
+                            <img
+                              src={artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')}
+                              alt={artwork.title}
+                              className="artwork-thumbnail"
+                              style={{ userSelect: 'none', maxWidth: '60px', maxHeight: '60px', borderRadius: '6px', transition: 'box-shadow 0.2s' }}
+                              onMouseEnter={() => setHoveredImg(artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : ''))}
+                              onMouseLeave={() => setHoveredImg(null)}
+                            />
+                            {hoveredImg === (artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')) && (
+                              <div style={{ position: 'absolute', left: '110%', top: '50%', transform: 'translateY(-50%)', zIndex: 10, background: '#fff', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 2px 12px rgba(0,0,0,0.18)', padding: '6px' }}>
+                                <img src={hoveredImg} alt="Preview" style={{ maxWidth: '220px', maxHeight: '220px', borderRadius: '8px' }} />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="artwork-thumbnail-placeholder">No image</span>
+                        )}
                       </td>
                       <td style={{ border: '1px solid #ddd', padding: '8px' }}>{artwork.title}</td>
                       <td style={{ border: '1px solid #ddd', padding: '8px' }}>{artwork.category}</td>
@@ -669,14 +679,18 @@ const AdminDashboard = () => {
                 artworks.map(artwork => (
                   <tr key={artwork.id}>
                     <td>
-                      <img
-                        src={artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')}
-                        alt={artwork.title}
-                        className="artwork-thumbnail"
-                        onContextMenu={e => e.preventDefault()}
-                        draggable={false}
-                        style={{ userSelect: 'none', pointerEvents: 'none' }}
-                      />
+                      {artwork.image ? (
+                        <img
+                          src={artwork.image + (artwork.updatedAt ? `?t=${encodeURIComponent(artwork.updatedAt)}` : '')}
+                          alt={artwork.title}
+                          className="artwork-thumbnail"
+                          onContextMenu={e => e.preventDefault()}
+                          draggable={false}
+                          style={{ userSelect: 'none', pointerEvents: 'none' }}
+                        />
+                      ) : (
+                        <span className="artwork-thumbnail-placeholder">No image</span>
+                      )}
                     </td>
                     <td>{artwork.title}</td>
                     <td>{artwork.category}</td>

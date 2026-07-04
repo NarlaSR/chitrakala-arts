@@ -63,9 +63,20 @@ export const artworksAPI = {
   delete: async (id) => {
     const response = await api.delete(`/artworks/${id}`);
     return response.data;
-  }
+  },
 
-  ,updatePrice: async (id, priceUsd, fxRateUsed = null, multiplierUsed = null) => {
+  // Admin-only: returns all artworks regardless of status
+  getAllAdmin: async () => {
+    const response = await api.get('/admin/artworks');
+    return response.data;
+  },
+
+  updateStatus: async (id, status) => {
+    const response = await api.patch(`/admin/artworks/${id}/status`, { status });
+    return response.data;
+  },
+
+  updatePrice: async (id, priceUsd, fxRateUsed = null, multiplierUsed = null) => {
     const body = { price_usd: priceUsd };
     if (fxRateUsed !== null) body.fx_rate_used = fxRateUsed;
     if (multiplierUsed !== null) body.multiplier_used = multiplierUsed;
@@ -122,6 +133,38 @@ export const aboutAPI = {
     });
     return response.data;
   }
+};
+
+// Inventory Sync
+export const inventorySyncAPI = {
+  // workbookFile: File (.xlsx/.xls)
+  // imageFiles: { zip: File|null, images: File[] } — both optional
+  preview: async (workbookFile, imageFiles = {}) => {
+    const formData = new FormData();
+    formData.append('file', workbookFile);
+    if (imageFiles.zip)    formData.append('imageZip', imageFiles.zip);
+    (imageFiles.images || []).forEach(f => formData.append('images', f));
+    const response = await api.post('/admin/inventory-sync/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  apply: async (workbookFile, imageFiles = {}) => {
+    const formData = new FormData();
+    formData.append('file', workbookFile);
+    if (imageFiles.zip)    formData.append('imageZip', imageFiles.zip);
+    (imageFiles.images || []).forEach(f => formData.append('images', f));
+    const response = await api.post('/admin/inventory-sync/apply', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  getAdminArtworks: async () => {
+    const response = await api.get('/admin/artworks');
+    return response.data;
+  },
 };
 
 export default api;

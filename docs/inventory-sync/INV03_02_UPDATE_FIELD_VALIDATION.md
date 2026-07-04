@@ -1,5 +1,7 @@
 # INV-03-02 UPDATE Field Validation
 
+> **Note:** This document describes an earlier preview-only phase and is superseded by the ISYNC-01 through ISYNC-10 implementation for the active staging workflow.
+
 ## Summary
 
 - Total rows: 36

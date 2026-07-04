@@ -1,5 +1,7 @@
 # Chitrakala Arts - Internal Reference: Inventory Sync Roadmap
 
+> **Note:** This document describes an earlier preview-only phase and is superseded by the ISYNC-01 through ISYNC-10 implementation for the active staging workflow.
+
 ## Purpose of This Reference Document
 
 This document is intended for Sanjay and the Chitrakala team.

@@ -1,5 +1,7 @@
 # Setup Instructions Before Giving the First Inventory Sync Prompt to the Coding Agent
 
+> **Note:** This document describes an earlier preview-only phase and is superseded by the ISYNC-01 through ISYNC-10 implementation for the active staging workflow.
+
 ## Purpose
 
 These steps prepare the Chitrakala Arts repo so the coding agent has the right context, the correct files, and a safe working environment before starting the spreadsheet-to-DB inventory sync work.

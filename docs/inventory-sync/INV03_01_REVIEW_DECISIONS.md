@@ -1,5 +1,7 @@
 # INV-03-01 REVIEW Row Decisions
 
+> **Note:** This document describes an earlier preview-only phase and is superseded by the ISYNC-01 through ISYNC-10 implementation for the active staging workflow.
+
 ## Summary
 
 - Source workbook: `Chitrakala_Inventory_Sync_v2_ReadyForCodingAgent.xlsx`
