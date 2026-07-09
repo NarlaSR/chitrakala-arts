@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCurrency } from '../context/CurrencyContext';
-import { getFormattedPriceForCountry, getStartingPriceForCountry, formatPrice } from '../utils/priceUtils';
+import { getStartingPriceForCountry, getPriceForCountry, formatPrice } from '../utils/priceUtils';
 import '../styles/ArtCard.css';
 
 // Fixed: Use full URLs from backend directly
@@ -13,11 +13,17 @@ const ArtCard = ({ artwork }) => {
     ? `${artwork.image}?t=${artwork.updatedAt || Date.now()}`
     : '/assets/images/placeholder.jpg';
   
-  // For multi-size artworks show "Prices from X", otherwise show single price
+  // For multi-size artworks show "Prices from X", otherwise show single price or "Price on request"
   const startingPrice = getStartingPriceForCountry(artwork, countryCode);
-  const formattedPrice = startingPrice
-    ? `Prices from ${formatPrice(startingPrice.price, startingPrice.currency)}`
-    : getFormattedPriceForCountry(artwork, countryCode);
+  let formattedPrice;
+  if (startingPrice) {
+    formattedPrice = `Prices from ${formatPrice(startingPrice.price, startingPrice.currency)}`;
+  } else {
+    const { price: rawPrice, currency: rawCurrency } = getPriceForCountry(artwork, countryCode);
+    formattedPrice = rawPrice != null ? formatPrice(rawPrice, rawCurrency) : 'Price on request';
+  }
+
+  const isMadeToOrder = artwork.status === 'MADE_TO_ORDER';
   
   return (
     <div className="art-card">
@@ -39,6 +45,9 @@ const ArtCard = ({ artwork }) => {
           <p className="art-card-description">{artwork.description}</p>
           {/* Show price based on user's detected country */}
           <div className="art-card-footer">
+            {isMadeToOrder && (
+              <span className="art-card-badge art-card-badge--mto">Made to Order</span>
+            )}
             <span className="art-card-price">{formattedPrice}</span>
           </div>
         </div>

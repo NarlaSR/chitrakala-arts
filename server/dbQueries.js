@@ -122,10 +122,10 @@ async function enrichArtworkRows(rows) {
   }));
 }
 
-// Public-facing: only artworks with status = 'IN_STOCK' are returned.
+// Public-facing: only artworks that are IN_STOCK or MADE_TO_ORDER AND enabled by admin.
 async function getArtworks() {
   const result = await pool.query(
-    "SELECT * FROM artworks WHERE status = 'IN_STOCK' ORDER BY created_at DESC"
+    "SELECT * FROM artworks WHERE status IN ('IN_STOCK', 'MADE_TO_ORDER') AND show_on_website = true ORDER BY created_at DESC"
   );
   return enrichArtworkRows(result.rows);
 }
@@ -136,11 +136,11 @@ async function getArtworksAdmin() {
   return enrichArtworkRows(result.rows);
 }
 
-// publicOnly = true → returns null if the artwork is not IN_STOCK (used by public API).
+// publicOnly = true → returns null if the artwork is not publicly visible (used by public API).
 // publicOnly = false (default) → returns any artwork by id (used by admin routes).
 async function getArtworkById(id, publicOnly = false) {
   const query = publicOnly
-    ? "SELECT * FROM artworks WHERE id = $1 AND status = 'IN_STOCK'"
+    ? "SELECT * FROM artworks WHERE id = $1 AND status IN ('IN_STOCK', 'MADE_TO_ORDER') AND show_on_website = true"
     : 'SELECT * FROM artworks WHERE id = $1';
   const result = await pool.query(query, [id]);
   const artwork = result.rows[0];
@@ -151,12 +151,14 @@ async function getArtworkById(id, publicOnly = false) {
 
 async function createArtwork(artwork) {
   const result = await pool.query(
-    `INSERT INTO artworks (id, title, category, price, price_inr, price_usd, fx_rate_used, multiplier_used, description, dimensions, materials, image, featured)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    `INSERT INTO artworks (id, title, category, price, price_inr, price_usd, fx_rate_used, multiplier_used, description, dimensions, materials, image, featured, status, show_on_website)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 'IN_STOCK'), COALESCE($15, false))
      RETURNING *`,
-    [artwork.id, artwork.title, artwork.category, artwork.price, artwork.price_inr, artwork.price_usd, 
-     artwork.fx_rate_used, artwork.multiplier_used, artwork.description, 
-     artwork.dimensions, artwork.materials, artwork.image, artwork.featured]
+    [artwork.id, artwork.title, artwork.category, artwork.price, artwork.price_inr, artwork.price_usd,
+     artwork.fx_rate_used, artwork.multiplier_used, artwork.description,
+     artwork.dimensions, artwork.materials, artwork.image, artwork.featured,
+     artwork.status ?? null,
+     artwork.show_on_website != null ? Boolean(artwork.show_on_website) : null]
   );
   // Add sizes if provided
   if (artwork.sizes && Array.isArray(artwork.sizes)) {
@@ -172,22 +174,24 @@ async function updateArtwork(id, artwork) {
      SET title = $2, category = $3, price = $4, price_inr = $5, price_usd = $6,
          fx_rate_used = $7, multiplier_used = $8, description = $9,
          dimensions = $10, materials = $11, image = $12, featured = $13,
-         status         = $14,
-         quantity       = $15,
-         sku            = $16,
-         image_filename = $17,
-         notes          = $18,
+         status          = $14,
+         quantity        = $15,
+         sku             = $16,
+         image_filename  = $17,
+         notes           = $18,
+         show_on_website = COALESCE($19, show_on_website),
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $1
      RETURNING *`,
     [id, artwork.title, artwork.category, artwork.price, artwork.price_inr, artwork.price_usd,
      artwork.fx_rate_used, artwork.multiplier_used, artwork.description,
      artwork.dimensions, artwork.materials, artwork.image, artwork.featured,
-     artwork.status       ?? null,
-     artwork.quantity     ?? null,
-     artwork.sku          ?? null,
+     artwork.status         ?? null,
+     artwork.quantity       ?? null,
+     artwork.sku            ?? null,
      artwork.image_filename ?? null,
-     artwork.notes        ?? null]
+     artwork.notes          ?? null,
+     artwork.show_on_website != null ? Boolean(artwork.show_on_website) : null]
   );
   if (artwork.sizes && Array.isArray(artwork.sizes)) {
     await updateArtworkSizes(id, artwork.sizes);
@@ -198,7 +202,7 @@ async function updateArtwork(id, artwork) {
 
 // Update only the status field — used by the admin review queue publish/archive actions.
 async function updateArtworkStatus(id, status) {
-  const ALLOWED = new Set(['NEEDS_REVIEW', 'IN_STOCK', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED']);
+  const ALLOWED = new Set(['NEEDS_REVIEW', 'IN_STOCK', 'MADE_TO_ORDER', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED']);
   if (!ALLOWED.has(status)) throw new Error(`Invalid status: ${status}`);
   const result = await pool.query(
     'UPDATE artworks SET status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',

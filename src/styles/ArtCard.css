@@ -99,6 +99,22 @@
   color: var(--text-light);
 }
 
+.art-card-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+}
+
+.art-card-badge--mto {
+  background-color: #fff7e6;
+  color: #b36b00;
+  border: 1px solid #ffd591;
+}
+
 @media (max-width: 768px) {
   .art-card-image {
     height: 220px;

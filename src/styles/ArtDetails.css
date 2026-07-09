@@ -58,6 +58,23 @@
   margin: 0;
 }
 
+.art-availability-label {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+}
+
+.art-availability--mto {
+  background: #fff7e6;
+  color: #b36b00;
+  border: 1px solid #ffd591;
+}
+
 .art-price {
   display: flex;
   align-items: baseline;

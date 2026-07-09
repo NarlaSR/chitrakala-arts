@@ -222,9 +222,21 @@
 
 .rq-status-review   { background: #f3e8ff; color: #6b21a8; }
 .rq-status-instock  { background: #dcfce7; color: #15803d; }
+.rq-status-mto      { background: #fff7e6; color: #b36b00; }
 .rq-status-oos      { background: #ffedd5; color: #c2410c; }
 .rq-status-sold     { background: #e0e7ff; color: #3730a3; }
 .rq-status-archived { background: #f1f5f9; color: #475569; }
+
+/* Show on website badge */
+.rq-onsite-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+}
+.rq-onsite-yes { background: #dcfce7; color: #15803d; }
+.rq-onsite-no  { background: #f1f5f9; color: #64748b; }
 
 /* Action buttons */
 .rq-actions {
@@ -308,6 +320,29 @@
 .rq-edit-actions {
   display: flex;
   gap: 0.75rem;
+}
+
+.rq-edit-checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.rq-edit-checkbox-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #15803d;
+}
+
+.rq-edit-checkbox-hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #64748b;
+  margin-left: 0.25rem;
 }
 
 @media (max-width: 768px) {
