@@ -4,18 +4,16 @@
 **Branch:** `feature/WEB-VIS-01-visibility-availability`  
 **PR:** [#16](https://github.com/NarlaSR/chitrakala-arts/pull/16)  
 **Date:** 2026-07-09  
-**Status:** Railway staging validation complete — ready for production approval
+**Status:** ✅ Complete — production migration verified, deployed, and smoke tested
 
 ---
 
 ## Scope
 
 Validates that the WEB-VIS-01 implementation (migration + backend + frontend) behaves correctly
-against a staging database before being merged and deployed to production.
+through local staging, Railway staging, and production deployment.
 
-> **No production DB was touched during this validation.**  
-> All testing used the local staging DB (`chitrakala_dev` on `localhost:5433`).  
-> No Inventory Preview, Apply, production import, or price recalculation was run.
+> No Inventory Preview, Apply, production import, or price recalculation was run at any stage.
 
 ---
 
@@ -25,11 +23,11 @@ against a staging database before being merged and deployed to production.
 |-------|-------------|------|--------|
 | Local validation | `chitrakala_dev` on `localhost:5433` | 2026-07-08 | ✅ Complete |
 | Railway staging validation | `shinkansen.proxy.rlwy.net:41009/railway` | 2026-07-09 | ✅ Complete |
-| Production backup | Railway production | — | Pending approval |
-| Production DB migration | Railway production | — | Pending approval |
-| Merge PR #16 to main | GitHub | — | Pending approval |
-| Deploy backend + frontend | Railway + Vercel | — | Pending approval |
-| Production smoke validation | chitrakala-arts.com | — | Pending approval |
+| Production backup | Railway production | 2026-07-09 | ✅ Complete |
+| Production DB migration | Railway production (`crossover.proxy.rlwy.net`) | 2026-07-09 | ✅ Complete |
+| Merge PR #16 to main | GitHub — merge commit `5fe2878` | 2026-07-09 | ✅ Complete |
+| Deploy backend + frontend | Railway + Vercel auto-deploy | 2026-07-09 | ✅ Complete |
+| Production smoke validation | chitrakala-arts.com | 2026-07-09 | ✅ Complete |
 
 ---
 
@@ -38,8 +36,10 @@ against a staging database before being merged and deployed to production.
 | Item | Value |
 |------|-------|
 | Branch | `feature/WEB-VIS-01-visibility-availability` |
-| Commit | `d34526a2f6b9d0046f8e4cd1d2fe63dd03937058` |
-| PR | #16 — open at github.com/NarlaSR/chitrakala-arts/pull/16 |
+| Implementation commit | `d34526a` — WEB-VIS-01 visibility and availability controls |
+| Staging results commit | `8b90b2d` — WEB-VIS-02 staging validation results |
+| PR | [#16](https://github.com/NarlaSR/chitrakala-arts/pull/16) — merged to `main` |
+| Merge commit | `5fe2878` |
 
 ---
 
@@ -255,24 +255,140 @@ Both test artworks restored after UI validation. Final public count confirmed 36
 
 ## Step 5 — Production Readiness Assessment
 
-Staging validation passed. The following steps remain before production is live:
+Staging validation passed all checks. Production release proceeded with explicit approval.
 
-### Pre-production checklist (requires explicit approval to proceed)
+### Pre-production checklist — all complete
 
-- [ ] Merge PR #16 to `main`
-- [ ] Run `node runMigration.js migrate_web_vis01.sql` against **production** Railway DB
-- [ ] Verify production migration: `SELECT column_name FROM information_schema.columns WHERE table_name='artworks' AND column_name='show_on_website';` → 1 row
-- [ ] Verify: `SELECT COUNT(*) FROM artworks WHERE status='IN_STOCK' AND show_on_website=false;` → 0
-- [ ] Deploy backend to Railway (auto-deploy on `main` push, or manual trigger)
-- [ ] Deploy frontend to Vercel (auto-deploy on `main` push, or manual trigger)
-- [ ] Production smoke test: existing IN_STOCK artworks still appear on public site
-- [ ] Production smoke test: count matches pre-migration baseline (38 at ISYNC-15)
+- [x] Production backup taken
+- [x] Run `node runMigration.js migrate_web_vis01.sql` against production Railway DB
+- [x] Production migration verified (7 checks)
+- [x] Merge PR #16 to `main` — commit `5fe2878`
+- [x] Deploy backend to Railway (auto-deploy on `main` push)
+- [x] Deploy frontend to Vercel (auto-deploy on `main` push)
+- [x] Production smoke test: all existing IN_STOCK artworks visible on public site
+- [x] Production smoke test: count matches pre-migration baseline (38)
 
 ### Production baseline (from ISYNC-15, 2026-07-04)
 
 - 38 IN_STOCK artworks in Railway before this migration
-- After migration: all 38 should gain `show_on_website=true` via backfill
-- Public count should remain 38 immediately after migration
+- After migration: all 38 gained `show_on_website=true` via backfill
+- Public count remained 38 immediately after migration ✅
+
+---
+
+## Step 6 — Production Backup
+
+**Taken before any production DB change.**
+
+| Item | Value |
+|------|-------|
+| File | `chitrakala_prod_20260709_pre_webvis01.backup` |
+| Path | `C:\Development\backups\postgres\` |
+| Size | 12,654,532 bytes (~12.07 MB) |
+| Format | pg_dump custom format |
+| Date | 2026-07-09 |
+
+---
+
+## Step 7 — Production DB Migration
+
+**Target:** `crossover.proxy.rlwy.net:54308/railway` (Railway production — confirmed not staging)
+
+**Command:** `node runMigration.js migrate_web_vis01.sql`
+
+```
+Database: postgresql://postgres:****@crossover.proxy.rlwy.net:54308/railway
+Running migration: migrate_web_vis01.sql
+
+✅ Migration completed successfully!
+
+Current pricing settings:
+  fx_rate: '92.4'   (updated 2026-03-17)
+  usd_multiplier: '2.25'  (updated 2026-07-04)
+```
+
+Pricing settings unchanged. No price recalculation triggered. ✅
+
+---
+
+## Step 8 — Production Migration Verification
+
+All 7 checks passed against `crossover.proxy.rlwy.net:54308/railway`.
+
+| Check | Expected | Result |
+|-------|----------|--------|
+| Column definition | `boolean NOT NULL DEFAULT false` | ✅ |
+| NULL count | 0 | ✅ |
+| IN_STOCK count with `show_on_website=true` | 38 | ✅ |
+| `instock_hidden` (IN_STOCK + show=false) | 0 | ✅ |
+| `non_instock_exposed` (non-IN_STOCK + show=true) | 0 | ✅ |
+| Row counts unchanged | artworks=38, artwork_sizes=91, categories=7 | ✅ |
+| Sample rows: prices, SKUs, titles untouched | — | ✅ |
+
+Sample rows verified (5 rows): prices, titles, and SKUs match pre-migration state. ✅
+
+---
+
+## Step 9 — PR #16 Merge
+
+| Item | Value |
+|------|-------|
+| PR | [#16](https://github.com/NarlaSR/chitrakala-arts/pull/16) |
+| Title | WEB-VIS-01 visibility and availability controls |
+| Commits | `d34526a` (implementation), `8b90b2d` (staging results) |
+| CI checks | ✅ 2/2 checks passed on both commits |
+| Merge commit | `5fe2878` |
+| Merged to | `main` |
+| Date | 2026-07-09 |
+
+---
+
+## Step 10 — Deploy Confirmation
+
+### Railway backend
+
+| Check | Result |
+|-------|--------|
+| API status | 200 ✅ |
+| Public artwork count | 38 ✅ |
+| All artworks status | IN_STOCK ✅ |
+| Categories | 7 ✅ |
+| Endpoint | `chitrakalaarts-production.up.railway.app` |
+
+### Vercel frontend
+
+| Check | Result |
+|-------|--------|
+| `https://www.chitrakala-arts.com` | 200 ✅ |
+| `https://chitrakala-arts.com` | 308 → www (expected) ✅ |
+
+---
+
+## Step 11 — Production Smoke Tests
+
+**Tested against:** `chitrakalaarts-production.up.railway.app` and `www.chitrakala-arts.com`  
+**Admin token:** from production browser localStorage (`$env:PROD_ADMIN_TOKEN`)
+
+| Test | Expected | Result |
+|------|----------|--------|
+| A1: Admin list artworks | status=200, count=38 | ✅ |
+| A2: Create new artwork defaults | status=IN_STOCK, show_on_website=false | ✅ (hidden by default) |
+| A3: MADE_TO_ORDER + show=true → public 200 | status=200 | ✅ |
+| A4: Hidden artwork (show=false) → public 404 | status=404 | ✅ |
+| Public count during test (MADE_TO_ORDER visible) | 38 | ✅ |
+| Cleanup: delete test artwork | status=200 | ✅ |
+| Final public count after cleanup | 38 | ✅ |
+
+Test artwork (`art-1783645105597`) created and deleted during smoke test. Final public count confirmed 38. ✅
+
+### Explicit scope confirmations — production phase
+
+- ✅ Inventory Preview not run
+- ✅ Inventory Apply not run
+- ✅ Production import not run
+- ✅ No price recalculation
+- ✅ No production artwork data modified (test artwork created and deleted during smoke test only)
+- ✅ No Railway/Vercel environment variables changed
 
 ---
 
