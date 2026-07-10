@@ -97,7 +97,10 @@ const ArtDetails = () => {
           <div className="art-details-info">
             <div className="art-category-badge">{categoryLabel}</div>
             <h1 className="art-title">{artwork.title}</h1>
-            
+            {artwork.status === 'MADE_TO_ORDER' && (
+              <div className="art-availability-label art-availability--mto">Made to Order</div>
+            )}
+
             {/* Show all sizes/prices */}
             <div className="art-description">
               <h3>Description</h3>
@@ -124,16 +127,13 @@ const ArtDetails = () => {
                 {Array.isArray(artwork.sizes) && artwork.sizes.length > 0 ? (
                   <>
                     {artwork.sizes.map((sp, idx) => {
-                      // Backend now provides price_usd for each size with psychological rounding
                       let sizePrice;
                       if (countryCode === 'IN') {
-                        sizePrice = formatPrice(sp.price, 'INR');
+                        sizePrice = sp.price != null ? formatPrice(sp.price, 'INR') : 'Price on request';
                       } else if (countryCode === 'US') {
-                        // Use calculated USD price from backend (includes psychological rounding)
-                        sizePrice = formatPrice(sp.price_usd, 'USD');
+                        sizePrice = sp.price_usd != null ? formatPrice(sp.price_usd, 'USD') : 'Price on request';
                       } else {
-                        // International: apply 15% markup to USD price
-                        sizePrice = formatPrice(sp.price_usd * 1.15, 'USD');
+                        sizePrice = sp.price_usd != null ? formatPrice(sp.price_usd * 1.15, 'USD') : 'Price on request';
                       }
                       
                       return (
@@ -156,7 +156,7 @@ const ArtDetails = () => {
                     <li>
                       <strong>Price:</strong> {(() => {
                         const { price: displayPrice, currency: displayCurrency } = getPriceForCountry(artwork, countryCode);
-                        return formatPrice(displayPrice, displayCurrency);
+                        return displayPrice != null ? formatPrice(displayPrice, displayCurrency) : 'Price on request';
                       })()}
                       {countryCode !== 'IN' && countryCode !== 'US' && (
                         <span style={{fontSize: '0.85rem', color: '#666', marginLeft: '0.5rem'}}>

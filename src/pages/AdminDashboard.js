@@ -73,6 +73,8 @@ const AdminDashboard = () => {
     price: '',
     materials: '',
     featured: false,
+    status: 'IN_STOCK',
+    show_on_website: false,
     sizes: [{ size: '', price: '' }]
   });
   const [imageFile, setImageFile] = useState(null);
@@ -227,8 +229,10 @@ const AdminDashboard = () => {
     if (!formData.description || formData.description.trim().length < 15) {
       errors.description = 'Description must be at least 15 characters.';
     }
-    if (!formData.price || isNaN(formData.price) || Number(formData.price) < 0) {
-      errors.price = 'Price must be a valid number.';
+    if (formData.price !== '' && formData.price != null) {
+      if (isNaN(formData.price) || Number(formData.price) < 0) {
+        errors.price = 'Price must be a valid positive number (or leave blank for "Price on request").';
+      }
     }
     if (formData.materials && formData.materials.length > 255) {
       errors.materials = 'Materials must be less than 255 characters.';
@@ -243,10 +247,11 @@ const AdminDashboard = () => {
     data.append('title', formData.title);
     data.append('category', formData.category);
     data.append('description', formData.description);
-    data.append('price', formData.price); // Ensure price is sent
+    data.append('price', formData.price ?? '');
     data.append('materials', formData.materials);
     data.append('featured', formData.featured);
-    // Send sizes array as JSON
+    data.append('status', formData.status || 'IN_STOCK');
+    data.append('show_on_website', String(Boolean(formData.show_on_website)));
     data.append('sizes', JSON.stringify(formData.sizes));
     if (imageFile) {
       data.append('image', imageFile);
@@ -283,9 +288,11 @@ const AdminDashboard = () => {
       title: artwork.title,
       category: artwork.category,
       description: artwork.description,
-      price: artwork.price || '',
+      price: artwork.price_inr != null ? String(artwork.price_inr) : '',
       materials: artwork.materials,
       featured: artwork.featured,
+      status: artwork.status || 'IN_STOCK',
+      show_on_website: Boolean(artwork.show_on_website),
       sizes
     });
     setImagePreview(artwork.image || '');
@@ -332,8 +339,11 @@ const AdminDashboard = () => {
       title: '',
       category: 'dot-mandala',
       description: '',
+      price: '',
       materials: '',
       featured: false,
+      status: 'IN_STOCK',
+      show_on_website: false,
       sizes: [{ size: '', price: '' }]
     });
     setImageFile(null);
@@ -528,7 +538,7 @@ const AdminDashboard = () => {
               {/* Main price field for backend compatibility */}
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="price">Master Price (INR) *</label>
+                  <label htmlFor="price">Master Price (INR)</label>
                   <input
                     type="number"
                     id="price"
@@ -538,9 +548,9 @@ const AdminDashboard = () => {
                     onBlur={e => validateField('price', e.target.value)}
                     min="0"
                     step="0.01"
-                    required
+                    placeholder="Leave blank for Price on request"
                   />
-                  <small>Base price in Indian Rupees. USD is auto-calculated.</small>
+                  <small>Base price in Indian Rupees. Leave blank for "Price on request". USD is auto-calculated.</small>
                   {formErrors.price && <div className="form-error">{formErrors.price}</div>}
                 </div>
               </div>
@@ -562,6 +572,40 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               )}
+
+              {/* Status and visibility controls */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="status">Status</label>
+                  <select
+                    id="status"
+                    name="status"
+                    value={formData.status || 'IN_STOCK'}
+                    onChange={handleInputChange}
+                  >
+                    <option value="IN_STOCK">In Stock</option>
+                    <option value="MADE_TO_ORDER">Made to Order</option>
+                    <option value="NEEDS_REVIEW">Needs Review</option>
+                    <option value="OUT_OF_STOCK">Out of Stock</option>
+                    <option value="SOLD">Sold</option>
+                    <option value="ARCHIVED">Archived</option>
+                  </select>
+                  <small>Status alone does not make artwork visible — also enable "Show on Website".</small>
+                </div>
+                <div className="form-group">
+                  <label>Show on Website</label>
+                  <label className="dash-checkbox-label">
+                    <input
+                      type="checkbox"
+                      name="show_on_website"
+                      checked={Boolean(formData.show_on_website)}
+                      onChange={e => setFormData(prev => ({ ...prev, show_on_website: e.target.checked }))}
+                    />
+                    <span>Visible to public</span>
+                  </label>
+                  <small>Artwork appears on the public site only when In Stock or Made to Order AND this is checked.</small>
+                </div>
+              </div>
 
               {/* Multiple sizes/prices UI */}
               <div className="form-group">

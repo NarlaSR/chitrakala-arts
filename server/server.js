@@ -217,7 +217,7 @@ const validateString = (str, minLength = 1, maxLength = 1000) => {
 
 // Shared approved status set — used by both PUT and PATCH endpoints.
 const ALLOWED_ARTWORK_STATUSES = new Set([
-  'NEEDS_REVIEW', 'IN_STOCK', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED',
+  'NEEDS_REVIEW', 'IN_STOCK', 'MADE_TO_ORDER', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED',
 ]);
 
 // Valid new-format SKU: CKS-YYYY-(DM|LA|MM|WA|TA|MA)-(SM|MD|LG|XL)-NNNNN
@@ -407,7 +407,7 @@ app.get('/api/artworks', async (req, res) => {
   }
 });
 
-// Get artwork by ID (public — only IN_STOCK artworks are accessible)
+// Get artwork by ID (public — only IN_STOCK or MADE_TO_ORDER with show_on_website=true)
 app.get('/api/artworks/:id', async (req, res) => {
   try {
     const artwork = await db.getArtworkById(req.params.id, true);
@@ -459,7 +459,7 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       console.error('Validation failed: description');
       return res.status(400).json({ error: 'Description must be between 10 and 5000 characters' });
     }
-    if (!validatePrice(req.body.price)) {
+    if (req.body.price && !validatePrice(req.body.price)) {
       console.error('Validation failed: price', req.body.price);
       return res.status(400).json({ error: 'Invalid price format' });
     }
@@ -490,24 +490,31 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       }
     }
     
-    // Calculate INR and USD prices
-    const priceInr = parseFloat(req.body.price);
-    const priceUsd = calculateUsdPrice(priceInr, fxRate, multiplier);
-    
+    // Calculate INR and USD prices (null when price not provided = "Price on request")
+    const priceInr = req.body.price ? parseFloat(req.body.price) : null;
+    const priceUsd = priceInr !== null ? calculateUsdPrice(priceInr, fxRate, multiplier) : null;
+
+    // Validate status (if provided)
+    const initialStatus = req.body.status && ALLOWED_ARTWORK_STATUSES.has(req.body.status)
+      ? req.body.status
+      : 'IN_STOCK';
+
     const newArtwork = {
       id: artworkId,
       title: req.body.title.trim(),
       category: req.body.category.trim(),
       description: req.body.description.trim(),
-      price: priceInr, // Keep for backward compatibility
+      price: priceInr,
       price_inr: priceInr,
       price_usd: priceUsd,
-      fx_rate_used: fxRate,
-      multiplier_used: multiplier,
+      fx_rate_used: priceInr !== null ? fxRate : null,
+      multiplier_used: priceInr !== null ? multiplier : null,
       dimensions: req.body.size?.trim() || '',
       materials: req.body.materials?.trim() || '',
       image: req.file ? `${BASE_URL}/api/images/artworks/${artworkId}` : '',
       featured: req.body.featured === 'true',
+      status: initialStatus,
+      show_on_website: req.body.show_on_website === 'true',
       sizes
     };
     const artwork = await db.createArtwork(newArtwork);
@@ -572,16 +579,21 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
     }
     
     // Calculate INR and USD prices if price is being updated
-    let priceInr = existingArtwork.price_inr || existingArtwork.price;
-    let priceUsd = existingArtwork.price_usd;
-    let fxRateUsed = existingArtwork.fx_rate_used;
-    let multiplierUsed = existingArtwork.multiplier_used;
-    
-    if (req.body.price) {
-      priceInr = parseFloat(req.body.price);
-      priceUsd = calculateUsdPrice(priceInr, fxRate, multiplier);
-      fxRateUsed = fxRate;
-      multiplierUsed = multiplier;
+    let priceInr = existingArtwork.price_inr ?? existingArtwork.price ?? null;
+    let priceUsd = existingArtwork.price_usd ?? null;
+    let fxRateUsed = existingArtwork.fx_rate_used ?? null;
+    let multiplierUsed = existingArtwork.multiplier_used ?? null;
+
+    if (req.body.price !== undefined) {
+      if (req.body.price === '' || req.body.price === null) {
+        // Explicit clear → "Price on request"
+        priceInr = null; priceUsd = null; fxRateUsed = null; multiplierUsed = null;
+      } else {
+        priceInr = parseFloat(req.body.price);
+        priceUsd = calculateUsdPrice(priceInr, fxRate, multiplier);
+        fxRateUsed = fxRate;
+        multiplierUsed = multiplier;
+      }
     }
     
     // Validate status (if provided)
@@ -645,6 +657,9 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       notes:          req.body.notes !== undefined
                         ? (req.body.notes?.trim() || null)
                         : (existingArtwork.notes ?? null),
+      show_on_website: req.body.show_on_website !== undefined
+                        ? req.body.show_on_website === 'true'
+                        : (existingArtwork.show_on_website ?? false),
     };
 
     // Update image if new one is uploaded

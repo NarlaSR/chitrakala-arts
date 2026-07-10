@@ -4,20 +4,29 @@ import { useAuth } from '../context/AuthContext';
 import { artworksAPI } from '../services/api';
 import '../styles/AdminReviewQueue.css';
 
-const STATUS_OPTIONS = ['NEEDS_REVIEW', 'IN_STOCK', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED'];
-const FILTER_LABELS  = { ALL: 'All', ...Object.fromEntries(STATUS_OPTIONS.map(s => [s, s.replace('_', ' ')])) };
+const STATUS_OPTIONS = ['NEEDS_REVIEW', 'IN_STOCK', 'MADE_TO_ORDER', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED'];
+const FILTER_LABELS  = {
+  ALL: 'All',
+  NEEDS_REVIEW:  'Needs Review',
+  IN_STOCK:      'In Stock',
+  MADE_TO_ORDER: 'Made to Order',
+  OUT_OF_STOCK:  'Out of Stock',
+  SOLD:          'Sold',
+  ARCHIVED:      'Archived',
+};
 
 const STATUS_COLORS = {
-  NEEDS_REVIEW: 'rq-status-review',
-  IN_STOCK:     'rq-status-instock',
-  OUT_OF_STOCK: 'rq-status-oos',
-  SOLD:         'rq-status-sold',
-  ARCHIVED:     'rq-status-archived',
+  NEEDS_REVIEW:  'rq-status-review',
+  IN_STOCK:      'rq-status-instock',
+  MADE_TO_ORDER: 'rq-status-mto',
+  OUT_OF_STOCK:  'rq-status-oos',
+  SOLD:          'rq-status-sold',
+  ARCHIVED:      'rq-status-archived',
 };
 
 const EMPTY_EDIT = {
   title: '', description: '', dimensions: '', materials: '',
-  quantity: '', price: '', notes: '', status: '',
+  quantity: '', price: '', notes: '', status: '', show_on_website: false,
 };
 
 const AdminReviewQueue = () => {
@@ -68,13 +77,13 @@ const AdminReviewQueue = () => {
   const flash = (msg) => { setActionMsg(msg); setTimeout(() => setActionMsg(''), 3000); };
 
   const handleStatusChange = async (artwork, newStatus) => {
-    const label = newStatus === 'IN_STOCK'
-      ? 'This will make the artwork visible on the public website. Continue?'
-      : `Change status to ${newStatus.replace('_', ' ')}?`;
+    const label = (newStatus === 'IN_STOCK' || newStatus === 'MADE_TO_ORDER')
+      ? `Change status to ${newStatus.replace(/_/g, ' ')}? The artwork will only appear on the public site if "Show on website" is also enabled.`
+      : `Change status to ${newStatus.replace(/_/g, ' ')}?`;
     if (!window.confirm(label)) return;
     try {
       await artworksAPI.updateStatus(artwork.id, newStatus);
-      flash(`"${artwork.title}" → ${newStatus.replace('_', ' ')}`);
+      flash(`"${artwork.title}" → ${newStatus.replace(/_/g, ' ')}`);
       loadArtworks();
     } catch (err) {
       flash(`Error: ${err.response?.data?.error || 'Status update failed'}`);
@@ -84,14 +93,15 @@ const AdminReviewQueue = () => {
   const startEdit = (artwork) => {
     setEditingId(artwork.id);
     setEditForm({
-      title:        artwork.title        || '',
-      description:  artwork.description  || '',
-      dimensions:   artwork.dimensions   || '',
-      materials:    artwork.materials    || '',
-      quantity:     artwork.quantity     != null ? String(artwork.quantity) : '',
-      price:        artwork.price_inr    != null ? String(artwork.price_inr) : '',
-      notes:        artwork.notes        || '',
-      status:       artwork.status       || '',
+      title:          artwork.title           || '',
+      description:    artwork.description     || '',
+      dimensions:     artwork.dimensions      || '',
+      materials:      artwork.materials       || '',
+      quantity:       artwork.quantity        != null ? String(artwork.quantity) : '',
+      price:          artwork.price_inr       != null ? String(artwork.price_inr) : '',
+      notes:          artwork.notes           || '',
+      status:         artwork.status          || '',
+      show_on_website: Boolean(artwork.show_on_website),
     });
     setEditError('');
   };
@@ -108,10 +118,11 @@ const AdminReviewQueue = () => {
       if (editForm.dimensions)  fd.append('size',        editForm.dimensions.trim());
       if (editForm.materials)   fd.append('materials',   editForm.materials.trim());
       if (editForm.quantity)    fd.append('quantity',    editForm.quantity);
-      if (editForm.price)       fd.append('price',       editForm.price);
-      if (editForm.notes)       fd.append('notes',       editForm.notes.trim());
+      if (editForm.price)       fd.append('price',           editForm.price);
+      if (editForm.notes)       fd.append('notes',           editForm.notes.trim());
       if (editForm.status && editForm.status !== artwork.status)
-                                fd.append('status',      editForm.status);
+                                fd.append('status',          editForm.status);
+      fd.append('show_on_website', String(editForm.show_on_website));
       await artworksAPI.update(artwork.id, fd);
       flash(`"${editForm.title || artwork.title}" saved`);
       cancelEdit();
@@ -210,6 +221,7 @@ const AdminReviewQueue = () => {
                   <th>Title</th>
                   <th>SKU</th>
                   <th>Status</th>
+                  <th>On Site</th>
                   <th>Category</th>
                   <th>Qty</th>
                   <th>Price (INR)</th>
@@ -230,7 +242,12 @@ const AdminReviewQueue = () => {
                       <td className="rq-td-sku">{artwork.sku || '—'}</td>
                       <td>
                         <span className={`rq-status-badge ${STATUS_COLORS[artwork.status] || ''}`}>
-                          {artwork.status?.replace('_', ' ') || '—'}
+                          {artwork.status?.replace(/_/g, ' ') || '—'}
+                        </span>
+                      </td>
+                      <td className="rq-td-center">
+                        <span className={`rq-onsite-badge${artwork.show_on_website ? ' rq-onsite-yes' : ' rq-onsite-no'}`}>
+                          {artwork.show_on_website ? 'Yes' : 'No'}
                         </span>
                       </td>
                       <td>{artwork.category || '—'}</td>
@@ -304,7 +321,7 @@ const AdminReviewQueue = () => {
                     {/* Inline edit panel */}
                     {editingId === artwork.id && (
                       <tr className="rq-edit-row">
-                        <td colSpan={13}>
+                        <td colSpan={14}>
                           <div className="rq-edit-panel">
                             <h4>Edit — {artwork.title}</h4>
                             {editError && <div className="rq-edit-error">{editError}</div>}
@@ -319,9 +336,20 @@ const AdminReviewQueue = () => {
                                 <select value={editForm.status}
                                   onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
                                   {STATUS_OPTIONS.map(s => (
-                                    <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                                    <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
                                   ))}
                                 </select>
+                              </label>
+                              <label className="rq-edit-checkbox-label">
+                                Show on Website
+                                <input
+                                  type="checkbox"
+                                  checked={editForm.show_on_website}
+                                  onChange={e => setEditForm(f => ({ ...f, show_on_website: e.target.checked }))}
+                                />
+                                <span className="rq-edit-checkbox-hint">
+                                  Artwork appears publicly only when status is In Stock or Made to Order AND this is checked.
+                                </span>
                               </label>
                               <label>
                                 Quantity
