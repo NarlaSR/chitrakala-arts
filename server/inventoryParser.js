@@ -2,24 +2,18 @@
 
 const XLSX = require('xlsx');
 const path = require('path');
+const { CATEGORY_BY_ARTCODE } = require('./skuUtils');
 
 // Valid Art Work codes. MA = Mixed Art (replaces legacy MW going forward).
-// MW is intentionally absent — workbooks containing MW will get a warning.
-const KNOWN_ARTWORK_CODES = new Set(['DM', 'LA', 'MM', 'WA', 'TA', 'MA']);
+// TD = Textile Design. MW is intentionally absent — workbooks containing MW will get a warning.
+// Source of truth for ArtCode↔category mapping is server/skuUtils.js ARTCODE_MAP.
+const KNOWN_ARTWORK_CODES = new Set(['DM', 'LA', 'MM', 'WA', 'TA', 'MA', 'TD']);
 const KNOWN_SIZE_CODES    = new Set(['SM', 'MD', 'LG', 'XL']);
 
-// Maps Art Work code → categories.id in the database
-const ARTWORK_CATEGORY_MAP = {
-  'DM': 'dot-mandala',
-  'LA': 'lippan-art',
-  'MM': 'mirror-mosaic',
-  'WA': 'warli-art',
-  'TA': 'texture-art',
-  'MA': 'mixed-art',
-};
+// ArtCode → categories.id. Derived from the centralized map in skuUtils.js.
+const ARTWORK_CATEGORY_MAP = CATEGORY_BY_ARTCODE;
 
-// Detects the old SKU format (e.g. CKS-DM-SM-2026-0001) so we can flag it as an error.
-// New format is CKS-2026-DM-SM-00001.
+// Detects the original old SKU format (e.g. CKS-DM-SM-2026-0001 with 4-digit counter).
 const OLD_SKU_PATTERN = /^CKS-[A-Z]+-[A-Z]+-\d{4}-\d{4}$/i;
 
 // Maps normalized (trimmed, lowercased) header text to a canonical field name.

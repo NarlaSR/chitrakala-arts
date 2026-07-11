@@ -151,14 +151,15 @@ async function getArtworkById(id, publicOnly = false) {
 
 async function createArtwork(artwork) {
   const result = await pool.query(
-    `INSERT INTO artworks (id, title, category, price, price_inr, price_usd, fx_rate_used, multiplier_used, description, dimensions, materials, image, featured, status, show_on_website)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 'IN_STOCK'), COALESCE($15, false))
+    `INSERT INTO artworks (id, title, category, price, price_inr, price_usd, fx_rate_used, multiplier_used, description, dimensions, materials, image, featured, status, show_on_website, sku)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, 'IN_STOCK'), COALESCE($15, false), $16)
      RETURNING *`,
     [artwork.id, artwork.title, artwork.category, artwork.price, artwork.price_inr, artwork.price_usd,
      artwork.fx_rate_used, artwork.multiplier_used, artwork.description,
      artwork.dimensions, artwork.materials, artwork.image, artwork.featured,
      artwork.status ?? null,
-     artwork.show_on_website != null ? Boolean(artwork.show_on_website) : null]
+     artwork.show_on_website != null ? Boolean(artwork.show_on_website) : null,
+     artwork.sku ?? null]
   );
   // Add sizes if provided
   if (artwork.sizes && Array.isArray(artwork.sizes)) {
@@ -207,6 +208,16 @@ async function updateArtworkStatus(id, status) {
   const result = await pool.query(
     'UPDATE artworks SET status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
     [id, status]
+  );
+  return result.rows[0] || null;
+}
+
+// Assign a SKU to an artwork that has none. The WHERE sku IS NULL guard makes this a no-op
+// if a SKU was already assigned concurrently, preventing accidental overwrites.
+async function updateArtworkSku(id, sku) {
+  const result = await pool.query(
+    'UPDATE artworks SET sku = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND sku IS NULL RETURNING *',
+    [id, sku]
   );
   return result.rows[0] || null;
 }
@@ -638,4 +649,5 @@ module.exports = {
   createArtworkFromInventory,
   updateArtworkFromInventory,
   updateArtworkStatus,
+  updateArtworkSku,
 };

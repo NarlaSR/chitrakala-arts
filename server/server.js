@@ -12,6 +12,7 @@ const sharp = require('sharp');
 const { initializeDatabase, isDatabaseConfigured, pool } = require('./db');
 const db = require('./dbQueries');
 const { calculateUsdPrice, getPriceForCountry } = require('./priceUtils');
+const { maybeGenerateSku } = require('./skuUtils');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -220,9 +221,9 @@ const ALLOWED_ARTWORK_STATUSES = new Set([
   'NEEDS_REVIEW', 'IN_STOCK', 'MADE_TO_ORDER', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED',
 ]);
 
-// Valid new-format SKU: CKS-YYYY-(DM|LA|MM|WA|TA|MA)-(SM|MD|LG|XL)-NNNNN
-// Rejects old format (CKS-DM-SM-2026-0001) and retired codes (MW).
-const VALID_SKU_PATTERN = /^CKS-\d{4}-(DM|LA|MM|WA|TA|MA)-(SM|MD|LG|XL)-\d{5}$/;
+// Valid SKU format: CKS-YYYY-(DM|LA|MM|WA|TA|MA|TD)-NNNNN (no size code).
+// Rejects old size-based format (CKS-DM-SM-2026-0001) and retired codes (MW).
+const VALID_SKU_PATTERN = /^CKS-\d{4}-(DM|LA|MM|WA|TA|MA|TD)-\d{5}$/;
 
 const isValidInventorySku = (sku) => VALID_SKU_PATTERN.test(sku);
 
@@ -499,6 +500,14 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       ? req.body.status
       : 'IN_STOCK';
 
+    const initialShowOnWebsite = req.body.show_on_website === 'true';
+    const autoSku = await maybeGenerateSku(pool, {
+      category: req.body.category.trim(),
+      status: initialStatus,
+      show_on_website: initialShowOnWebsite,
+      existingSku: null,
+    }).catch(() => null); // unapproved category → no SKU; admin can address later
+
     const newArtwork = {
       id: artworkId,
       title: req.body.title.trim(),
@@ -514,7 +523,8 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       image: req.file ? `${BASE_URL}/api/images/artworks/${artworkId}` : '',
       featured: req.body.featured === 'true',
       status: initialStatus,
-      show_on_website: req.body.show_on_website === 'true',
+      show_on_website: initialShowOnWebsite,
+      sku: autoSku,
       sizes
     };
     const artwork = await db.createArtwork(newArtwork);
@@ -603,15 +613,15 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       });
     }
 
-    // Validate SKU (if provided).
-    // Blank SKU in request = explicitly clear it. Missing SKU = preserve existing.
+    // Resolve SKU: preserve existing (immutable once set), validate if admin explicitly provides one,
+    // or auto-generate when the artwork is saved into a public/orderable state with no SKU yet.
     let finalSku = existingArtwork.sku ?? null; // default: preserve
     if (req.body.sku !== undefined) {
       const rawSku = req.body.sku?.trim() || null;
       if (rawSku) {
         if (!isValidInventorySku(rawSku)) {
           return res.status(400).json({
-            error: 'Invalid SKU format. Expected CKS-YYYY-CODE-SIZE-00001 with a valid Art Work code (DM, LA, MM, WA, TA, MA) and size code (SM, MD, LG, XL).',
+            error: 'Invalid SKU format. Expected CKS-YYYY-CODE-00001 with a valid ArtCode (DM, LA, MM, WA, TA, MA, TD). SKU does not include a size code.',
           });
         }
         const skuOwner = await db.getArtworkBySku(rawSku);
@@ -620,6 +630,20 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
         }
       }
       finalSku = rawSku; // null = explicitly clear; non-null = validated value
+    }
+    // Auto-generate SKU if the save results in a public/orderable state and no SKU exists yet.
+    if (!finalSku) {
+      const finalStatus       = req.body.status || existingArtwork.status;
+      const finalShowOnWebsite = req.body.show_on_website !== undefined
+        ? req.body.show_on_website === 'true'
+        : (existingArtwork.show_on_website ?? false);
+      const finalCategory = req.body.category?.trim() || existingArtwork.category;
+      finalSku = await maybeGenerateSku(pool, {
+        category:       finalCategory,
+        status:         finalStatus,
+        show_on_website: finalShowOnWebsite,
+        existingSku:    null,
+      }).catch(() => null);
     }
 
     // Validate quantity (if provided).
@@ -734,6 +758,21 @@ app.patch('/api/admin/artworks/:id/status', authenticateToken, async (req, res) 
   try {
     const artwork = await db.updateArtworkStatus(req.params.id, status);
     if (!artwork) return res.status(404).json({ error: 'Artwork not found' });
+
+    // Auto-generate SKU if this status change makes the artwork public/orderable and it has no SKU yet.
+    if (!artwork.sku) {
+      const generatedSku = await maybeGenerateSku(pool, {
+        category:       artwork.category,
+        status:         artwork.status,
+        show_on_website: artwork.show_on_website,
+        existingSku:    null,
+      }).catch(() => null);
+      if (generatedSku) {
+        const withSku = await db.updateArtworkSku(artwork.id, generatedSku);
+        if (withSku) return res.json(withSku);
+      }
+    }
+
     res.json(artwork);
   } catch (err) {
     console.error('Error updating artwork status:', err);
