@@ -290,10 +290,88 @@ Staging admin password: temporary hash set during validation. `DEFAULT_ADMIN_PAS
 
 ---
 
+## Production Release
+
+**Date:** 2026-07-12  
+**Status:** ✅ Deployed and smoke validated
+
+### PR Merge
+
+| Item | Value |
+|------|-------|
+| PR | [#17](https://github.com/NarlaSR/chitrakala-arts/pull/17) |
+| Merge commit | `d023261` |
+| Merged to | `main` |
+| Commits included | `2d1c6a9` — implementation · `3a02b5f` — staging results |
+
+### Deployment Confirmation
+
+| Service | Status | URL |
+|---------|--------|-----|
+| Railway backend | ✅ HTTP 200 (0.56s) | `https://chitrakalaarts-production.up.railway.app` |
+| Vercel frontend | ✅ HTTP 200 (0.15s) | `https://www.chitrakala-arts.com` |
+
+Both services auto-deployed on merge to `main` via GitHub integration. No migration was required or run — `artworks.sku` already existed from INV-02.
+
+### Production Smoke Validation
+
+**Target:** `https://chitrakalaarts-production.up.railway.app` + `https://www.chitrakala-arts.com`  
+**Method:** Read-only API checks. No production artwork records created or modified.
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| Public homepage loads | ✅ | HTTP 200, returns HTML |
+| `/api/artworks` responds | ✅ | HTTP 200 |
+| Public artwork count | ✅ | 38 artworks — unchanged from WEB-VIS-02 baseline |
+| Public artwork detail | ✅ | HTTP 200 for `art-1782445237565` |
+| SKU field present in API response | ✅ | `sku` key present on all artwork objects |
+| Existing IN_STOCK artworks visible | ✅ | 38 IN_STOCK artworks returned |
+| `show_on_website=true` artworks visible | ✅ | 38 artworks |
+| Blank-SKU artworks not bulk backfilled | ✅ | 38 artworks have blank SKU — no automatic backfill occurred |
+| Old-format SKUs not overwritten | ✅ | 0 old-format SKUs in production (production never received inventory-sync-format SKUs) |
+| New-format SKUs auto-generated | ✅ (N/A) | 0 new-format SKUs yet — expected, existing artworks receive SKU on next admin edit |
+| No error page on public site | ✅ | No `application error` / 500 content detected |
+
+**Admin UI smoke (not verified in production):** Admin login and SKU read-only display confirmed via staging validation and local testing. The AdminDashboard SKU section is a read-only display block — no manual entry field is presented.
+
+### Production Baseline After Deploy
+
+| Metric | Value |
+|--------|-------|
+| Total public artworks | 38 |
+| IN_STOCK | 38 |
+| show_on_website=true | 38 |
+| Artworks with blank SKU | 38 |
+| Artworks with SKU assigned | 0 |
+| Old-format SKUs | 0 |
+| New-format SKUs | 0 |
+
+Existing artworks will receive a new-format SKU the next time an admin saves them while they are IN_STOCK or MADE_TO_ORDER with `show_on_website=true`. No bulk backfill was run.
+
+### Production Release Scope Confirmations
+
+- ✅ No production DB migration run
+- ✅ No Inventory Preview run
+- ✅ No Inventory Apply run
+- ✅ No production import run
+- ✅ No bulk SKU backfill on existing production artworks
+- ✅ No price recalculation run
+- ✅ No production artwork title, category, image, material, description, dimension, or price data changed
+
+### Follow-ups
+
+| Item | Notes |
+|------|-------|
+| Railway staging admin password | Staging `cks-admin` password was reset to `CKSAdmin_Stg2026!` during INV-SKU-01 validation. Update Railway staging `DEFAULT_ADMIN_PASSWORD` env var for documentation consistency (note: env var does not sync to DB automatically — only used on first boot if users table is empty). |
+| Existing production artworks without SKU | 38 IN_STOCK artworks have no SKU. They will receive a SKU the next time an admin edits and saves them. No bulk backfill needed or planned. |
+| Concurrent SKU collision edge case | If two admins simultaneously create artworks in the same category, the second write may fail the unique index and return a 201 with no SKU. Admin would need to re-save. Low risk; can be hardened in a future ticket if needed. |
+
+---
+
 ## Explicit Scope Confirmations
 
 - ✅ No production migration run
-- ✅ No production deploy
+- ✅ Production deployed via auto-deploy on merge to `main` (Railway + Vercel)
 - ✅ No Inventory Preview run
 - ✅ No Inventory Apply run
 - ✅ No production import
