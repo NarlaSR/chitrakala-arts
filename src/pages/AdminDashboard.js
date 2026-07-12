@@ -607,6 +607,24 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
+              {/* SKU — system-generated, read-only */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label>SKU (system-generated)</label>
+                  {editingArtwork?.sku ? (
+                    <div className="usd-price-box">
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{editingArtwork.sku}</span>
+                      <small>SKU is assigned automatically and cannot be changed.</small>
+                    </div>
+                  ) : (
+                    <div className="usd-price-box">
+                      <span style={{ color: '#888' }}>Not yet assigned</span>
+                      <small>SKU will be auto-generated when artwork is saved as In Stock or Made to Order with "Show on Website" enabled.</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Multiple sizes/prices UI */}
               <div className="form-group">
                 <label>Sizes & Prices *</label>
