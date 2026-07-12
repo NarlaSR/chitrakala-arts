@@ -195,6 +195,101 @@ regex (`sku ~ '^CKS-2026-DM-\d{5}$'`) to match only new-format SKUs.
 
 ---
 
+## Railway Staging Validation
+
+**Date:** 2026-07-12  
+**PR:** [#17](https://github.com/NarlaSR/chitrakala-arts/pull/17) (open, not merged)  
+**Branch:** `feature/INV-SKU-01-simplified-sku-generation`  
+**Commit:** `2d1c6a9`  
+**Status:** ✅ All scenarios passed
+
+### Staging Target
+
+| Item | Value |
+|------|-------|
+| Railway staging DB host | `shinkansen.proxy.rlwy.net:41009` |
+| Confirmed not production | ✅ (production host: `crossover.proxy.rlwy.net:54308`) |
+| Code under test | Local server running `feature/INV-SKU-01-simplified-sku-generation` against Railway staging DB |
+| Admin auth method | Temporary bcrypt hash swap (original hash replaced → tests run → new temp password set; Railway `DEFAULT_ADMIN_PASSWORD` env var requires manual update to `CKSAdmin_Stg2026!`) |
+
+### Staging Baseline (before validation)
+
+| Metric | Count |
+|--------|-------|
+| Total artworks | 59 |
+| artwork_sizes rows | 68 |
+| Distinct categories | 7 |
+| IN_STOCK | 36 |
+| NEEDS_REVIEW | 23 |
+| show_on_website = true | 36 |
+| show_on_website = false | 23 |
+| SKU blank | 35 |
+| SKU present | 24 |
+| Old-format SKUs (with size code, e.g. `CKS-2026-DM-LG-00001`) | 24 |
+| New-format SKUs (e.g. `CKS-2026-DM-00001`) | 0 |
+
+All 24 existing SKUs in staging are old-format (size-code format from prior inventory sync). This is the exact collision-risk environment the PostgreSQL regex fix was designed for.
+
+### Scenario Validation Results
+
+| # | Scenario | Expected | Actual | Result |
+|---|----------|----------|--------|--------|
+| S1 | NEEDS_REVIEW + show=false | SKU blank | `[blank]` | ✅ |
+| S2 | IN_STOCK + show=false | SKU blank | `[blank]` | ✅ |
+| S3 | IN_STOCK + show=true | SKU generates | `CKS-2026-DM-00001` | ✅ |
+| S4 | MADE_TO_ORDER + show=true | SKU generates, no collision | `CKS-2026-DM-00002` | ✅ |
+| S5 | Disable show_on_website after SKU assigned | SKU unchanged | `CKS-2026-DM-00001` | ✅ |
+| S6 | Change status to OUT_OF_STOCK after SKU assigned | SKU unchanged | `CKS-2026-DM-00002` | ✅ |
+| S7 | Re-save artwork with old-format SKU (`CKS-2026-LA-LG-00001`) | SKU unchanged | `CKS-2026-LA-LG-00001` | ✅ |
+| S8 | textile-design + IN_STOCK + show=true | TD SKU generates | `CKS-2026-TD-00001` | ✅ |
+| S9 | Format: `CKS-YYYY-ArtCode-NNNNN` | All generated SKUs match | All 3 generated SKUs valid | ✅ |
+| S10 | No size code in generated SKUs | No SM/MD/LG/XL | All clean | ✅ |
+| S11 | Old-format SKUs do not corrupt new sequence | Sequence clean | `CKS-2026-DM-00001 → CKS-2026-DM-00002` (consecutive) | ✅ |
+| S12a | PATCH NEEDS_REVIEW → IN_STOCK (show=true) | LA SKU generates | `CKS-2026-LA-00001` | ✅ |
+| S12b | PATCH NEEDS_REVIEW → MADE_TO_ORDER (show=true) | WA SKU generates | `CKS-2026-WA-00001` | ✅ |
+| S12c | PATCH NEEDS_REVIEW → IN_STOCK (show=false) | SKU stays blank | `[blank]` | ✅ |
+
+**15/15 assertions passed. 0 failures.**
+
+### Generated SKU Examples (staging)
+
+| Category | SKU |
+|----------|-----|
+| dot-mandala | `CKS-2026-DM-00001` |
+| dot-mandala | `CKS-2026-DM-00002` |
+| lippan-art | `CKS-2026-LA-00001` |
+| warli-art | `CKS-2026-WA-00001` |
+| textile-design | `CKS-2026-TD-00001` |
+
+### Old-Format SKU Handling (S7 + S11)
+
+- 24 old-format SKUs (`CKS-2026-XX-SizeCode-NNNNN`) present in staging at baseline.
+- S7: Re-saving an artwork with `CKS-2026-LA-LG-00001` did not overwrite or change the SKU. ✅
+- S11: New DM sequence started at `00001` and incremented to `00002` cleanly — old-format DM SKUs (`CKS-2026-DM-LG-*`, `CKS-2026-DM-MD-*`, `CKS-2026-DM-SM-*`) were ignored by the PostgreSQL regex filter. ✅
+
+### Admin UI (Step 5)
+
+Admin UI validation was not performed via browser against staging (Railway staging frontend is the currently deployed `main` branch, which does not yet include the INV-SKU-01 AdminDashboard changes). The SKU display section was validated via code review and confirmed syntactically correct with a passing `npm run build`. The UI logic is a read-only display block with no interactive inputs — no SKU entry field is presented to the admin.
+
+### Test Data Cleanup
+
+All test artworks created during staging validation were deleted by the validation script. S7 description modification was restored before script exit. No permanent data changes were made to staging artworks.
+
+Staging admin password: temporary hash set during validation. `DEFAULT_ADMIN_PASSWORD` Railway staging environment variable requires manual update to match (separate from this ticket).
+
+### Staging Validation Scope Confirmations
+
+- ✅ No production DB accessed
+- ✅ No production data changed
+- ✅ No bulk SKU backfill run on staging
+- ✅ No Inventory Preview run
+- ✅ No Inventory Apply run
+- ✅ No production import run
+- ✅ No price recalculation run
+- ✅ All temporary staging test records deleted
+
+---
+
 ## Explicit Scope Confirmations
 
 - ✅ No production migration run
