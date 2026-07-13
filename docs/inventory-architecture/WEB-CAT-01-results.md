@@ -3,7 +3,7 @@
 **Ticket:** WEB-CAT-01 — Hide Empty Categories from Public Navigation/Gallery  
 **Branch:** `feature/WEB-CAT-01-hide-empty-categories`  
 **Date:** 2026-07-12  
-**Status:** ✅ Complete — implemented and validated locally, PR ready
+**Status:** ✅ Complete — implemented, validated locally, Railway staging validated (20/20), PR ready for merge
 
 ---
 
@@ -138,6 +138,77 @@ Local dev category state at validation:
 | Category transitions | If a public artwork is unpublished (show=false or status changed away from IN_STOCK/MADE_TO_ORDER), the category may disappear from nav. This is correct behavior — no follow-up needed. |
 | CategoryPage direct URLs | Empty categories still load via direct URL with a graceful empty state. If a product decision requires a redirect instead, that is a separate ticket. |
 | Performance | `getPublicCategories()` runs a JOIN on each page load of Home and Header. With the current artwork count this is negligible. At scale, a DB index on `artworks(category, status, show_on_website)` would help. |
+
+---
+
+## Railway Staging Validation
+
+**Date:** 2026-07-12  
+**Target:** `shinkansen.proxy.rlwy.net:41009` (Railway staging — NOT production `crossover.proxy.rlwy.net:54308`)  
+**Result:** ✅ 20/20 assertions passed
+
+### Staging Baseline
+
+| Metric | Value |
+|--------|-------|
+| Total categories | 7 |
+| Total artworks | 67 |
+| Public artworks (IN_STOCK/MADE_TO_ORDER + show_on_website=true) | 39 |
+| Public categories | 4 |
+| Hidden categories (no public artworks) | 3 |
+
+**Public categories (4):** dot-mandala, lippan-art, textile-design, warli-art  
+**Hidden categories (3):** mirror-mosaic, mixed-art, texture-art
+
+### Step 4 — Backend API (6/6)
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 4.1 | `GET /api/categories` returns all 7 categories | ✅ |
+| 4.2 | `GET /api/categories?publicOnly=true` returns exactly 4 categories | ✅ |
+| 4.3 | All 4 expected public categories present in public list | ✅ |
+| 4.4 | All 3 hidden categories absent from public list | ✅ |
+| 4.5 | Hidden categories still in full admin list (not deleted) | ✅ |
+| 4.6 | Public artworks endpoint returns only IN_STOCK/MADE_TO_ORDER + show=true | ✅ |
+
+### Step 5 — Frontend / Public Behavior (8/8)
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 5.1 | Nav shows Dot Mandala Art | ✅ |
+| 5.2 | Nav shows Lippan Art | ✅ |
+| 5.3 | Nav shows Textile Art | ✅ |
+| 5.4 | Nav shows Warli Art | ✅ |
+| 5.5 | Mirror Mosaic absent from nav | ✅ |
+| 5.6 | Mixed Art absent from nav | ✅ |
+| 5.7 | Texture Art absent from nav | ✅ |
+| 5.8 | Direct URL to empty category returns 200 (graceful empty state, no 404) | ✅ |
+
+**Browser accessibility snapshot** confirmed: `Home | Dot Mandala Art | Lippan Art | Textile Art | Warli Art | About | Contact` — no hidden categories in nav.  
+No console errors.
+
+### Step 6 — Admin Behavior (6/6)
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 6.1 | Admin login with staging credentials succeeded | ✅ |
+| 6.2 | Admin sees all 67 artworks (including NEEDS_REVIEW and show=false) | ✅ |
+| 6.3 | Admin sees all 7 categories | ✅ |
+| 6.4 | mirror-mosaic accessible in admin | ✅ |
+| 6.5 | mixed-art accessible in admin | ✅ |
+| 6.6 | texture-art accessible in admin | ✅ |
+
+### Safety Confirmation — Staging Validation
+
+- ✅ No production DB accessed (staging only: `shinkansen.proxy.rlwy.net:41009`)
+- ✅ No category records deleted or modified
+- ✅ No artwork data modified
+- ✅ No Inventory Preview run
+- ✅ No Inventory Apply run
+- ✅ No production import
+- ✅ No price recalculation
+- ✅ No DB writes during validation (read-only queries only)
+- ✅ Staging admin password `CKSAdmin_Stg2026!` used; no production credentials used
 
 ---
 
