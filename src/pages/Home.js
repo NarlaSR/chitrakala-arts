@@ -37,7 +37,7 @@ const Home = () => {
       try {
         const [artworksData, categoriesData] = await Promise.all([
           artworksAPI.getAll(),
-          categoriesAPI.getAll()
+          categoriesAPI.getPublic()
         ]);
         setAllArtworks(artworksData);
         setFeaturedArtworks(artworksData.filter(art => art.featured));
