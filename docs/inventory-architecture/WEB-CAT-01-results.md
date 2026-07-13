@@ -3,7 +3,7 @@
 **Ticket:** WEB-CAT-01 — Hide Empty Categories from Public Navigation/Gallery  
 **Branch:** `feature/WEB-CAT-01-hide-empty-categories`  
 **Date:** 2026-07-12  
-**Status:** ✅ Complete — implemented, validated locally, Railway staging validated (20/20), PR ready for merge
+**Status:** ✅ Done — implemented, locally validated, Railway staging validated (20/20), merged PR #18, production deployed and smoke tested
 
 ---
 
@@ -212,10 +212,80 @@ No console errors.
 
 ---
 
+## Production Release
+
+**Date:** 2026-07-12  
+**PR:** [#18](https://github.com/NarlaSR/chitrakala-arts/pull/18) — merged to `main`  
+**Merge commit:** `4727010`  
+**Railway backend:** `https://chitrakalaarts-production.up.railway.app` — auto-deployed on merge ✅  
+**Vercel frontend:** `https://www.chitrakala-arts.com` — auto-deployed on merge ✅  
+**No DB migration required or run.**
+
+### Production Smoke Validation
+
+**Date:** 2026-07-12  
+**Backend:** `chitrakalaarts-production.up.railway.app`  
+**Frontend:** `www.chitrakala-arts.com`
+
+#### Public category state in production
+
+| Category | Public? | Artworks |
+|----------|---------|---------|
+| dot-mandala | ✅ Public | 19 |
+| lippan-art | ✅ Public | 8 |
+| mirror-mosaic | ✅ Public | 4 |
+| texture-art | ✅ Public | 1 |
+| textile-design | ✅ Public | 6 |
+| warli-art | ❌ Hidden | 0 public artworks |
+| mixed-art | ❌ Hidden | 0 public artworks |
+
+**Public categories (5):** dot-mandala, lippan-art, mirror-mosaic, texture-art, textile-design  
+**Hidden categories (2):** warli-art, mixed-art  
+**Total public artworks:** 38 (unchanged, all `IN_STOCK`, all `show_on_website=true`)
+
+#### Smoke checks
+
+| # | Check | Result |
+|---|-------|--------|
+| S1 | Public homepage `https://www.chitrakala-arts.com/` | 200 ✅ |
+| S2 | `GET /api/categories` → 7 categories (admin path) | 7 returned ✅ |
+| S3 | `GET /api/categories?publicOnly=true` → 5 categories | 5 returned ✅ |
+| S4 | All 5 expected public categories present | ✅ |
+| S5 | warli-art absent from public list | ✅ |
+| S6 | mixed-art absent from public list | ✅ |
+| S7 | warli-art in full category list (not deleted) | ✅ |
+| S8 | mixed-art in full category list (not deleted) | ✅ |
+| S9 | Total public artworks: 38 (unchanged) | ✅ |
+| S10 | No warli-art artworks in public list | 0 ✅ |
+| S11 | No mixed-art artworks in public list | 0 ✅ |
+| S12 | No NEEDS_REVIEW artworks in public list | 0 ✅ |
+| S13 | No show_on_website=false artworks in public list | 0 ✅ |
+| S14 | Artwork detail `GET /api/artworks/art-1782445237565` | 200 ✅ |
+| S15 | Direct URL `/api/categories/warli-art` (empty category) | 200 graceful ✅ |
+| S16 | Direct URL `/api/categories/mixed-art` (empty category) | 200 graceful ✅ |
+| S17 | All 5 public category API endpoints | 200 each ✅ |
+| S18 | `GET /api/categories` data path (all 7, no auth) | ✅ |
+
+**Admin login:** Production credentials not available in session — cannot automate. Admin data path (all 7 categories returned unauthenticated) confirmed via S2 and S18. Manual admin verification recommended.
+
+### Production Scope Confirmations
+
+- ✅ No production DB migration run (WEB-CAT-01 requires none)
+- ✅ No Inventory Preview run
+- ✅ No Inventory Apply run
+- ✅ No production import run
+- ✅ No category records deleted or modified
+- ✅ No artwork data modified
+- ✅ No category data modified
+- ✅ No price recalculation run
+- ✅ `server/.env` not staged or committed at any step
+
+---
+
 ## Explicit Scope Confirmations
 
 - ✅ No production migration run
-- ✅ No production deploy
+- ✅ No production deploy without approval
 - ✅ No Inventory Preview run
 - ✅ No Inventory Apply run
 - ✅ No production import
