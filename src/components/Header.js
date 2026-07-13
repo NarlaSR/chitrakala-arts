@@ -26,7 +26,7 @@ const Header = () => {
   const logoAlt = isIndia ? 'ChitraKala Sanskriti' : 'Sainar Chitrakala Ventures';
 
   useEffect(() => {
-    categoriesAPI.getAll()
+    categoriesAPI.getPublic()
       .then(setCategories)
       .catch(err => console.error('Failed to load categories:', err));
   }, []);

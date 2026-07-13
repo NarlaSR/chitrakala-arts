@@ -25,6 +25,20 @@ async function getCategories() {
   return result.rows;
 }
 
+// Returns only categories that have at least one public artwork
+// (status IN_STOCK or MADE_TO_ORDER, show_on_website = true).
+async function getPublicCategories() {
+  const result = await pool.query(`
+    SELECT DISTINCT c.*
+    FROM categories c
+    INNER JOIN artworks a ON a.category = c.id
+    WHERE a.status IN ('IN_STOCK', 'MADE_TO_ORDER')
+      AND a.show_on_website = true
+    ORDER BY c.display_order ASC, c.name ASC
+  `);
+  return result.rows;
+}
+
 async function getCategoryById(id) {
   const result = await pool.query('SELECT * FROM categories WHERE id = $1', [id]);
   return result.rows[0] || null;
@@ -618,6 +632,7 @@ module.exports = {
   getUserByUsername,
   createUser,
   getCategories,
+  getPublicCategories,
   getCategoryById,
   createCategory,
   updateCategory,

@@ -92,6 +92,11 @@ export const categoriesAPI = {
     return response.data;
   },
 
+  getPublic: async () => {
+    const response = await api.get('/categories?publicOnly=true');
+    return response.data;
+  },
+
   getById: async (id) => {
     const response = await api.get(`/categories/${id}`);
     return response.data;

@@ -783,9 +783,13 @@ app.patch('/api/admin/artworks/:id/status', authenticateToken, async (req, res) 
 // ─── Category Routes ────────────────────────────────────────────────────────
 
 // GET /api/categories — public
+// ?publicOnly=true returns only categories with at least one public artwork
+// (status IN_STOCK/MADE_TO_ORDER, show_on_website=true). Admin callers omit the param.
 app.get('/api/categories', async (req, res) => {
   try {
-    const categories = await db.getCategories();
+    const categories = req.query.publicOnly === 'true'
+      ? await db.getPublicCategories()
+      : await db.getCategories();
     res.json(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);
