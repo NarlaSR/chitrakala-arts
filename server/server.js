@@ -30,6 +30,10 @@ if (JWT_SECRET === 'your-secret-key-change-in-production') {
 // Check if using database or JSON files
 const USE_DATABASE = !!process.env.DATABASE_URL;
 
+// Public website maintenance mode. Only the exact string "true" enables it;
+// missing, empty, "false", or any other value is treated as disabled.
+const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true';
+
 // Trust Railway proxy to get correct IP addresses for rate limiting
 app.set('trust proxy', 1);
 
@@ -88,6 +92,16 @@ app.use((req, res, next) => {
 // Body parsing middleware - must be before any routes that read req.body
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Health/status endpoint - always accessible, including during maintenance mode
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Read-only maintenance mode status for the public frontend to poll
+app.get('/api/config/maintenance', (req, res) => {
+  res.json({ maintenanceMode: MAINTENANCE_MODE });
+});
 
 // Update only artwork USD price (admin override)
 app.put('/api/artworks/:id/price', authenticateToken, async (req, res) => {

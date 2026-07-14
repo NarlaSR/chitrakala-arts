@@ -17,7 +17,35 @@ import AdminCategoriesPage from './pages/AdminCategoriesPage';
 import AdminInventorySync from './pages/AdminInventorySync';
 import AdminReviewQueue from './pages/AdminReviewQueue';
 import DebugEnv from './pages/DebugEnv';
+import Maintenance from './pages/Maintenance';
+import useMaintenanceMode from './hooks/useMaintenanceMode';
 import './styles/App.css';
+
+function PublicSite() {
+  const { maintenanceMode, loading } = useMaintenanceMode();
+
+  if (loading) return null;
+
+  if (maintenanceMode) {
+    return <Maintenance />;
+  }
+
+  return (
+    <>
+      <Header />
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/category/:categoryId" element={<CategoryPage />} />
+          <Route path="/art/:artId" element={<ArtDetails />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+        </Routes>
+      </main>
+      <Footer />
+    </>
+  );
+}
 
 function App() {
   return (
@@ -25,7 +53,7 @@ function App() {
       <Router>
         <div className="App">
           <Routes>
-            {/* Admin Routes - Hidden paths for security */}
+            {/* Admin Routes - Hidden paths for security. Never gated by maintenance mode. */}
             <Route path="/ckk-secure-admin" element={<AdminLogin />} />
             <Route path="/ckk-secure-admin/dashboard" element={<AdminDashboard />} />
             <Route path="/ckk-secure-admin/about" element={<AdminAboutPage />} />
@@ -35,23 +63,9 @@ function App() {
             <Route path="/ckk-secure-admin/inventory-sync" element={<AdminInventorySync />} />
             <Route path="/ckk-secure-admin/review-queue" element={<AdminReviewQueue />} />
             <Route path="/debug-env" element={<DebugEnv />} />
-            
-            {/* Public Routes */}
-            <Route path="/*" element={
-              <>
-                <Header />
-                <main className="main-content">
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/category/:categoryId" element={<CategoryPage />} />
-                    <Route path="/art/:artId" element={<ArtDetails />} />
-                    <Route path="/about" element={<About />} />
-                    <Route path="/contact" element={<Contact />} />
-                  </Routes>
-                </main>
-                <Footer />
-              </>
-            } />
+
+            {/* Public Routes - gated by maintenance mode */}
+            <Route path="/*" element={<PublicSite />} />
           </Routes>
         </div>
       </Router>
