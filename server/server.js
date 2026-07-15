@@ -30,9 +30,25 @@ if (JWT_SECRET === 'your-secret-key-change-in-production') {
 // Check if using database or JSON files
 const USE_DATABASE = !!process.env.DATABASE_URL;
 
-// Public website maintenance mode. Only the exact string "true" enables it;
-// missing, empty, "false", or any other value is treated as disabled.
-const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true';
+// Public website maintenance mode. The admin-controlled app_settings value
+// ("maintenance_mode" key) is the primary source of truth so the site owner
+// can toggle it from the admin UI with no code change or redeploy. The
+// MAINTENANCE_MODE env var is only a fallback/default, used if no DB value
+// has been set yet or if the DB read itself fails. Only the exact string
+// "true" is ever treated as enabled.
+const MAINTENANCE_MODE_ENV_DEFAULT = process.env.MAINTENANCE_MODE === 'true';
+
+async function getMaintenanceMode() {
+  try {
+    const setting = await db.getAppSetting('maintenance_mode');
+    if (setting) {
+      return setting.value === 'true';
+    }
+  } catch (error) {
+    console.error('Error reading maintenance_mode setting, falling back to env default:', error);
+  }
+  return MAINTENANCE_MODE_ENV_DEFAULT;
+}
 
 // Trust Railway proxy to get correct IP addresses for rate limiting
 app.set('trust proxy', 1);
@@ -98,9 +114,60 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Read-only maintenance mode status for the public frontend to poll
-app.get('/api/config/maintenance', (req, res) => {
-  res.json({ maintenanceMode: MAINTENANCE_MODE });
+// Read-only maintenance mode status for the public frontend to poll.
+// Reads the admin-controlled DB setting (falls back to env/default).
+app.get('/api/config/maintenance-mode', async (req, res) => {
+  const maintenanceMode = await getMaintenanceMode();
+  res.json({ maintenanceMode });
+});
+
+// Deprecated alias - kept working for backward compatibility with any
+// existing callers of the original endpoint name. New code should use
+// /api/config/maintenance-mode above.
+app.get('/api/config/maintenance', async (req, res) => {
+  const maintenanceMode = await getMaintenanceMode();
+  res.json({ maintenanceMode });
+});
+
+// Admin: read current maintenance mode state and who last changed it
+app.get('/api/admin/settings/maintenance-mode', authenticateToken, async (req, res) => {
+  try {
+    const setting = await db.getAppSetting('maintenance_mode');
+    res.json({
+      maintenanceMode: setting ? setting.value === 'true' : MAINTENANCE_MODE_ENV_DEFAULT,
+      updatedAt: setting ? setting.updated_at : null,
+      updatedBy: setting ? setting.updated_by : null
+    });
+  } catch (error) {
+    console.error('Error fetching maintenance mode setting:', error);
+    res.status(500).json({ error: 'Failed to fetch maintenance mode setting' });
+  }
+});
+
+// Admin: turn maintenance mode ON/OFF. Persists to the database and takes
+// effect immediately for the public site - no code change or redeploy needed.
+app.patch('/api/admin/settings/maintenance-mode', authenticateToken, async (req, res) => {
+  try {
+    const { maintenanceMode } = req.body;
+    if (typeof maintenanceMode !== 'boolean') {
+      return res.status(400).json({ error: 'maintenanceMode must be a boolean' });
+    }
+
+    const updated = await db.setAppSetting(
+      'maintenance_mode',
+      maintenanceMode ? 'true' : 'false',
+      req.user.username
+    );
+
+    res.json({
+      maintenanceMode: updated.value === 'true',
+      updatedAt: updated.updated_at,
+      updatedBy: updated.updated_by
+    });
+  } catch (error) {
+    console.error('Error updating maintenance mode setting:', error);
+    res.status(500).json({ error: 'Failed to update maintenance mode setting' });
+  }
 });
 
 // Update only artwork USD price (admin override)

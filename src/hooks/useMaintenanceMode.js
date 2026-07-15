@@ -12,7 +12,7 @@ function useMaintenanceMode() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`${API_BASE_URL}/config/maintenance`)
+    fetch(`${API_BASE_URL}/config/maintenance-mode`)
       .then((res) => (res.ok ? res.json() : { maintenanceMode: false }))
       .then((data) => {
         if (!cancelled) setMaintenanceMode(!!data.maintenanceMode);
