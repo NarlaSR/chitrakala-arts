@@ -372,6 +372,9 @@ const AdminDashboard = () => {
           <button onClick={() => navigate('/ckk-secure-admin/review-queue')} className="btn-secondary">
             Review Queue
           </button>
+          <button onClick={() => navigate('/ckk-secure-admin/order-requests')} className="btn-secondary">
+            Order Requests
+          </button>
           <button onClick={() => navigate('/ckk-secure-admin/categories')} className="btn-secondary">
             Manage Categories
           </button>
