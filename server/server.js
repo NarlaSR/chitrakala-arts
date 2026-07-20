@@ -270,6 +270,20 @@ const validateEmail = (email) => {
   return typeof email === 'string' && email.length <= 254 && emailRegex.test(email);
 };
 
+// Escapes user-supplied text before interpolating it into an HTML email body.
+const sanitizeHTML = (str) => {
+  return String(str).replace(/[&<>"']/g, (match) => {
+    const escape = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return escape[match];
+  });
+};
+
 const validatePrice = (price) => {
   const num = parseFloat(price);
   return !isNaN(num) && num >= 0 && num <= 999999.99;
@@ -975,20 +989,6 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
     const envEmail = process.env.INQUIRY_EMAIL;
     const fallbackEmail = process.env.INQUIRY_EMAIL_FALLBACK;
     const recipientEmail = [envEmail || adminEmails[0] || 'chitrakala.sanskriti@gmail.com'];
-
-        // Sanitize user input to prevent XSS
-    const sanitizeHTML = (str) => {
-      return str.replace(/[&<>"']/g, (match) => {
-        const escape = {
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;'
-        };
-        return escape[match];
-      });
-    };
 
     const mailOptions = {
       from: 'Chitrakala Arts <onboarding@resend.dev>',
@@ -1771,6 +1771,64 @@ app.post(
 // no automatic status change) — it only reads artwork data to validate the
 // request and snapshot it at request time.
 
+// Best-effort business-owner notification for a newly created order request
+// (ORD-02). Reuses the same email infrastructure/recipient resolution as the
+// contact form. Never throws — a failure here must not lose the order
+// request, which has already been committed to the database by the time
+// this runs. Silently no-ops if RESEND_API_KEY isn't configured, so local
+// dev / environments without email still succeed at creating requests.
+async function sendOrderRequestNotificationEmail(orderRequest) {
+  try {
+    if (!process.env.RESEND_API_KEY) return;
+
+    const contactData = await db.getContact();
+    const adminEmails = contactData?.emails || ['chitrakala.sanskriti@gmail.com'];
+    const envEmail = process.env.INQUIRY_EMAIL;
+    const recipientEmail = [envEmail || adminEmails[0] || 'chitrakala.sanskriti@gmail.com'];
+
+    const itemsHtml = orderRequest.items.map(item => `
+      <li>
+        ${item.quantity} × ${sanitizeHTML(item.snapshot_title)}
+        ${item.snapshot_size_label ? ` (${sanitizeHTML(item.snapshot_size_label)})` : ''}
+        — ${item.snapshot_sku ? sanitizeHTML(item.snapshot_sku) : 'no SKU yet'} —
+        ${item.snapshot_price_inr != null ? `₹${item.snapshot_price_inr}` : 'Price on request'}
+        [${sanitizeHTML(item.snapshot_availability || '')}]
+      </li>`).join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #8b5a3c;">New Artwork Order Request #${orderRequest.id}</h2>
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Name:</strong> ${sanitizeHTML(orderRequest.customer_name)}</p>
+          <p><strong>Email:</strong> ${sanitizeHTML(orderRequest.customer_email)}</p>
+          <p><strong>Phone:</strong> ${orderRequest.customer_phone ? sanitizeHTML(orderRequest.customer_phone) : '—'}</p>
+          ${orderRequest.customer_message ? `<p><strong>Message:</strong> ${sanitizeHTML(orderRequest.customer_message)}</p>` : ''}
+        </div>
+        <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+          <p><strong>Requested items:</strong></p>
+          <ul>${itemsHtml}</ul>
+        </div>
+        <div style="margin-top: 20px; padding: 10px; background-color: #f9f9f9; border-radius: 5px; font-size: 12px; color: #666;">
+          <p>Review and update this request in the admin Order Requests screen.</p>
+        </div>
+      </div>`;
+
+    const result = await getResend().emails.send({
+      from: 'Chitrakala Arts <info@chitrakala-arts.com>',
+      to: recipientEmail,
+      replyTo: orderRequest.customer_email,
+      subject: `New Artwork Order Request #${orderRequest.id} from ${orderRequest.customer_name}`,
+      html,
+    });
+    if (result?.error) {
+      console.warn('Order request notification email failed (order request was still saved):', result.error);
+    }
+  } catch (error) {
+    // Logged only — never surfaced to the public submitter, and never blocks the response.
+    console.error('Order request notification email failed (order request was still saved):', error.message || error);
+  }
+}
+
 // POST /api/order-requests — public. Customers submit an inquiry for one or
 // more artworks/sizes. Every item is validated against the CURRENT public/
 // orderable artwork state; nothing here mutates artworks.
@@ -1860,6 +1918,10 @@ app.post('/api/order-requests', orderRequestLimiter, async (req, res) => {
       customer_message: message?.trim() || null,
       items: resolvedItems,
     });
+
+    // Best-effort only — errors are caught/logged inside this function and
+    // never affect the response below. The order request is already saved.
+    await sendOrderRequestNotificationEmail(orderRequest);
 
     res.status(201).json({
       message: 'Order request submitted successfully',

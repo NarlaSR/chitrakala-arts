@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useHomeView } from '../context/HomeViewContext';
-import { useWishlist } from '../context/WishlistContext';
+import { useRequestCart } from '../context/RequestCartContext';
 import { useCurrency } from '../context/CurrencyContext';
-import WishlistModal from './WishlistModal';
+import RequestCartModal from './RequestCartModal';
 import { Link } from 'react-router-dom';
 import { categoriesAPI } from '../services/api';
 import '../styles/Header.css';
@@ -16,8 +16,8 @@ const Header = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const { wishlist } = useWishlist();
-  const [showWishlist, setShowWishlist] = useState(false);
+  const { items: requestItems } = useRequestCart();
+  const [showRequestCart, setShowRequestCart] = useState(false);
   const { countryCode } = useCurrency();
 
   const isIndia = countryCode === 'IN';
@@ -70,17 +70,17 @@ const Header = () => {
           <Link to="/contact" onClick={() => setIsMenuOpen(false)}>Contact</Link>
           <span className="nav-divider">|</span>
           <button
-            className="wishlist-btn"
-            onClick={() => setShowWishlist(true)}
-            aria-label="View Wishlist"
+            className="request-cart-btn"
+            onClick={() => setShowRequestCart(true)}
+            aria-label="View Artwork Request"
           >
-            <span role="img" aria-label="wishlist">🛒</span>
-            {wishlist.length > 0 && (
-              <span className="wishlist-count">{wishlist.length}</span>
+            <span role="img" aria-label="artwork request">🛒</span>
+            {requestItems.length > 0 && (
+              <span className="request-cart-count">{requestItems.length}</span>
             )}
           </button>
         </nav>
-        <WishlistModal open={showWishlist} onClose={() => setShowWishlist(false)} />
+        <RequestCartModal open={showRequestCart} onClose={() => setShowRequestCart(false)} />
       </div>
     </header>
   );
