@@ -161,3 +161,46 @@ Tested locally: backend on `http://localhost:5000` (local Postgres via
 - ✅ No Inventory Preview or Inventory Apply was run.
 - ✅ No checkout/order functionality was added.
 - ✅ No production deploy was performed.
+
+---
+
+## Railway Staging Validation
+
+**Date:** 2026-07-21
+**Target:** `shinkansen.proxy.rlwy.net:41009` (Railway staging — NOT production `crossover.proxy.rlwy.net:54308`)
+**Branch tested:** `staging-test/web-maint-ord-validation` (WEB-MAINT-01 + ORD-01 + ORD-02 merged)
+**Result:** ✅ 18/18 assertions passed
+
+### Migration applied
+
+`app_settings` table created automatically via `initializeDatabase()` on server start.
+`INSERT ... ON CONFLICT DO NOTHING` seeded `maintenance_mode = 'false'`.
+Idempotent — re-running is a no-op.
+
+### Staging validation results
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 1 | `GET /api/config/maintenance-mode` → 200, `maintenanceMode: false` at start | ✅ |
+| 2 | `GET /api/admin/settings/maintenance-mode` → 200, `maintenanceMode: false` | ✅ |
+| 3 | `PATCH /api/admin/settings/maintenance-mode {maintenanceMode: true}` → 200, confirms ON | ✅ |
+| 4 | Public config endpoint immediately reflects ON | ✅ |
+| 5 | Admin settings endpoint accessible during maintenance | ✅ |
+| 6 | Admin reads ON correctly; `updatedBy` and `updatedAt` set | ✅ |
+| 7 | Public categories API responds during maintenance (API not gated) | ✅ |
+| 8 | Admin order requests accessible during maintenance | ✅ |
+| 9 | `PATCH {maintenanceMode: false}` → 200, confirms OFF | ✅ |
+| 10 | Public endpoint shows OFF after reset | ✅ |
+| 11 | Maintenance mode is OFF at end of all tests | ✅ |
+| 12 | Unauthenticated PATCH → 401/403 | ✅ |
+
+### Safety confirmations — staging validation
+
+- ✅ No production DB accessed (staging only)
+- ✅ No production migration run
+- ✅ No Inventory Preview / Apply run
+- ✅ No production import
+- ✅ No artwork, category, or pricing data modified
+- ✅ No price recalculation
+- ✅ Maintenance mode OFF at end of all tests
+- ✅ `server/.env` not staged or committed
