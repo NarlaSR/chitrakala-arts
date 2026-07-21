@@ -172,4 +172,24 @@ export const inventorySyncAPI = {
   },
 };
 
+// Order Requests (ORD-01 — admin viewing only; public submission has no UI yet)
+export const orderRequestsAPI = {
+  getAll: async (status = null) => {
+    const response = await api.get('/admin/order-requests', {
+      params: status ? { status } : {},
+    });
+    return response.data;
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/admin/order-requests/${id}`);
+    return response.data;
+  },
+
+  updateStatus: async (id, status) => {
+    const response = await api.patch(`/admin/order-requests/${id}/status`, { status });
+    return response.data;
+  },
+};
+
 export default api;

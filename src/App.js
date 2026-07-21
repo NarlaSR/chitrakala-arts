@@ -16,6 +16,7 @@ import AdminSettingsPage from './pages/AdminSettingsPage';
 import AdminCategoriesPage from './pages/AdminCategoriesPage';
 import AdminInventorySync from './pages/AdminInventorySync';
 import AdminReviewQueue from './pages/AdminReviewQueue';
+import AdminOrderRequests from './pages/AdminOrderRequests';
 import DebugEnv from './pages/DebugEnv';
 import Maintenance from './pages/Maintenance';
 import useMaintenanceMode from './hooks/useMaintenanceMode';
@@ -62,6 +63,7 @@ function App() {
             <Route path="/ckk-secure-admin/categories" element={<AdminCategoriesPage />} />
             <Route path="/ckk-secure-admin/inventory-sync" element={<AdminInventorySync />} />
             <Route path="/ckk-secure-admin/review-queue" element={<AdminReviewQueue />} />
+            <Route path="/ckk-secure-admin/order-requests" element={<AdminOrderRequests />} />
             <Route path="/debug-env" element={<DebugEnv />} />
 
             {/* Public Routes - gated by maintenance mode */}

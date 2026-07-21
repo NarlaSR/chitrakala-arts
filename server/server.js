@@ -269,6 +269,18 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Rate limiter for public order request submissions (spam/abuse prevention)
+const orderRequestLimiter =
+  process.env.NODE_ENV === 'production'
+    ? rateLimit({
+        windowMs: 60 * 60 * 1000, // 1 hour
+        max: 5,
+        message: { error: 'Too many order requests submitted. Please try again later.' },
+        standardHeaders: true,
+        legacyHeaders: false,
+      })
+    : (req, res, next) => next(); // Disable rate limit in development
+
 // Initialize default admin user in database
 const initializeDefaultAdmin = async () => {
   try {
@@ -301,6 +313,23 @@ const validateString = (str, minLength = 1, maxLength = 1000) => {
 const ALLOWED_ARTWORK_STATUSES = new Set([
   'NEEDS_REVIEW', 'IN_STOCK', 'MADE_TO_ORDER', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED',
 ]);
+
+// ── Order Request validation helpers (ORD-01) ─────────────────────────────
+
+const ALLOWED_ORDER_REQUEST_STATUSES = new Set([
+  'NEW', 'REVIEWING', 'QUOTE_SENT', 'CONFIRMED', 'CANCELLED', 'FULFILLED',
+]);
+
+const MAX_ORDER_REQUEST_ITEMS = 50;
+
+// Returns a positive integer quantity, defaulting to 1 when not supplied.
+// Returns null (invalid) for anything else.
+const validateItemQuantity = (val) => {
+  if (val === undefined || val === null || val === '') return 1;
+  const n = Number(val);
+  if (!Number.isInteger(n) || n < 1 || n > 999) return null;
+  return n;
+};
 
 // Valid SKU format: CKS-YYYY-(DM|LA|MM|WA|TA|MA|TD)-NNNNN (no size code).
 // Rejects old size-based format (CKS-DM-SM-2026-0001) and retired codes (MW).
@@ -1814,6 +1843,170 @@ app.post(
     });
   }
 );
+
+// ─── Order Request Routes (ORD-01) ──────────────────────────────────────────
+//
+// Foundation for customer artwork inquiries/order requests. This is NOT a
+// checkout flow: no payment, shipping, tax, or fulfillment logic lives here.
+// Creating a request never modifies artwork records (no quantity decrement,
+// no automatic status change) — it only reads artwork data to validate the
+// request and snapshot it at request time.
+
+// POST /api/order-requests — public. Customers submit an inquiry for one or
+// more artworks/sizes. Every item is validated against the CURRENT public/
+// orderable artwork state; nothing here mutates artworks.
+app.post('/api/order-requests', orderRequestLimiter, async (req, res) => {
+  try {
+    const { name, email, phone, message, items } = req.body;
+
+    if (!validateString(name, 2, 255)) {
+      return res.status(400).json({ error: 'Name must be between 2 and 255 characters' });
+    }
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    if (phone !== undefined && phone !== null && phone !== '' && !validateString(phone, 1, 50)) {
+      return res.status(400).json({ error: 'Phone must be less than 50 characters' });
+    }
+    if (message !== undefined && message !== null && message !== '' && !validateString(message, 1, 5000)) {
+      return res.status(400).json({ error: 'Message must be less than 5000 characters' });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
+    }
+    if (items.length > MAX_ORDER_REQUEST_ITEMS) {
+      return res.status(400).json({ error: `A single request cannot include more than ${MAX_ORDER_REQUEST_ITEMS} items` });
+    }
+
+    // Validate and snapshot each item against the CURRENT public/orderable
+    // artwork state. status IN_STOCK/MADE_TO_ORDER + show_on_website=true
+    // (enforced by db.getArtworkById(id, publicOnly=true)) is the only
+    // definition of "public/orderable" used anywhere in this endpoint.
+    const resolvedItems = [];
+    for (let i = 0; i < items.length; i++) {
+      const rawItem = items[i] || {};
+      const artworkId = rawItem.artwork_id;
+      if (!validateString(artworkId, 1, 50)) {
+        return res.status(400).json({ error: `Item ${i + 1}: artwork_id is required` });
+      }
+
+      const quantity = validateItemQuantity(rawItem.quantity);
+      if (quantity === null) {
+        return res.status(400).json({ error: `Item ${i + 1}: quantity must be a whole number between 1 and 999` });
+      }
+
+      const artwork = await db.getArtworkById(artworkId, true); // publicOnly=true
+      if (!artwork) {
+        return res.status(400).json({
+          error: `Item ${i + 1}: artwork "${artworkId}" is not a valid public/orderable artwork`,
+        });
+      }
+
+      let sizeMatch = null;
+      if (rawItem.artwork_size_id !== undefined && rawItem.artwork_size_id !== null && rawItem.artwork_size_id !== '') {
+        const sizeId = Number(rawItem.artwork_size_id);
+        if (!Number.isInteger(sizeId)) {
+          return res.status(400).json({ error: `Item ${i + 1}: artwork_size_id must be an integer` });
+        }
+        sizeMatch = await db.getArtworkSizeForArtwork(sizeId, artworkId);
+        if (!sizeMatch) {
+          return res.status(400).json({ error: `Item ${i + 1}: artwork_size_id does not belong to artwork "${artworkId}"` });
+        }
+      }
+
+      // artwork.sizes (enriched) already carries price_usd per size when a size is selected.
+      const enrichedSize = sizeMatch
+        ? artwork.sizes?.find(s => s.size_label === sizeMatch.size_label)
+        : null;
+
+      resolvedItems.push({
+        artwork_id: artwork.id,
+        artwork_size_id: sizeMatch ? sizeMatch.id : null,
+        quantity,
+        snapshot_sku: artwork.sku || null,
+        snapshot_title: artwork.title,
+        snapshot_category: artwork.category || null,
+        snapshot_size_label: sizeMatch ? sizeMatch.size_label : (artwork.dimensions || null),
+        snapshot_price_inr: sizeMatch ? sizeMatch.price : artwork.price_inr,
+        snapshot_price_usd: sizeMatch ? (enrichedSize?.price_usd ?? null) : artwork.price_usd,
+        snapshot_image: artwork.image || null,
+        snapshot_availability: artwork.status,
+      });
+    }
+
+    const orderRequest = await db.createOrderRequest({
+      customer_name: name.trim(),
+      customer_email: email.trim(),
+      customer_phone: phone?.trim() || null,
+      customer_message: message?.trim() || null,
+      items: resolvedItems,
+    });
+
+    res.status(201).json({
+      message: 'Order request submitted successfully',
+      orderRequest,
+    });
+  } catch (error) {
+    console.error('Error creating order request:', error);
+    res.status(500).json({ error: 'Failed to submit order request' });
+  }
+});
+
+// GET /api/admin/order-requests — admin only. Optional ?status= filter.
+app.get('/api/admin/order-requests', authenticateToken, async (req, res) => {
+  try {
+    const { status } = req.query;
+    if (status && !ALLOWED_ORDER_REQUEST_STATUSES.has(status)) {
+      return res.status(400).json({
+        error: `Invalid status filter. Allowed values: ${[...ALLOWED_ORDER_REQUEST_STATUSES].join(', ')}`,
+      });
+    }
+    const orderRequests = await db.getOrderRequestsAdmin(status || null);
+    res.json(orderRequests);
+  } catch (error) {
+    console.error('Error fetching order requests:', error);
+    res.status(500).json({ error: 'Failed to fetch order requests' });
+  }
+});
+
+// GET /api/admin/order-requests/:id — admin only. Full detail + line items.
+app.get('/api/admin/order-requests/:id', authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid order request id' });
+    }
+    const orderRequest = await db.getOrderRequestById(id);
+    if (!orderRequest) return res.status(404).json({ error: 'Order request not found' });
+    res.json(orderRequest);
+  } catch (error) {
+    console.error('Error fetching order request:', error);
+    res.status(500).json({ error: 'Failed to fetch order request' });
+  }
+});
+
+// PATCH /api/admin/order-requests/:id/status — admin only. Review-status change only;
+// never touches artworks (no quantity/status/SOLD/OUT_OF_STOCK side effects).
+app.patch('/api/admin/order-requests/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid order request id' });
+    }
+    const { status } = req.body;
+    if (!status || !ALLOWED_ORDER_REQUEST_STATUSES.has(status)) {
+      return res.status(400).json({
+        error: `Invalid or missing status. Allowed values: ${[...ALLOWED_ORDER_REQUEST_STATUSES].join(', ')}`,
+      });
+    }
+    const orderRequest = await db.updateOrderRequestStatus(id, status);
+    if (!orderRequest) return res.status(404).json({ error: 'Order request not found' });
+    res.json(orderRequest);
+  } catch (error) {
+    console.error('Error updating order request status:', error);
+    res.status(500).json({ error: 'Failed to update order request status' });
+  }
+});
 
 // 404 handler
 app.use((req, res) => {

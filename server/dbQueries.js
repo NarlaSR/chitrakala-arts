@@ -647,6 +647,111 @@ async function updateArtworkPriceUsd(id, priceUsd, fxRateUsed = null, multiplier
   return result.rows[0];
 }
 
+// ── Order Requests (ORD-01) ─────────────────────────────────────────────────
+
+// Confirms a given artwork_size_id actually belongs to the given artwork_id.
+async function getArtworkSizeForArtwork(sizeId, artworkId) {
+  const result = await pool.query(
+    'SELECT * FROM artwork_sizes WHERE id = $1 AND artwork_id = $2',
+    [sizeId, artworkId]
+  );
+  return result.rows[0] || null;
+}
+
+// Creates an order request and its line items in a single transaction.
+// `items` must already contain validated artwork/size references and
+// resolved snapshot_* fields — this function only persists them.
+async function createOrderRequest({ customer_name, customer_email, customer_phone, customer_message, items }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query(
+      `INSERT INTO order_requests (customer_name, customer_email, customer_phone, customer_message)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [customer_name, customer_email, customer_phone || null, customer_message || null]
+    );
+    const orderRequest = orderResult.rows[0];
+
+    const insertedItems = [];
+    for (const item of items) {
+      const itemResult = await client.query(
+        `INSERT INTO order_request_items (
+           order_request_id, artwork_id, artwork_size_id, quantity,
+           snapshot_sku, snapshot_title, snapshot_category, snapshot_size_label,
+           snapshot_price_inr, snapshot_price_usd, snapshot_image, snapshot_availability
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING *`,
+        [
+          orderRequest.id,
+          item.artwork_id,
+          item.artwork_size_id || null,
+          item.quantity,
+          item.snapshot_sku || null,
+          item.snapshot_title,
+          item.snapshot_category || null,
+          item.snapshot_size_label || null,
+          item.snapshot_price_inr,
+          item.snapshot_price_usd,
+          item.snapshot_image || null,
+          item.snapshot_availability || null,
+        ]
+      );
+      insertedItems.push(itemResult.rows[0]);
+    }
+
+    await client.query('COMMIT');
+    orderRequest.items = insertedItems;
+    return orderRequest;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Admin-facing: list requests with item counts, optionally filtered by status.
+async function getOrderRequestsAdmin(status = null) {
+  const query = status
+    ? `SELECT o.*, COUNT(i.id)::int AS item_count
+       FROM order_requests o
+       LEFT JOIN order_request_items i ON i.order_request_id = o.id
+       WHERE o.status = $1
+       GROUP BY o.id
+       ORDER BY o.created_at DESC`
+    : `SELECT o.*, COUNT(i.id)::int AS item_count
+       FROM order_requests o
+       LEFT JOIN order_request_items i ON i.order_request_id = o.id
+       GROUP BY o.id
+       ORDER BY o.created_at DESC`;
+  const result = await pool.query(query, status ? [status] : []);
+  return result.rows;
+}
+
+// Admin-facing: full detail for one request, including its line items.
+async function getOrderRequestById(id) {
+  const orderResult = await pool.query('SELECT * FROM order_requests WHERE id = $1', [id]);
+  const orderRequest = orderResult.rows[0];
+  if (!orderRequest) return null;
+
+  const itemsResult = await pool.query(
+    'SELECT * FROM order_request_items WHERE order_request_id = $1 ORDER BY id ASC',
+    [id]
+  );
+  orderRequest.items = itemsResult.rows;
+  return orderRequest;
+}
+
+async function updateOrderRequestStatus(id, status) {
+  const result = await pool.query(
+    `UPDATE order_requests SET status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+    [id, status]
+  );
+  return result.rows[0] || null;
+}
+
 module.exports = {
   getUsers,
   getUserByUsername,
@@ -687,4 +792,9 @@ module.exports = {
   updateArtworkFromInventory,
   updateArtworkStatus,
   updateArtworkSku,
+  getArtworkSizeForArtwork,
+  createOrderRequest,
+  getOrderRequestsAdmin,
+  getOrderRequestById,
+  updateOrderRequestStatus,
 };
