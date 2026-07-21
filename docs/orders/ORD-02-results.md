@@ -230,3 +230,54 @@ test submissions (deleted after each check):
   already exist.
 - Do not deploy until the ORD-01 and ORD-02 deployment order is confirmed
   with the site owner.
+
+---
+
+## Railway Staging Validation
+
+**Date:** 2026-07-21
+**Target:** `shinkansen.proxy.rlwy.net:41009` (Railway staging — NOT production `crossover.proxy.rlwy.net:54308`)
+**Branch tested:** `staging-test/web-maint-ord-validation` (WEB-MAINT-01 + ORD-01 + ORD-02 merged)
+**Result:** ✅ 22/22 assertions passed (status workflow + regression)
+
+### Status workflow validation
+
+All statuses tested in sequence on test order request ID 3:
+`NEW → REVIEWING → QUOTE_SENT → CONFIRMED → CANCELLED → FULFILLED`
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 1 | `PATCH /api/admin/order-requests/:id/status {status: "REVIEWING"}` → 200 | ✅ |
+| 2 | `PATCH {status: "QUOTE_SENT"}` → 200 | ✅ |
+| 3 | `PATCH {status: "CONFIRMED"}` → 200 | ✅ |
+| 4 | `PATCH {status: "CANCELLED"}` → 200 | ✅ |
+| 5 | Request still exists and retrievable after `CANCELLED` | ✅ |
+| 6 | Snapshots intact after all status changes | ✅ |
+| 7 | `PATCH {status: "FULFILLED"}` → 200 | ✅ |
+| 8 | Invalid status `DELETED` → 400/422 | ✅ |
+
+### Combined regression validation
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 9 | Public categories endpoint works, returns 4 (staging baseline) | ✅ |
+| 10 | All 7 categories unchanged | ✅ |
+| 11 | Public artworks unchanged (39 from API, 39 from DB) | ✅ |
+| 12 | Artwork detail endpoint works | ✅ |
+| 13 | Maintenance mode OFF at end of all tests | ✅ |
+| 14 | Admin order list accessible | ✅ |
+| 15 | Artwork count unchanged (67) | ✅ |
+| 16 | Category count unchanged (7) | ✅ |
+| 17 | Public artwork DB count unchanged (39) | ✅ |
+
+### Safety confirmations — staging validation
+
+- ✅ No production DB accessed (staging only)
+- ✅ No production migration run (ORD-02 requires none)
+- ✅ No Inventory Preview / Apply run
+- ✅ No production import
+- ✅ No artwork, category, or pricing data modified
+- ✅ No price recalculation
+- ✅ Maintenance mode OFF at end of all tests
+- ✅ Test order request deleted from staging — `order_requests` count: 0
+- ✅ `server/.env` not staged or committed
