@@ -204,3 +204,51 @@ Idempotent — re-running is a no-op.
 - ✅ No price recalculation
 - ✅ Maintenance mode OFF at end of all tests
 - ✅ `server/.env` not staged or committed
+
+---
+
+## Production Release
+
+**Date:** 2026-07-21
+**PR:** #19
+**Merge commit:** `3c7250d`
+**Railway backend:** `chitrakalaarts-production.up.railway.app` — auto-deployed on merge to `main`
+**Vercel frontend:** `www.chitrakala-arts.com` — auto-deployed on merge to `main`
+
+### Migration
+
+No manual migration step. `app_settings` table and seed created automatically via
+`initializeDatabase()` on first server start after deploy — same pattern as `pricing_settings`.
+The `CREATE TABLE IF NOT EXISTS` / `INSERT ... ON CONFLICT DO NOTHING` pattern ensures the
+deploy is safe to re-run against a database that already has the row.
+
+### Production smoke
+
+Manual browser verification by business owner immediately after Railway deploy:
+
+| Check | Result |
+|---|---|
+| Admin login on production | ✅ |
+| Admin → Site Settings → Maintenance Mode toggle OFF → ON | ✅ — page refreshed, public site showed maintenance message |
+| Maintenance Mode toggle ON → OFF | ✅ — public site returned to normal |
+| Maintenance mode confirmed OFF at end | ✅ |
+
+Railway deployment and Vercel frontend load also confirmed as part of the ORD-02 combined
+production smoke (see `ORD-02-results.md`):
+
+| Check | Result |
+|---|---|
+| `GET /api/health` | ✅ 200 `{"status":"ok"}` |
+| `GET /api/config/maintenance-mode` | ✅ `{"maintenanceMode":false}` |
+| `GET /` (Vercel frontend) | ✅ 200, React root present |
+
+### Safety confirmations — production release
+
+- ✅ No Inventory Preview / Apply run
+- ✅ No production import
+- ✅ No artwork, category, or pricing data modified
+- ✅ No price recalculation
+- ✅ Maintenance mode OFF at end of all verification
+- ✅ `server/.env` not staged or committed
+
+**Status: Done**

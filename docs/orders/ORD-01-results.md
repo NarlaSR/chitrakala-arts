@@ -290,3 +290,63 @@ Indexes: `idx_order_requests_status`, `idx_order_requests_created_at`, `idx_orde
 - ✅ No price recalculation
 - ✅ Test order request (ID 3) deleted from staging after validation — staging `order_requests` count: 0
 - ✅ `server/.env` not staged or committed
+
+---
+
+## Production Release
+
+**Date:** 2026-07-21
+**PR:** #20
+**Merge commit:** `09f3d53`
+**Railway backend:** `chitrakalaarts-production.up.railway.app` — auto-deployed on merge to `main`
+**Vercel frontend:** `www.chitrakala-arts.com` — auto-deployed on merge to `main`
+
+### Pre-deploy backup
+
+Production database backed up before migration:
+- **File:** `chitrakala_prod_backup_2026-07-21T19-57-40.dump` (12.07 MB, pg_dump custom format)
+- **Tool:** `pg_dump` via `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe`
+- **Verified:** `pg_restore --list` confirmed backup is valid and restorable
+
+### Migration run on production
+
+```
+node server/runMigration.js migrate_ord01_order_requests.sql
+```
+
+Run against `crossover.proxy.rlwy.net:54308` (production). All statements use
+`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` — idempotent, safe to re-run.
+
+| Table / Index | Result |
+|---|---|
+| `order_requests` table | ✅ Created |
+| `order_request_items` table | ✅ Created |
+| `idx_order_requests_status` | ✅ Created |
+| `idx_order_requests_created_at` | ✅ Created |
+| `idx_order_request_items_order_request_id` | ✅ Created |
+| `idx_order_request_items_artwork_id` | ✅ Created |
+
+Post-migration baseline confirmed: **38 public artworks, 5 public categories — unchanged**.
+
+### Production endpoints verified (combined ORD-02 smoke, see `ORD-02-results.md`)
+
+| Check | Result |
+|---|---|
+| `POST /api/order-requests` → 201, order ID returned | ✅ |
+| `GET /api/admin/order-requests` → 200, list accessible | ✅ |
+| `GET /api/admin/order-requests/:id` → 200, items + snapshots present | ✅ |
+| `PATCH /api/admin/order-requests/:id/status` → 200, status updated | ✅ |
+| Artwork count unchanged after order creation | ✅ |
+
+### Safety confirmations — production release
+
+- ✅ Pre-deploy production backup taken before migration
+- ✅ Migration is idempotent (`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`)
+- ✅ Migration does NOT alter `artworks`, `artwork_sizes`, or `categories`
+- ✅ No Inventory Preview / Apply run
+- ✅ No production import
+- ✅ No artwork, category, or pricing data modified
+- ✅ No price recalculation
+- ✅ `server/.env` not staged or committed
+
+**Status: Done**

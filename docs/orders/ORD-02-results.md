@@ -281,3 +281,65 @@ All statuses tested in sequence on test order request ID 3:
 - ✅ Maintenance mode OFF at end of all tests
 - ✅ Test order request deleted from staging — `order_requests` count: 0
 - ✅ `server/.env` not staged or committed
+
+---
+
+## Production Release
+
+**Date:** 2026-07-21
+**PR:** #22 (`feature/ORD-01-order-request-foundation` → `main`, stacked PR fix)
+**Merge commit:** `2a37339`
+**Railway backend:** `chitrakalaarts-production.up.railway.app` — auto-deployed on merge to `main`
+**Vercel frontend:** `www.chitrakala-arts.com` — auto-deployed on merge to `main`
+
+### Note on stacking
+
+ORD-02 was originally PR #21 (`feature/ORD-02-public-order-request-flow` → `feature/ORD-01-order-request-foundation`),
+created as a stacked PR while ORD-01 was pending. After ORD-01 merged (PR #20), PR #21 was
+merged into the now-stale ORD-01 feature branch. PR #22 was opened to land those 4 commits on
+`main` directly — that is the effective production deploy for ORD-02.
+
+### Migration
+
+No migration required. ORD-02 is entirely frontend + one `SELECT` widening in `dbQueries.js`
+(`getArtworkSizes` now returns `id`). The `order_requests` / `order_request_items` tables
+were already on production from the ORD-01 migration.
+
+### Production smoke — 17/17 passed
+
+**Tested against:** `chitrakalaarts-production.up.railway.app` + `www.chitrakala-arts.com`
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 1 | `GET /api/health` → 200 `{"status":"ok"}` | ✅ |
+| 2 | `GET /api/config/maintenance-mode` → `maintenanceMode: false` | ✅ |
+| 3 | `GET /api/categories` → count ≥ 5 | ✅ |
+| 4 | `GET /api/artworks` → count ≥ 38 | ✅ |
+| 5 | Public artworks only `IN_STOCK` status | ✅ |
+| 6 | Admin login (`POST /api/auth/login`) → token issued | ✅ |
+| 7 | `GET /api/admin/order-requests` → 200, list accessible | ✅ |
+| 8 | `POST /api/order-requests` → 201, order ID returned | ✅ (order ID 2) |
+| 9 | `GET /api/admin/order-requests/:id` → 200, detail correct | ✅ |
+| 10 | Order has items | ✅ |
+| 11 | Order status is `NEW` | ✅ |
+| 12 | `snapshot_title` populated at request time | ✅ |
+| 13 | `PATCH .../status {status: "REVIEWING"}` → 200 | ✅ |
+| 14 | Test order `CANCELLED` (cleanup) | ✅ |
+| 15 | Artwork count unchanged after order creation | ✅ |
+| 16 | Vercel frontend → 200 | ✅ |
+| 17 | Vercel frontend has React root | ✅ |
+
+Test orders: IDs 1 (from initial failed run) and 2 (from smoke) — both `CANCELLED` after validation.
+
+### Safety confirmations — production release
+
+- ✅ No migration required or run
+- ✅ No Inventory Preview / Apply run
+- ✅ No production import
+- ✅ No artwork, category, or pricing data modified
+- ✅ No price recalculation
+- ✅ Maintenance mode confirmed OFF throughout
+- ✅ Test order records `CANCELLED` after smoke (IDs 1 and 2)
+- ✅ `server/.env` not staged or committed
+
+**Status: Done**
