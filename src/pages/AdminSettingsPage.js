@@ -36,9 +36,16 @@ const AdminSettingsPage = () => {
   const [fetchingFxRate, setFetchingFxRate] = useState(false);
   const [recalculatingPrices, setRecalculatingPrices] = useState(false);
 
+  // Maintenance mode state
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceInfo, setMaintenanceInfo] = useState({ updatedAt: null, updatedBy: null });
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
+  const [loadingMaintenance, setLoadingMaintenance] = useState(true);
+
   useEffect(() => {
     fetchSettings();
     fetchPricingSettings();
+    fetchMaintenanceMode();
   }, []);
 
   const fetchSettings = async () => {
@@ -282,6 +289,66 @@ const AdminSettingsPage = () => {
     }
   };
 
+  // Maintenance mode functions
+  const fetchMaintenanceMode = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/admin/settings/maintenance-mode`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMaintenanceMode(!!data.maintenanceMode);
+        setMaintenanceInfo({ updatedAt: data.updatedAt, updatedBy: data.updatedBy });
+      }
+    } catch (error) {
+      console.error('Error fetching maintenance mode:', error);
+    } finally {
+      setLoadingMaintenance(false);
+    }
+  };
+
+  const handleToggleMaintenanceMode = async () => {
+    const nextValue = !maintenanceMode;
+
+    if (nextValue) {
+      const confirmed = window.confirm(
+        'Turn on maintenance mode for the public website? Admin access will remain available.'
+      );
+      if (!confirmed) return;
+    }
+
+    setSavingMaintenance(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/admin/settings/maintenance-mode`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ maintenanceMode: nextValue })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMaintenanceMode(!!data.maintenanceMode);
+        setMaintenanceInfo({ updatedAt: data.updatedAt, updatedBy: data.updatedBy });
+        alert(`Maintenance mode turned ${data.maintenanceMode ? 'ON' : 'OFF'}. This takes effect immediately - no redeploy needed.`);
+      } else {
+        alert('Failed to update maintenance mode');
+      }
+    } catch (error) {
+      console.error('Error updating maintenance mode:', error);
+      alert('Error updating maintenance mode');
+    } finally {
+      setSavingMaintenance(false);
+    }
+  };
+
   if (loading) {
     return <div className="admin-settings-loading">Loading settings...</div>;
   }
@@ -456,6 +523,34 @@ const AdminSettingsPage = () => {
             />
             <small>Recommended: 150px × 40px, PNG with transparent background, max 2MB</small>
           </div>
+        </section>
+
+        {/* Maintenance Mode */}
+        <section className="settings-section">
+          <div className="section-header">
+            <h2>Maintenance Mode</h2>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={maintenanceMode}
+                disabled={loadingMaintenance || savingMaintenance}
+                onChange={handleToggleMaintenanceMode}
+              />
+              <span>Maintenance Mode {maintenanceMode ? 'ON' : 'OFF'}</span>
+            </label>
+          </div>
+          <p className="section-description">
+            When enabled, public visitors will see a temporary maintenance message instead of the
+            homepage, gallery, or artwork pages. Admin login and the admin dashboard remain
+            available. Changes take effect immediately for the public site - no code changes or
+            redeploy required.
+          </p>
+          {maintenanceInfo.updatedAt && (
+            <small>
+              Last changed: {new Date(maintenanceInfo.updatedAt).toLocaleString()}
+              {maintenanceInfo.updatedBy ? ` by ${maintenanceInfo.updatedBy}` : ''}
+            </small>
+          )}
         </section>
 
         {/* Pricing Settings */}
