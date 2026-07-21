@@ -94,8 +94,11 @@ async function addArtworkSizes(artworkId, sizesArray) {
   await pool.query(query);
 }
 
+// `id` is included (not just size_label/price) so callers — including the
+// public artwork API — can reference a specific size row as
+// order_request_items.artwork_size_id (ORD-02).
 async function getArtworkSizes(artworkId) {
-  const result = await pool.query('SELECT size_label, price FROM artwork_sizes WHERE artwork_id = $1 ORDER BY price ASC', [artworkId]);
+  const result = await pool.query('SELECT id, size_label, price FROM artwork_sizes WHERE artwork_id = $1 ORDER BY price ASC', [artworkId]);
   return result.rows;
 }
 

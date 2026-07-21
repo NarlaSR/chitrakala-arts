@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useWishlist } from '../context/WishlistContext';
+import { useRequestCart } from '../context/RequestCartContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useParams, Link } from 'react-router-dom';
 import { artworksAPI, categoriesAPI } from '../services/api';
@@ -11,9 +11,14 @@ const ArtDetails = () => {
   const [artwork, setArtwork] = useState(null);
   const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { addToWishlist, wishlist } = useWishlist();
+  const { addToRequest, isInRequest } = useRequestCart();
   const { countryCode } = useCurrency();
   const [showToast, setShowToast] = useState(false);
+  const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
+
+  useEffect(() => {
+    setSelectedSizeIdx(0);
+  }, [artId]);
 
   useEffect(() => {
     const loadArtwork = async () => {
@@ -75,6 +80,29 @@ const ArtDetails = () => {
     ? `${artwork.image}?t=${artwork.updatedAt || Date.now()}`
     : '/assets/images/placeholder.jpg';
 
+  // Multi-size artworks require the customer to pick which size they're
+  // requesting so the correct artwork_size_id (and its own price) is sent.
+  const hasSizes = Array.isArray(artwork.sizes) && artwork.sizes.length > 0;
+  const selectedSize = hasSizes ? artwork.sizes[selectedSizeIdx] || artwork.sizes[0] : null;
+  const cartArtworkSizeId = selectedSize ? selectedSize.id : null;
+  const alreadyInRequest = isInRequest(artwork.id, cartArtworkSizeId);
+
+  const handleAddToRequest = () => {
+    addToRequest({
+      artwork_id: artwork.id,
+      artwork_size_id: cartArtworkSizeId,
+      title: artwork.title,
+      image: artwork.image || null,
+      category: categoryLabel,
+      size_label: hasSizes ? selectedSize.size_label : (artwork.dimensions || null),
+      availability: artwork.status,
+      price_inr: hasSizes ? (selectedSize.price ?? null) : (artwork.price_inr ?? artwork.price ?? null),
+      price_usd: hasSizes ? (selectedSize.price_usd ?? null) : (artwork.price_usd ?? null),
+    });
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2000);
+  };
+
   return (
     <div className="art-details">
       <div className="container">
@@ -97,8 +125,10 @@ const ArtDetails = () => {
           <div className="art-details-info">
             <div className="art-category-badge">{categoryLabel}</div>
             <h1 className="art-title">{artwork.title}</h1>
-            {artwork.status === 'MADE_TO_ORDER' && (
+            {artwork.status === 'MADE_TO_ORDER' ? (
               <div className="art-availability-label art-availability--mto">Made to Order</div>
+            ) : (
+              <div className="art-availability-label art-availability--instock">Available</div>
             )}
 
             {/* Show all sizes/prices */}
@@ -175,21 +205,41 @@ const ArtDetails = () => {
               </ul>
             </div>
 
+            {hasSizes && artwork.sizes.length > 1 && (
+              <div className="art-size-selector">
+                <label htmlFor="request-size-select">
+                  <strong>Choose a size to request:</strong>
+                </label>
+                <select
+                  id="request-size-select"
+                  value={selectedSizeIdx}
+                  onChange={(e) => setSelectedSizeIdx(Number(e.target.value))}
+                >
+                  {artwork.sizes.map((sp, idx) => {
+                    const optionPrice = countryCode === 'IN'
+                      ? (sp.price != null ? formatPrice(sp.price, 'INR') : 'Price on request')
+                      : (sp.price_usd != null ? formatPrice(sp.price_usd, 'USD') : 'Price on request');
+                    return (
+                      <option key={idx} value={idx}>
+                        {sp.size_label} — {optionPrice}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+
             <div className="art-actions">
               <button
                 className="btn-secondary"
-                onClick={() => {
-                  addToWishlist(artwork);
-                  setShowToast(true);
-                  setTimeout(() => setShowToast(false), 2000);
-                }}
-                disabled={wishlist.some(item => item.id === artwork.id)}
+                onClick={handleAddToRequest}
+                disabled={alreadyInRequest}
               >
-                {wishlist.some(item => item.id === artwork.id) ? 'Added to Wishlist' : 'Add to Wishlist'}
+                {alreadyInRequest ? 'Added to Request' : 'Add to Request'}
               </button>
             </div>
             {showToast && (
-              <div className="wishlist-toast">Added to Wishlist!</div>
+              <div className="request-toast">Added to your artwork request!</div>
             )}
 
             <div className="art-note">

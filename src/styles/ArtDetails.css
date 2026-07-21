@@ -75,6 +75,44 @@
   border: 1px solid #ffd591;
 }
 
+.art-availability--instock {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.art-size-selector {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.art-size-selector label {
+  color: var(--text-dark);
+  font-size: 0.95rem;
+}
+
+.art-size-selector select {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: var(--white, #fff);
+  max-width: 100%;
+}
+
+.request-toast {
+  margin-top: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: #dcfce7;
+  color: #15803d;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .art-price {
   display: flex;
   align-items: baseline;
