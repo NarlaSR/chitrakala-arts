@@ -31,6 +31,26 @@ if (JWT_SECRET === 'your-secret-key-change-in-production') {
 // Check if using database or JSON files
 const USE_DATABASE = !!process.env.DATABASE_URL;
 
+// Public website maintenance mode. The admin-controlled app_settings value
+// ("maintenance_mode" key) is the primary source of truth so the site owner
+// can toggle it from the admin UI with no code change or redeploy. The
+// MAINTENANCE_MODE env var is only a fallback/default, used if no DB value
+// has been set yet or if the DB read itself fails. Only the exact string
+// "true" is ever treated as enabled.
+const MAINTENANCE_MODE_ENV_DEFAULT = process.env.MAINTENANCE_MODE === 'true';
+
+async function getMaintenanceMode() {
+  try {
+    const setting = await db.getAppSetting('maintenance_mode');
+    if (setting) {
+      return setting.value === 'true';
+    }
+  } catch (error) {
+    console.error('Error reading maintenance_mode setting, falling back to env default:', error);
+  }
+  return MAINTENANCE_MODE_ENV_DEFAULT;
+}
+
 // Trust Railway proxy to get correct IP addresses for rate limiting
 app.set('trust proxy', 1);
 
@@ -89,6 +109,67 @@ app.use((req, res, next) => {
 // Body parsing middleware - must be before any routes that read req.body
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Health/status endpoint - always accessible, including during maintenance mode
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Read-only maintenance mode status for the public frontend to poll.
+// Reads the admin-controlled DB setting (falls back to env/default).
+app.get('/api/config/maintenance-mode', async (req, res) => {
+  const maintenanceMode = await getMaintenanceMode();
+  res.json({ maintenanceMode });
+});
+
+// Deprecated alias - kept working for backward compatibility with any
+// existing callers of the original endpoint name. New code should use
+// /api/config/maintenance-mode above.
+app.get('/api/config/maintenance', async (req, res) => {
+  const maintenanceMode = await getMaintenanceMode();
+  res.json({ maintenanceMode });
+});
+
+// Admin: read current maintenance mode state and who last changed it
+app.get('/api/admin/settings/maintenance-mode', authenticateToken, async (req, res) => {
+  try {
+    const setting = await db.getAppSetting('maintenance_mode');
+    res.json({
+      maintenanceMode: setting ? setting.value === 'true' : MAINTENANCE_MODE_ENV_DEFAULT,
+      updatedAt: setting ? setting.updated_at : null,
+      updatedBy: setting ? setting.updated_by : null
+    });
+  } catch (error) {
+    console.error('Error fetching maintenance mode setting:', error);
+    res.status(500).json({ error: 'Failed to fetch maintenance mode setting' });
+  }
+});
+
+// Admin: turn maintenance mode ON/OFF. Persists to the database and takes
+// effect immediately for the public site - no code change or redeploy needed.
+app.patch('/api/admin/settings/maintenance-mode', authenticateToken, async (req, res) => {
+  try {
+    const { maintenanceMode } = req.body;
+    if (typeof maintenanceMode !== 'boolean') {
+      return res.status(400).json({ error: 'maintenanceMode must be a boolean' });
+    }
+
+    const updated = await db.setAppSetting(
+      'maintenance_mode',
+      maintenanceMode ? 'true' : 'false',
+      req.user.username
+    );
+
+    res.json({
+      maintenanceMode: updated.value === 'true',
+      updatedAt: updated.updated_at,
+      updatedBy: updated.updated_by
+    });
+  } catch (error) {
+    console.error('Error updating maintenance mode setting:', error);
+    res.status(500).json({ error: 'Failed to update maintenance mode setting' });
+  }
+});
 
 // Update only artwork USD price (admin override)
 app.put('/api/artworks/:id/price', authenticateToken, async (req, res) => {
@@ -268,6 +349,20 @@ const validateQuantity = (val) => {
 const validateEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return typeof email === 'string' && email.length <= 254 && emailRegex.test(email);
+};
+
+// Escapes user-supplied text before interpolating it into an HTML email body.
+const sanitizeHTML = (str) => {
+  return String(str).replace(/[&<>"']/g, (match) => {
+    const escape = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return escape[match];
+  });
 };
 
 const validatePrice = (price) => {
@@ -975,20 +1070,6 @@ app.post('/api/contact/send-message', contactLimiter, async (req, res) => {
     const envEmail = process.env.INQUIRY_EMAIL;
     const fallbackEmail = process.env.INQUIRY_EMAIL_FALLBACK;
     const recipientEmail = [envEmail || adminEmails[0] || 'chitrakala.sanskriti@gmail.com'];
-
-        // Sanitize user input to prevent XSS
-    const sanitizeHTML = (str) => {
-      return str.replace(/[&<>"']/g, (match) => {
-        const escape = {
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;'
-        };
-        return escape[match];
-      });
-    };
 
     const mailOptions = {
       from: 'Chitrakala Arts <onboarding@resend.dev>',
@@ -1771,6 +1852,64 @@ app.post(
 // no automatic status change) — it only reads artwork data to validate the
 // request and snapshot it at request time.
 
+// Best-effort business-owner notification for a newly created order request
+// (ORD-02). Reuses the same email infrastructure/recipient resolution as the
+// contact form. Never throws — a failure here must not lose the order
+// request, which has already been committed to the database by the time
+// this runs. Silently no-ops if RESEND_API_KEY isn't configured, so local
+// dev / environments without email still succeed at creating requests.
+async function sendOrderRequestNotificationEmail(orderRequest) {
+  try {
+    if (!process.env.RESEND_API_KEY) return;
+
+    const contactData = await db.getContact();
+    const adminEmails = contactData?.emails || ['chitrakala.sanskriti@gmail.com'];
+    const envEmail = process.env.INQUIRY_EMAIL;
+    const recipientEmail = [envEmail || adminEmails[0] || 'chitrakala.sanskriti@gmail.com'];
+
+    const itemsHtml = orderRequest.items.map(item => `
+      <li>
+        ${item.quantity} × ${sanitizeHTML(item.snapshot_title)}
+        ${item.snapshot_size_label ? ` (${sanitizeHTML(item.snapshot_size_label)})` : ''}
+        — ${item.snapshot_sku ? sanitizeHTML(item.snapshot_sku) : 'no SKU yet'} —
+        ${item.snapshot_price_inr != null ? `₹${item.snapshot_price_inr}` : 'Price on request'}
+        [${sanitizeHTML(item.snapshot_availability || '')}]
+      </li>`).join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #8b5a3c;">New Artwork Order Request #${orderRequest.id}</h2>
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Name:</strong> ${sanitizeHTML(orderRequest.customer_name)}</p>
+          <p><strong>Email:</strong> ${sanitizeHTML(orderRequest.customer_email)}</p>
+          <p><strong>Phone:</strong> ${orderRequest.customer_phone ? sanitizeHTML(orderRequest.customer_phone) : '—'}</p>
+          ${orderRequest.customer_message ? `<p><strong>Message:</strong> ${sanitizeHTML(orderRequest.customer_message)}</p>` : ''}
+        </div>
+        <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+          <p><strong>Requested items:</strong></p>
+          <ul>${itemsHtml}</ul>
+        </div>
+        <div style="margin-top: 20px; padding: 10px; background-color: #f9f9f9; border-radius: 5px; font-size: 12px; color: #666;">
+          <p>Review and update this request in the admin Order Requests screen.</p>
+        </div>
+      </div>`;
+
+    const result = await getResend().emails.send({
+      from: 'Chitrakala Arts <info@chitrakala-arts.com>',
+      to: recipientEmail,
+      replyTo: orderRequest.customer_email,
+      subject: `New Artwork Order Request #${orderRequest.id} from ${orderRequest.customer_name}`,
+      html,
+    });
+    if (result?.error) {
+      console.warn('Order request notification email failed (order request was still saved):', result.error);
+    }
+  } catch (error) {
+    // Logged only — never surfaced to the public submitter, and never blocks the response.
+    console.error('Order request notification email failed (order request was still saved):', error.message || error);
+  }
+}
+
 // POST /api/order-requests — public. Customers submit an inquiry for one or
 // more artworks/sizes. Every item is validated against the CURRENT public/
 // orderable artwork state; nothing here mutates artworks.
@@ -1860,6 +1999,10 @@ app.post('/api/order-requests', orderRequestLimiter, async (req, res) => {
       customer_message: message?.trim() || null,
       items: resolvedItems,
     });
+
+    // Best-effort only — errors are caught/logged inside this function and
+    // never affect the response below. The order request is already saved.
+    await sendOrderRequestNotificationEmail(orderRequest);
 
     res.status(201).json({
       message: 'Order request submitted successfully',

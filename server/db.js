@@ -140,10 +140,30 @@ async function initializeDatabase() {
 
     // Insert default pricing settings if they don't exist
     await client.query(`
-      INSERT INTO pricing_settings (key, value) 
-      VALUES 
+      INSERT INTO pricing_settings (key, value)
+      VALUES
         ('fx_rate', '83'),
         ('usd_multiplier', '1.75')
+      ON CONFLICT (key) DO NOTHING
+    `);
+
+    // Create app_settings table for general admin-controlled toggles
+    // (e.g. maintenance mode) - separate from pricing_settings since these
+    // control site behavior, not currency/pricing math.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_by VARCHAR(100)
+      )
+    `);
+
+    // Insert default maintenance mode (off) if not already set. Safe to
+    // re-run: does nothing if an admin has already set a value.
+    await client.query(`
+      INSERT INTO app_settings (key, value)
+      VALUES ('maintenance_mode', 'false')
       ON CONFLICT (key) DO NOTHING
     `);
 

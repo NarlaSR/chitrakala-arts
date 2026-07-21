@@ -94,8 +94,11 @@ async function addArtworkSizes(artworkId, sizesArray) {
   await pool.query(query);
 }
 
+// `id` is included (not just size_label/price) so callers — including the
+// public artwork API — can reference a specific size row as
+// order_request_items.artwork_size_id (ORD-02).
 async function getArtworkSizes(artworkId) {
-  const result = await pool.query('SELECT size_label, price FROM artwork_sizes WHERE artwork_id = $1 ORDER BY price ASC', [artworkId]);
+  const result = await pool.query('SELECT id, size_label, price FROM artwork_sizes WHERE artwork_id = $1 ORDER BY price ASC', [artworkId]);
   return result.rows;
 }
 
@@ -615,6 +618,26 @@ async function updatePricingSettings(settings) {
   }
 }
 
+async function getAppSetting(key) {
+  const result = await pool.query(
+    'SELECT value, updated_at, updated_by FROM app_settings WHERE key = $1',
+    [key]
+  );
+  return result.rows[0];
+}
+
+async function setAppSetting(key, value, updatedBy = null) {
+  const result = await pool.query(
+    `INSERT INTO app_settings (key, value, updated_at, updated_by)
+     VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
+     ON CONFLICT (key)
+     DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP, updated_by = $3
+     RETURNING value, updated_at, updated_by`,
+    [key, value, updatedBy]
+  );
+  return result.rows[0];
+}
+
 // Update only the USD price (admin override)
 async function updateArtworkPriceUsd(id, priceUsd, fxRateUsed = null, multiplierUsed = null) {
   const result = await pool.query(
@@ -764,6 +787,8 @@ module.exports = {
   getPricingSettings,
   updatePricingSetting,
   updatePricingSettings,
+  getAppSetting,
+  setAppSetting,
   updateArtworkPriceUsd,
   getArtworkBySku,
   createArtworkFromInventory,

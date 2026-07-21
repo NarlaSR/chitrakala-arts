@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './styles/index.css';
 
 import App from './App';
-import { WishlistProvider } from './context/WishlistContext';
+import { RequestCartProvider } from './context/RequestCartContext';
 import { HomeViewProvider } from './context/HomeViewContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 
@@ -11,11 +11,11 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <CurrencyProvider>
-      <WishlistProvider>
+      <RequestCartProvider>
         <HomeViewProvider>
           <App />
         </HomeViewProvider>
-      </WishlistProvider>
+      </RequestCartProvider>
     </CurrencyProvider>
   </React.StrictMode>
 );

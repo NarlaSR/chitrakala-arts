@@ -172,8 +172,14 @@ export const inventorySyncAPI = {
   },
 };
 
-// Order Requests (ORD-01 — admin viewing only; public submission has no UI yet)
+// Order Requests (ORD-01 admin viewing + ORD-02 public submission)
 export const orderRequestsAPI = {
+  // Public: submit a new order request. { name, email, phone?, message?, items: [{ artwork_id, artwork_size_id?, quantity? }] }
+  create: async (payload) => {
+    const response = await api.post('/order-requests', payload);
+    return response.data;
+  },
+
   getAll: async (status = null) => {
     const response = await api.get('/admin/order-requests', {
       params: status ? { status } : {},
