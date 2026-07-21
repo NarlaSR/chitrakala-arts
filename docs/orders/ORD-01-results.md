@@ -228,3 +228,65 @@ Cart, checkout, payment, shipping calculation, tax calculation, fulfillment,
 email automation, inventory decrement, automatic artwork status changes, and
 any public-facing "submit an inquiry" UI (the public creation endpoint
 exists for a future ticket to build against; no public form was added here).
+
+---
+
+## Railway Staging Validation
+
+**Date:** 2026-07-21
+**Target:** `shinkansen.proxy.rlwy.net:41009` (Railway staging — NOT production `crossover.proxy.rlwy.net:54308`)
+**Branch tested:** `staging-test/web-maint-ord-validation` (WEB-MAINT-01 + ORD-01 + ORD-02 merged)
+**Result:** ✅ 26/26 assertions passed
+
+### Migration applied
+
+```
+node server/runMigration.js migrate_ord01_order_requests.sql
+```
+
+All statements use `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` — idempotent.
+Does not alter `artworks`, `artwork_sizes`, or `categories`.
+Staging baseline confirmed before and after: **67 artworks, 7 categories, 39 public artworks — unchanged**.
+
+### Tables verified
+
+| Table | Exists | Columns |
+|-------|--------|---------|
+| `order_requests` | ✅ | id, customer_name, customer_email, customer_phone, customer_message, status, created_at, updated_at |
+| `order_request_items` | ✅ | id, order_request_id, artwork_id, artwork_size_id, quantity, snapshot_sku, snapshot_title, snapshot_category, snapshot_size_label, snapshot_price_inr, snapshot_price_usd, snapshot_image, snapshot_availability, created_at |
+
+Indexes: `idx_order_requests_status`, `idx_order_requests_created_at`, `idx_order_request_items_order_request_id`, `idx_order_request_items_artwork_id`
+
+### Staging validation results
+
+| # | Assertion | Result |
+|---|-----------|--------|
+| 1 | `GET /api/admin/order-requests` → 200, returns array | ✅ |
+| 2 | `POST /api/order-requests` with IN_STOCK artwork → 201, order ID returned | ✅ |
+| 3 | Order list grew by 1 after creation | ✅ |
+| 4 | `GET /api/admin/order-requests/:id` → 200, items array present | ✅ |
+| 5 | Item count is 1 | ✅ |
+| 6 | `snapshot_title` present and correct | ✅ (`"SKU-STAG-TEST S12a"`) |
+| 7 | `snapshot_category` present | ✅ (`"lippan-art"`) |
+| 8 | `snapshot_availability` is `IN_STOCK` or `MADE_TO_ORDER` | ✅ (`"IN_STOCK"`) |
+| 9 | `artwork_id` matches requested artwork | ✅ |
+| 10 | Order status starts as `NEW` | ✅ |
+| 11 | Snapshot prices captured: `price_inr=500.00`, `price_usd=12.00` | ✅ |
+| 12 | Artwork status unchanged after request creation | ✅ |
+| 13 | Artwork `show_on_website` unchanged after request creation | ✅ |
+| 14 | Admin list without auth → 401/403 | ✅ |
+| 15 | `NEEDS_REVIEW` artwork rejected (`400: not a valid public/orderable artwork`) | ✅ |
+| 16 | `show_on_website=false` artwork rejected | ✅ |
+
+**Test order record created:** ID 3 (staging only, deleted after validation).
+
+### Safety confirmations — staging validation
+
+- ✅ No production DB accessed (staging only)
+- ✅ No production migration run
+- ✅ No Inventory Preview / Apply run
+- ✅ No production import
+- ✅ No artwork, category, or pricing data modified
+- ✅ No price recalculation
+- ✅ Test order request (ID 3) deleted from staging after validation — staging `order_requests` count: 0
+- ✅ `server/.env` not staged or committed
