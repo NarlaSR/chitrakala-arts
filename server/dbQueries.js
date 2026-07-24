@@ -282,7 +282,7 @@ async function createArtworkFromInventory(data, client) {
   return result.rows[0];
 }
 
-// Patch an existing artwork by SKU from an inventory import.
+// Patch an existing artwork by SKU from an inventory import (legacy — pre-ISYNC-16).
 // Only updates fields that are provided (non-null). Never changes sku, title, category, image, featured, status, id.
 // `client` is a pg transaction client; pass pool to run outside a transaction.
 async function updateArtworkFromInventory(sku, data, client) {
@@ -323,6 +323,51 @@ async function updateArtworkFromInventory(sku, data, client) {
 
   const result = await q.query(
     `UPDATE artworks SET ${sets.join(', ')} WHERE sku = $1 RETURNING id, title, sku, status`,
+    params
+  );
+  return result.rows[0] || null;
+}
+
+// Patch an existing artwork by artwork ID from an inventory import (ISYNC-16+ format).
+// Looks up by artwork ID (from Existing Artwork ID column), not by SKU.
+// Only updates inventory-relevant fields. Never changes id, sku, title, category, image, featured, status.
+// `client` is a pg transaction client; pass pool to run outside a transaction.
+async function updateArtworkFromInventoryById(id, data, client) {
+  const q      = client || pool;
+  const params = [id];
+
+  params.push(data.quantity);       const qIdx       = params.length; // $2
+  params.push(data.priceInr);       const priceIdx    = params.length; // $3
+  params.push(data.priceUsd);       const priceUsdIdx = params.length; // $4
+  params.push(data.fxRateUsed);     const fxIdx       = params.length; // $5
+  params.push(data.multiplierUsed); const multIdx     = params.length; // $6
+
+  const sets = [
+    `quantity        = $${qIdx}`,
+    `price           = $${priceIdx}`,
+    `price_inr       = $${priceIdx}`,
+    `price_usd       = $${priceUsdIdx}`,
+    `fx_rate_used    = $${fxIdx}`,
+    `multiplier_used = $${multIdx}`,
+    'updated_at = CURRENT_TIMESTAMP',
+  ];
+
+  const optionals = [
+    ['description',    data.description],
+    ['dimensions',     data.dimensions],
+    ['materials',      data.materials],
+    ['image_filename', data.imageFilename],
+    ['notes',          data.notes],
+  ];
+  for (const [col, val] of optionals) {
+    if (val !== null && val !== undefined) {
+      params.push(val);
+      sets.push(`${col} = $${params.length}`);
+    }
+  }
+
+  const result = await q.query(
+    `UPDATE artworks SET ${sets.join(', ')} WHERE id = $1 RETURNING id, title, sku, status`,
     params
   );
   return result.rows[0] || null;
@@ -793,6 +838,7 @@ module.exports = {
   getArtworkBySku,
   createArtworkFromInventory,
   updateArtworkFromInventory,
+  updateArtworkFromInventoryById,
   updateArtworkStatus,
   updateArtworkSku,
   getArtworkSizeForArtwork,

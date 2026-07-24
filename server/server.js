@@ -1695,52 +1695,47 @@ app.post(
       return res.status(400).json({ error: imageMapErrors.join('; ') });
     }
 
-    // 1. Parse workbook — always revalidate server-side
+    // 1. Parse workbook — always revalidate server-side (uses ISYNC-16 aligned parser)
     const { rows } = parseInventoryBuffer(workbookFile.buffer, workbookFile.originalname);
 
-    // 2. Apply-level validation: unknown Art Work codes block import
-    //    (preview warns; apply errors because category is NOT NULL in DB)
+    // 2. Apply-level category resolution.
+    //    Try ARTWORK_CATEGORY_MAP[artWorkCode] first; fall back to row.category slug.
+    //    Error if neither resolves — category is NOT NULL in the DB.
     for (const row of rows) {
-      if (row.artWorkCode && !ARTWORK_CATEGORY_MAP[row.artWorkCode] && !row.errors.length) {
+      if (row.errors.length > 0) continue;
+      const resolvedCategory = ARTWORK_CATEGORY_MAP[row.artWorkCode] || row.category || null;
+      if (!resolvedCategory) {
         row.errors.push(
-          `Unknown Art Work code "${row.artWorkCode}" — no category mapping exists and category is required for import. ` +
-          `Known codes: ${Object.keys(ARTWORK_CATEGORY_MAP).join(', ')}.`
+          `Cannot determine category — ArtCode "${row.artWorkCode || '(blank)'}" is not recognised ` +
+          `and no Category slug was provided. Known ArtCodes: ${Object.keys(ARTWORK_CATEGORY_MAP).join(', ')}.`
         );
       }
+      row._resolvedCategory = resolvedCategory;
     }
 
-    // 3a. Catch duplicate SKUs within the batch (e.g. explicit + auto-generated collision)
-    const batchSkuMap = new Map(); // sku → first rowNumber that claimed it
-    for (const row of rows) {
-      if (row.sku && row.errors.length === 0) {
-        if (batchSkuMap.has(row.sku)) {
-          row.errors.push(
-            `Duplicate SKU "${row.sku}" in this upload — first seen on row ${batchSkuMap.get(row.sku)}. ` +
-            'Each SKU must be unique within the batch.'
-          );
-        } else {
-          batchSkuMap.set(row.sku, row.rowNumber);
-        }
-      }
-    }
-
-    // 3b. Block entire batch if any row has errors
+    // 3. Block entire batch if any row has errors
     const errorRows = rows.filter(r => r.errors.length > 0);
     if (errorRows.length > 0) {
       return res.status(422).json({
         error: 'Batch blocked — fix all errors before applying.',
         summary: {
-          totalRows: rows.length,
+          totalRows:    rows.length,
           createdCount: 0,
           updatedCount: 0,
           skippedCount: 0,
-          errorCount: errorRows.length,
+          errorCount:   errorRows.length,
         },
         errorRows: errorRows.map(r => ({ rowNumber: r.rowNumber, errors: r.errors })),
       });
     }
 
-    // 4. Fetch pricing settings once for this batch
+    // 4. Split rows: REVIEW rows are skipped — not written.
+    //    A row is REVIEW only when the parser flagged isReview (CREATE with prefilled SKU or Existing Artwork ID).
+    //    Rows with only informational warnings (unknown category slug, etc.) are still applied.
+    const reviewRows = rows.filter(r => r.isReview);
+    const applyRows  = rows.filter(r => !r.isReview);
+
+    // 5. Fetch pricing settings once for this batch
     let fxRate, multiplier;
     try {
       const settings = await db.getPricingSettings();
@@ -1750,43 +1745,46 @@ app.post(
       return res.status(500).json({ error: 'Cannot read pricing settings — DB may be unavailable.' });
     }
 
-    // 5. Look up which SKUs already exist in the DB (read-only)
-    const candidateSkus = rows.map(r => r.sku).filter(Boolean);
-    let existingSkuSet = new Set();
-    if (candidateSkus.length > 0) {
-      const found = await pool.query('SELECT sku FROM artworks WHERE sku = ANY($1)', [candidateSkus]);
-      found.rows.forEach(r => existingSkuSet.add(r.sku));
-    }
-
-    // 6. Classify and prepare each row
+    // 6. Classify by Action and prepare payloads.
+    //    CREATE: generate a batch-safe non-SKU artwork ID (art-{timestamp}-{index}).
+    //    UPDATE: use existingArtworkId as the DB lookup key.
+    //    Status always NEEDS_REVIEW; show_on_website always false (Option A — conservative import).
+    //    SKU is never generated here — app generates it on first admin save when public/orderable.
     const toCreate = [];
     const toUpdate = [];
-    for (const row of rows) {
-      const category = ARTWORK_CATEGORY_MAP[row.artWorkCode];
+    for (let i = 0; i < applyRows.length; i++) {
+      const row      = applyRows[i];
+      const category = row._resolvedCategory;
       const priceUsd = calculateUsdPrice(row.priceInr, fxRate, multiplier);
-      const artworkId = buildInventoryArtworkId(row.sku);
 
-      const payload = {
-        id:             artworkId,
+      const basePayload = {
         title:          row.itemDescription,
         category,
         priceInr:       row.priceInr,
         priceUsd,
         fxRateUsed:     fxRate,
         multiplierUsed: multiplier,
-        description:    row.longDescription   || null,
-        dimensions:     row.dimensions        || null,
-        materials:      row.materials         || null,
-        imageFilename:  row.imageFilename     || null,
-        notes:          row.notes             || null,
-        sku:            row.sku,
+        description:    row.notes         || null,
+        dimensions:     row.dimensions    || null,
+        materials:      row.materials     || null,
+        imageFilename:  row.imageFilename || null,
+        notes:          row.notes         || null,
         quantity:       row.quantity,
       };
 
-      if (existingSkuSet.has(row.sku)) {
-        toUpdate.push({ rowNumber: row.rowNumber, payload });
-      } else {
-        toCreate.push({ rowNumber: row.rowNumber, payload });
+      if (row.action === 'CREATE') {
+        const artworkId = `art-${Date.now()}-${i}`;
+        toCreate.push({
+          rowNumber: row.rowNumber,
+          artworkId,
+          payload:   { id: artworkId, sku: null, ...basePayload },
+        });
+      } else if (row.action === 'UPDATE' && row.existingArtworkId) {
+        toUpdate.push({
+          rowNumber:  row.rowNumber,
+          artworkId:  row.existingArtworkId,
+          payload:    basePayload,
+        });
       }
     }
 
@@ -1797,14 +1795,14 @@ app.post(
     try {
       await client.query('BEGIN');
 
-      for (const { rowNumber, payload } of toCreate) {
+      for (const { rowNumber, artworkId, payload } of toCreate) {
         const inserted = await db.createArtworkFromInventory(payload, client);
-        created.push({ rowNumber, sku: inserted.sku, artworkId: inserted.id, title: inserted.title });
+        created.push({ rowNumber, artworkId: inserted.id, sku: inserted.sku, title: inserted.title });
       }
 
-      for (const { rowNumber, payload } of toUpdate) {
-        const patched = await db.updateArtworkFromInventory(payload.sku, payload, client);
-        updated.push({ rowNumber, sku: patched.sku, artworkId: patched.id, title: patched.title });
+      for (const { rowNumber, artworkId, payload } of toUpdate) {
+        const patched = await db.updateArtworkFromInventoryById(artworkId, payload, client);
+        updated.push({ rowNumber, artworkId: patched?.id, sku: patched?.sku, title: patched?.title });
       }
 
       await client.query('COMMIT');
@@ -1817,17 +1815,17 @@ app.post(
     }
 
     // 8. Process matched images (outside the row-data transaction — images are best-effort).
-    //    Row data has already been committed. Image failures are reported clearly
-    //    but do NOT roll back artwork rows — the row is visible in NEEDS_REVIEW
+    //    Matched by rowNumber so blank-SKU CREATE rows are handled correctly.
+    //    Image failures do NOT roll back artwork rows — the row is visible in NEEDS_REVIEW
     //    and the admin can upload the image manually via the Review Queue.
     const allProcessed = [...created, ...updated];
     const imageResults = {
       stored:  0,
-      skipped: 0,   // no image filename / no matching upload — expected, not an error
+      skipped: 0,   // no filename / no matching upload — expected, not an error
       failed:  [],  // tried to store but threw — reported in response
     };
-    for (const { artworkId, sku } of allProcessed) {
-      const row = rows.find(r => r.sku === sku && r.imageFilename);
+    for (const { artworkId, rowNumber } of allProcessed) {
+      const row = rows.find(r => r.rowNumber === rowNumber && r.imageFilename);
       if (!row?.imageFilename) { imageResults.skipped++; continue; }
       const imageKey = row.imageFilename.toLowerCase();
       if (!imageMap.has(imageKey)) { imageResults.skipped++; continue; }
@@ -1842,27 +1840,25 @@ app.post(
         imageResults.stored++;
       } catch (imgErr) {
         const msg = imgErr.message || 'Unknown error';
-        console.error(`Image store failed for ${artworkId} (sku: ${sku}):`, msg);
-        imageResults.failed.push({ artworkId, sku, imageFilename: row.imageFilename, error: msg });
+        console.error(`Image store failed for ${artworkId} (row ${rowNumber}):`, msg);
+        imageResults.failed.push({ artworkId, rowNumber, imageFilename: row.imageFilename, error: msg });
       }
     }
 
     return res.json({
       summary: {
-        totalRows:     rows.length,
-        createdCount:  created.length,
-        updatedCount:  updated.length,
-        skippedCount:  0,
-        errorCount:    0,
-        imagesStored:  imageResults.stored,
-        imagesFailed:  imageResults.failed.length,
+        totalRows:    rows.length,
+        createdCount: created.length,
+        updatedCount: updated.length,
+        skippedCount: reviewRows.length,
+        errorCount:   0,
+        imagesStored: imageResults.stored,
+        imagesFailed: imageResults.failed.length,
       },
       created,
       updated,
-      skipped: [],
-      errors:  [],
-      // Clearly report any image storage failures so the admin knows
-      // which artworks need their image uploaded manually via Review Queue.
+      skipped:      reviewRows.map(r => ({ rowNumber: r.rowNumber, reason: 'REVIEW', warnings: r.warnings })),
+      errors:       [],
       imageFailures: imageResults.failed.length > 0 ? imageResults.failed : undefined,
     });
   }
