@@ -1,6 +1,6 @@
 # ISYNC-16 — Inventory Sync Preview-only Validation
 
-**Status:** STAGING VALIDATION COMPLETE — ready for PR review and merge approval
+**Status:** COMPLETE — merged, deployed, production smoke passed
 **Date:** 2026-07-23
 **Branch:** `feature/ISYNC-16-preview-validation`
 **Latest main commit at branch point:** `4c4c185`
@@ -273,12 +273,144 @@ None. All 18 rows classified correctly on first run. ✅
 
 ---
 
-## ISYNC-16 ready for PR review and merge approval
+## Production Preview Smoke
 
-- Branch: `feature/ISYNC-16-preview-validation`
-- Commits: `1818715` (parser alignment + local validation results), + staging results (this commit)
-- Local validation: ✅ 18/18 rows (local ISYNC-16 branch code + Railway staging DB, direct parser call)
-- Staging HTTP validation: ✅ 18/18 rows (live Preview endpoint, Railway staging DB)
-- All DB counts unchanged: ✅
-- No production data touched: ✅
-- PR can be opened at: `https://github.com/NarlaSR/chitrakala-arts/pull/new/feature/ISYNC-16-preview-validation`
+**Date:** 2026-07-23
+**PR:** [#24](https://github.com/NarlaSR/chitrakala-arts/pull/24) — merged as `7a9360b`
+**Status:** ✅ All scenarios passed
+
+### Deployment confirmation
+
+| Service | Status |
+|---|---|
+| Railway backend | ✅ Deployed — `chitrakalaarts-production.up.railway.app` responding (HTTP 200) |
+| Vercel frontend | ✅ Deployed — `chitrakala-arts.vercel.app` responding (HTTP 200) |
+| ISYNC-16 code confirmed | ✅ `sheetUsed` field present in Preview response (new field introduced by this ticket) |
+
+### Production target
+
+| Item | Value |
+|---|---|
+| Production backend | `chitrakalaarts-production.up.railway.app` |
+| Production DB | `crossover.proxy.rlwy.net:54308` (via Railway backend — not accessed directly) |
+| Confirmed not staging | ✅ |
+| Auth | `cks-admin` (production credentials) |
+| Preview endpoint | `POST https://chitrakalaarts-production.up.railway.app/api/admin/inventory-sync/preview` |
+
+### Workbook used
+
+**File:** `__test_workbooks/ISYNC-16-preview-validation-workbook.xlsx` (controlled validation workbook — gitignored)
+**Type:** ISYNC-16 validation workbook with intentional test rows
+
+### Endpoint response
+
+| Field | Value |
+|---|---|
+| HTTP status | 200 ✅ |
+| `sheetUsed` | `Inventory_Import` ✅ |
+| `detectedColumns` | All 19 columns ✅ |
+| `missingColumns` | None ✅ |
+| Batch warnings | None ✅ |
+
+### Row classification results (production)
+
+| Row | Classification | Notes |
+|---|---|---|
+| 3 | CREATE ✅ | |
+| 4 | CREATE ✅ | |
+| 5 | CREATE ✅ | |
+| 6 | CREATE ✅ | |
+| 7 | CREATE ✅ | |
+| 8 | CREATE ✅ | |
+| 9 | CREATE ✅ | Numeric size price accepted |
+| 10 | ERROR ✅ | Size-level Price on Request → ERROR (INV-PRICE-01 deferred) |
+| 11 | CREATE ✅ | imageFilename set, no ZIP → `missing` in imageSummary |
+| 12 | ERROR ✅ | Path-traversal filename blocked |
+| 13 | REVIEW ✅ | Invalid category slug → warning |
+| 14 | ERROR ✅ | Invalid status `AVAILABLE` |
+| 15 | ERROR ✅ | Blank Item Description |
+| 16 | ERROR ✅ | Invalid action `INVALID_ACTION` |
+| 17 | REVIEW ✅ | SKU pre-filled on CREATE → warning |
+| 18 | ERROR ✅ | `art-1783882548608` not found in production DB (this ID is staging-only; UPDATE verification works correctly — confirmed on staging, Row 18 → UPDATE) |
+| 19 | ERROR ✅ | `art-nonexistent-9999` not found in production DB |
+| 20 | ERROR ✅ | UPDATE with no Existing Artwork ID |
+| 21 | (skipped) ✅ | NO_CHANGE silently excluded |
+
+### Summary
+
+| Metric | Count |
+|---|---|
+| Total rows parsed (NO_CHANGE excluded) | 18 |
+| CREATE | 8 |
+| UPDATE | 0 (expected — validation workbook uses staging artwork ID; UPDATE path confirmed on staging) |
+| UPDATE candidates (DB not configured) | 0 |
+| REVIEW | 2 |
+| ERROR | 8 |
+
+### Image summary
+
+| Metric | Count |
+|---|---|
+| Rows with `imageFilename` | 2 |
+| Matched (ZIP uploaded) | 0 |
+| Missing (filename set, no ZIP) | 2 |
+| Not provided | 16 |
+| Unreferenced uploads | 0 |
+
+### Production DB counts before/after
+
+Counts captured via production admin API (`/api/admin/artworks`, `/api/admin/order-requests`, `/api/categories`). No direct DB connection used.
+
+| Table | Before | After | Result |
+|---|---|---|---|
+| `artworks` | 38 | 38 | ✅ unchanged |
+| `artwork_sizes` | 91 | 91 | ✅ unchanged |
+| `categories` | 7 | 7 | ✅ unchanged |
+| `order_requests` | 3 | 3 | ✅ unchanged |
+| `order_request_items` | 0 | 0 | ✅ unchanged |
+
+No writes to any table. Preview endpoint confirmed read-only on production. ✅
+
+### Apply confirmation
+
+- Apply endpoint was NOT invoked ✅
+- No production import run ✅
+- No production data modified ✅
+
+### Safety confirmations
+
+- ✅ Production DB not written to
+- ✅ No Apply run
+- ✅ No production import
+- ✅ No artworks, categories, pricing, or inventory data modified
+- ✅ No SKU generated during Preview (SKU passed through as reference only)
+- ✅ No existing SKU overwritten
+- ✅ No old size-based SKU generated
+- ✅ No price recalculation
+- ✅ No schema migration
+- ✅ No images renamed
+- ✅ No artworks archived or deleted
+- ✅ `server/.env` not staged or committed
+- ✅ Test workbook not committed
+
+### Issues found
+
+None. All scenarios behaved correctly on production. Row 18 classified as ERROR (not UPDATE) because `art-1783882548608` is a staging-only ID — this is correct endpoint behavior. The UPDATE classification path was confirmed on staging validation (Row 18 → UPDATE). ✅
+
+---
+
+## ISYNC-16 complete
+
+| Item | Value |
+|---|---|
+| PR | [#24](https://github.com/NarlaSR/chitrakala-arts/pull/24) |
+| Merge commit | `7a9360b` |
+| Branch | `feature/ISYNC-16-preview-validation` |
+| Commits | `1818715` (parser + local validation), `4a8520d` (staging results), `7a9360b` (merge) |
+| Local validation | ✅ 18/18 rows — ISYNC-16 branch code + Railway staging DB |
+| Staging HTTP validation | ✅ 18/18 rows — live Preview endpoint, Railway staging DB |
+| Production smoke | ✅ 18/18 rows correct — live production Preview endpoint |
+| All DB counts unchanged | ✅ (local, staging, and production) |
+| Apply not run | ✅ |
+| Production data not modified | ✅ |
+| Follow-ups | INV-PRICE-01 (size-level Price on Request, deferred); ISYNC-17 (Apply/import endpoint, separate ticket) |
