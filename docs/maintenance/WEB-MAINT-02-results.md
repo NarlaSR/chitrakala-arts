@@ -1,9 +1,9 @@
 # WEB-MAINT-02 — Block Public Order Request Submissions During Maintenance Mode
 
-**Status:** Complete — revalidated after ISYNC-16 merge (local + Railway staging), not deployed, no production migration
-**Date:** 2026-07-23 (original implementation); revalidated 2026-07-24 after ISYNC-16 merge
+**Status:** Complete — refreshed and revalidated after ISYNC-17 merge (local), previously revalidated after ISYNC-16 merge (local + Railway staging); not deployed, no production migration
+**Date:** 2026-07-23 (original implementation); revalidated 2026-07-24 after ISYNC-16 merge; refreshed 2026-07-24 after ISYNC-17 merge
 **Depends on:** WEB-MAINT-01, ORD-01, ORD-02 (all confirmed merged into `main`)
-**Branch:** `feature/WEB-MAINT-02-block-order-requests-during-maintenance` (created from updated `main`; later merged forward with latest `main` to pick up ISYNC-16 — see [Revalidation after ISYNC-16 merge](#revalidation-after-isync-16-merge-2026-07-24) below)
+**Branch:** `feature/WEB-MAINT-02-block-order-requests-during-maintenance` (created from updated `main`; merged forward twice with latest `main` — once for ISYNC-16, once for ISYNC-17 — see [Revalidation after ISYNC-16 merge](#revalidation-after-isync-16-merge-2026-07-24) and [Refresh after ISYNC-17 merge](#refresh-after-isync-17-merge-2026-07-24-2) below)
 
 ## Summary
 
@@ -279,3 +279,101 @@ Per the ticket's restriction, only the **Preview** endpoint was smoke-tested —
 - No production migration was performed or is required — unchanged from the original implementation; this revalidation confirmed the same holds true after the ISYNC-16 merge (ISYNC-16 itself required no new migration for this behavior either).
 - No PR was merged as part of this revalidation, per the ticket's restrictions.
 - **WEB-MAINT-02 is ready for merge/deploy approval**, contingent on the acceptance criteria below.
+
+---
+
+## Refresh after ISYNC-17 merge (2026-07-24) {#refresh-after-isync-17-merge-2026-07-24-2}
+
+### Why
+
+Before final validation/merge approval, ISYNC-17 was merged into `main` first and touched backend files (`server/server.js`, `server/dbQueries.js`, `server/inventoryParser.js`) — specifically Apply/import validation behavior. Since WEB-MAINT-02 also modifies `server/server.js`, the branch was refreshed with latest `main` and revalidated again before proceeding to final approval. This is a refresh/revalidation only — no new feature scope was added.
+
+### Merge confirmation
+
+| Item | Result |
+|---|---|
+| `main` commit merged into WEB-MAINT-02 | **`83f81e2`** — "Merge pull request #25 from NarlaSR/feature/ISYNC-17-apply-import-validation" |
+| Was ISYNC-17 included in main? | **Yes**, confirmed before merging — `git log origin/main` showed `83f81e2` (merge) and `86d9aa6` ("ISYNC-17 apply import validation") at the tip, on top of the previously-merged ISYNC-16 commits |
+| Merge sequence followed | `git checkout main` → `git pull origin main --ff-only` (fast-forwarded `53609ea` → `83f81e2`) → confirmed ISYNC-17 present → `git checkout feature/WEB-MAINT-02-block-order-requests-during-maintenance` → `git merge main` |
+| Conflicts occurred | **No.** `git merge` completed automatically via the `ort` strategy (merge commit `e379168`) |
+| Conflicting files | None — no manual conflict resolution was needed |
+| Files changed by the merge | `server/server.js`, `server/dbQueries.js`, `server/inventoryParser.js`, `docs/inventory-sync/ISYNC-17-apply-import-validation-results.md` (new file, brought in from `main`) |
+
+As with the ISYNC-16 merge, both changesets were independently verified intact post-merge — not just "no conflict markers":
+
+- **WEB-MAINT-02 guard preserved, not broadened:** the maintenance-mode check is still the first statement inside `POST /api/order-requests` (`server/server.js:1936-1946`), byte-identical to before. Grepped every call site of `getMaintenanceMode()` in the merged file — it appears only at its own definition, the two pre-existing `GET /api/config/maintenance*` status endpoints (from WEB-MAINT-01), and the order-requests route. **It does not appear in any admin route** — confirming the guard was not broadened to admin routes, per the ticket's explicit restriction.
+- **ISYNC-17 changes preserved:** `POST /api/admin/inventory-sync/apply` still contains ISYNC-17's Apply-level category resolution, batch error-blocking, and the transactional create/update logic; `server/dbQueries.js` still contains the new `updateArtworkFromInventoryById()` function (ISYNC-17's ID-based artwork lookup for Apply, as opposed to the legacy SKU-based lookup).
+- **No overlap between the two changesets:** diffed `server/dbQueries.js` between `53609ea` (pre-ISYNC-17) and `83f81e2` (post-ISYNC-17) — the only change is the addition of `updateArtworkFromInventoryById()`, which is not called anywhere in the order-request code path (`createOrderRequest`, `getOrderRequestsAdmin`, `getOrderRequestById`, `updateOrderRequestStatus` are all untouched). WEB-MAINT-02 has never modified `dbQueries.js`, so there was nothing for ISYNC-17 to conflict with there.
+
+### Local revalidation results
+
+Backend started locally (`node server/server.js`) against local Postgres, branch at merge commit `e379168`.
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Syntax checks | `node --check server/server.js` → OK; `node --check server/dbQueries.js` → OK |
+| 2 | Maintenance OFF — submit valid request (`art-1782445237565`, size 646) | `201`, order id 10 created |
+| 3 | Maintenance ON via `PATCH /api/admin/settings/maintenance-mode` | `200`, confirmed via `GET /api/config/maintenance-mode` → `true` |
+| 3b | Valid payload while ON | `503 { "error": "Site is temporarily under maintenance. Please try again later." }` |
+| 3c | Invalid/empty payload (`{}`) while ON | Still `503` with the same message — **not** `400` — maintenance check confirmed to still run before validation after the ISYNC-17 merge |
+| 3d | No new `order_requests`/`order_request_items` rows from blocked attempts | `GET /api/admin/order-requests` unchanged (still only ids 10, 7, 4) |
+| 4 | Admin login reachable during maintenance | Wrong password → `401 "Invalid credentials"`, not `503` |
+| 4b | Admin order request list | `200` |
+| 4c | Admin order request detail (id 10) | `200` |
+| 4d | Admin order request status update (id 10: `NEW` → `REVIEWING`) | `200` |
+| 4e | Admin turns maintenance OFF | `200`, `{"maintenanceMode":false}` |
+| 5 | **Confirm final maintenance state** | `GET /api/config/maintenance-mode` → **`{"maintenanceMode":false}`** ✅ |
+| 6 | Maintenance OFF again — submit valid request | `201`, order id 11 created — confirms immediate recovery, no restart needed |
+| 7 | Safety: artwork data unchanged | `GET /api/artworks/art-1782445237565` identical before/after (status, quantity, price_inr/usd, sku, category, show_on_website, updatedAt) |
+
+**Local cleanup:** order request ids 10 and 11 (created during this refresh) were deleted from the local dev DB afterward. Pre-existing rows (id 7, id 4, from prior sessions) were left untouched.
+
+### ISYNC Preview/Apply route smoke results
+
+Per the ticket's restriction, Apply was never executed — only route accessibility/safety was smoke-tested for the Apply endpoint, and the Preview endpoint was smoke-tested normally (it is read-only by design).
+
+**Preview route** (`POST /api/admin/inventory-sync/preview`) — full smoke test:
+- Generated a minimal one-row test workbook (`Inventory_Import` sheet, one `CREATE` row) in the session scratchpad (not committed to the repo).
+- Response: **`200`**, `sheetUsed: "Inventory_Import"` ✅, row correctly classified `CREATE` with zero errors, `summary.totalRows: 1`.
+- Confirmed no write occurred: re-queried `GET /api/artworks` and found no artwork matching the smoke-test title.
+- **Conclusion: Preview/parser behavior was not broken by the ISYNC-17 merge.**
+
+**Apply route** (`POST /api/admin/inventory-sync/apply`) — accessibility/safety smoke only, Apply never executed:
+- Captured artwork count **before**: `37`.
+- Unauthenticated request → **`401` "Access token required"** — route requires admin auth, as expected.
+- Authenticated request with no file → **`400` "No workbook uploaded..."** — route reachable and validates input before any parsing.
+- Authenticated request with a **deliberately invalid** workbook (bad `Action` value) → **`422` "Batch blocked — fix all errors before applying."**, `createdCount: 0, updatedCount: 0, skippedCount: 0` — the row-validation block in the Apply handler runs and blocks the entire batch *before* the pricing-settings fetch, the transaction, or any write, exactly as designed. This is the safe way to exercise the route's reachability without ever reaching the write path.
+- Captured artwork count **after**: `37` — **unchanged**, confirming no Apply write occurred.
+- **No Apply was run. No data was imported. No artwork/inventory data was modified.**
+
+### Test request cleanup status
+
+| Environment | Test rows created | Cleaned up |
+|---|---|---|
+| Local | `order_requests` ids 10, 11 | ✅ Deleted; `order_request_items` cascade-deleted with them |
+
+No staging validation was performed as part of this refresh (not requested in this ticket — only local revalidation was required).
+
+### Safety confirmations (refresh)
+
+- ✅ No artwork/category/pricing/SKU/inventory data changed — verified before/after via the artwork API (byte-identical snapshot) and artwork count (`37` → `37`, unchanged through the Apply safety smoke).
+- ✅ No Inventory Apply run — the Apply route was only probed for reachability/auth/input-validation behavior; the one workbook submitted to it was deliberately invalid so it could never reach the write path.
+- ✅ No production import run.
+- ✅ No price recalculation run.
+- ✅ No production database accessed.
+- ✅ No production migration run.
+- ✅ No production deploy performed.
+- ✅ No PR was merged.
+- ✅ Maintenance guard was **not** broadened to admin routes — confirmed by checking every `getMaintenanceMode()` call site in the merged file.
+- ✅ WEB-MAINT-02's 503 maintenance guard was **not** removed or altered — byte-identical to its original implementation.
+- ✅ ISYNC-17's Apply/import validation changes were **not** overwritten — confirmed present and functioning (batch-blocking on row errors) after the merge.
+- ✅ `server/.env` was not modified this round (local DB only was used; no staging credentials involved in this refresh).
+- ✅ No temp scripts, workbooks, or logs were committed — both smoke-test workbooks were created in the session scratchpad and removed from the repo directory immediately after use.
+- ✅ Local test order-request rows (ids 10, 11) fully cleaned up.
+
+### Production/deploy note (refresh)
+
+- No production deployment was performed.
+- No production migration was performed or is required.
+- No PR was merged, per the ticket's restrictions.
+- **WEB-MAINT-02 remains ready for final merge/deploy approval** — the branch is current with `main` through ISYNC-17 (`83f81e2`), both changesets are confirmed intact and non-overlapping, and all local validation passes.
