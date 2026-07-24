@@ -1,6 +1,6 @@
 # ISYNC-16 — Inventory Sync Preview-only Validation
 
-**Status:** LOCAL VALIDATION COMPLETE — awaiting approval to proceed to Railway staging
+**Status:** STAGING VALIDATION COMPLETE — ready for PR review and merge approval
 **Date:** 2026-07-23
 **Branch:** `feature/ISYNC-16-preview-validation`
 **Latest main commit at branch point:** `4c4c185`
@@ -141,7 +141,7 @@ No writes to any table. ✅
 
 ---
 
-## Safety confirmations
+## Safety confirmations (local branch + staging DB validation)
 
 - ✅ No production DB accessed during local validation (staging DB used for UPDATE verification — read-only SELECT only)
 - ✅ No Apply endpoint invoked
@@ -156,8 +156,129 @@ No writes to any table. ✅
 
 ---
 
-## Stop point — awaiting approval to proceed to Railway staging
+## Railway Staging Preview-only Validation
 
-Per ISYNC-16 ticket: **do not proceed to Railway staging Preview-only validation until owner approves.**
+**Date:** 2026-07-23
+**Branch:** `feature/ISYNC-16-preview-validation`
+**Commit:** `1818715`
+**Status:** ✅ All scenarios passed
 
-**Next step (pending approval):** POST `INV-03-10-production-workbook-template-FINAL-CORRECTED.xlsx` to the Preview endpoint on Railway staging and verify the same classifications hold against staging data.
+### Staging target
+
+| Item | Value |
+|---|---|
+| Railway staging DB host | `shinkansen.proxy.rlwy.net:41009` |
+| Confirmed not production | ✅ (production host: `crossover.proxy.rlwy.net:54308`) |
+| Code under test | Local server running `feature/ISYNC-16-preview-validation` against Railway staging DB |
+| Admin auth | `cks-admin` / `CKSAdmin_Stg2026!` (staging password set during INV-SKU-01 validation) |
+| Preview endpoint | `POST http://localhost:5000/api/admin/inventory-sync/preview` |
+
+### Workbook used
+
+**File:** `__test_workbooks/ISYNC-16-preview-validation-workbook.xlsx` (controlled validation workbook — gitignored)
+**Type:** ISYNC-16 validation workbook with intentional test rows (not the INV-03-10 final template)
+**Purpose:** Validates all parser/endpoint scenarios including CREATE, UPDATE, REVIEW, ERROR, NO_CHANGE
+
+### Endpoint response
+
+| Field | Value |
+|---|---|
+| HTTP status | 200 ✅ |
+| `sheetUsed` | `Inventory_Import` ✅ |
+| `detectedColumns` | All 19 columns ✅ |
+| `missingColumns` | None ✅ |
+| Batch warnings | None ✅ |
+
+### Row classification results (via live HTTP endpoint)
+
+| Row | Classification | Notes |
+|---|---|---|
+| 3 | CREATE ✅ | |
+| 4 | CREATE ✅ | |
+| 5 | CREATE ✅ | |
+| 6 | CREATE ✅ | |
+| 7 | CREATE ✅ | |
+| 8 | CREATE ✅ | |
+| 9 | CREATE ✅ | Numeric size price accepted |
+| 10 | ERROR ✅ | Size-level Price on Request → ERROR (INV-PRICE-01 deferred) |
+| 11 | CREATE ✅ | imageFilename set, no ZIP provided → `missing` (2 rows missing in imageSummary) |
+| 12 | ERROR ✅ | Path-traversal filename `folder/traversal.jpg` blocked |
+| 13 | REVIEW ✅ | Invalid category slug → warning |
+| 14 | ERROR ✅ | Invalid status `AVAILABLE` |
+| 15 | ERROR ✅ | Blank Item Description |
+| 16 | ERROR ✅ | Invalid action `INVALID_ACTION` |
+| 17 | REVIEW ✅ | SKU pre-filled on CREATE → warning |
+| 18 | UPDATE ✅ | `art-1783882548608` found in staging DB |
+| 19 | ERROR ✅ | `art-nonexistent-9999` not found in staging DB |
+| 20 | ERROR ✅ | UPDATE with no Existing Artwork ID |
+| 21 | (skipped) ✅ | NO_CHANGE silently excluded |
+
+### Summary
+
+| Metric | Count |
+|---|---|
+| Total rows parsed (NO_CHANGE excluded) | 18 |
+| CREATE | 8 |
+| UPDATE | 1 |
+| UPDATE candidates (DB not configured) | 0 |
+| REVIEW | 2 |
+| ERROR | 7 |
+
+All 18 rows matched expected classification. ✅
+
+### Image summary
+
+| Metric | Count |
+|---|---|
+| Rows with `imageFilename` | 2 |
+| Matched (ZIP uploaded) | 0 |
+| Missing (filename set, no ZIP) | 2 |
+| Not provided | 16 |
+| Unreferenced uploads | 0 |
+
+No image ZIP was uploaded — expected. Missing images produce warnings, not errors. ✅
+
+### Staging DB counts before/after
+
+| Table | Before | After | Result |
+|---|---|---|---|
+| `artworks` | 67 | 67 | ✅ unchanged |
+| `artwork_sizes` | 68 | 68 | ✅ unchanged |
+| `categories` | 7 | 7 | ✅ unchanged |
+| `order_requests` | 0 | 0 | ✅ unchanged |
+| `order_request_items` | 0 | 0 | ✅ unchanged |
+
+No writes to any table. Preview endpoint is confirmed read-only. ✅
+
+### Safety confirmations
+
+- ✅ Production DB not accessed (`crossover.proxy.rlwy.net:54308` not used)
+- ✅ Staging DB host confirmed (`shinkansen.proxy.rlwy.net:41009`) before every script
+- ✅ No Apply endpoint invoked
+- ✅ No production import run
+- ✅ No artworks, categories, pricing, or image data modified on staging
+- ✅ No SKU generated during Preview (SKU passed through as reference only)
+- ✅ No existing SKU overwritten
+- ✅ No old size-based SKU generated
+- ✅ No price recalculation
+- ✅ No schema migration
+- ✅ No images renamed
+- ✅ No artworks archived or deleted
+- ✅ `server/.env` not staged or committed
+- ✅ Test workbook gitignored (not committed)
+
+### Issues found
+
+None. All 18 rows classified correctly on first run. ✅
+
+---
+
+## ISYNC-16 ready for PR review and merge approval
+
+- Branch: `feature/ISYNC-16-preview-validation`
+- Commits: `1818715` (parser alignment + local validation results), + staging results (this commit)
+- Local validation: ✅ 18/18 rows (local ISYNC-16 branch code + Railway staging DB, direct parser call)
+- Staging HTTP validation: ✅ 18/18 rows (live Preview endpoint, Railway staging DB)
+- All DB counts unchanged: ✅
+- No production data touched: ✅
+- PR can be opened at: `https://github.com/NarlaSR/chitrakala-arts/pull/new/feature/ISYNC-16-preview-validation`
