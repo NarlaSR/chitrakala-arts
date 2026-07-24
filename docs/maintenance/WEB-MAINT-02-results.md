@@ -1,9 +1,9 @@
 # WEB-MAINT-02 — Block Public Order Request Submissions During Maintenance Mode
 
-**Status:** Complete — refreshed and revalidated after ISYNC-17 merge (local), previously revalidated after ISYNC-16 merge (local + Railway staging); not deployed, no production migration
-**Date:** 2026-07-23 (original implementation); revalidated 2026-07-24 after ISYNC-16 merge; refreshed 2026-07-24 after ISYNC-17 merge
+**Status:** Complete — Railway staging validation passed after ISYNC-17 merge; ready for final merge/deploy approval; not deployed, no production migration
+**Date:** 2026-07-23 (original implementation); revalidated 2026-07-24 after ISYNC-16 merge; refreshed 2026-07-24 after ISYNC-17 merge; staging-validated 2026-07-24 after ISYNC-17 merge
 **Depends on:** WEB-MAINT-01, ORD-01, ORD-02 (all confirmed merged into `main`)
-**Branch:** `feature/WEB-MAINT-02-block-order-requests-during-maintenance` (created from updated `main`; merged forward twice with latest `main` — once for ISYNC-16, once for ISYNC-17 — see [Revalidation after ISYNC-16 merge](#revalidation-after-isync-16-merge-2026-07-24) and [Refresh after ISYNC-17 merge](#refresh-after-isync-17-merge-2026-07-24-2) below)
+**Branch:** `feature/WEB-MAINT-02-block-order-requests-during-maintenance` (created from updated `main`; merged forward twice with latest `main` — once for ISYNC-16, once for ISYNC-17 — see [Revalidation after ISYNC-16 merge](#revalidation-after-isync-16-merge-2026-07-24), [Refresh after ISYNC-17 merge](#refresh-after-isync-17-merge-2026-07-24-2), and [Railway staging validation after ISYNC-17](#railway-staging-validation-after-isync-17-2026-07-24) below)
 
 ## Summary
 
@@ -377,3 +377,143 @@ No staging validation was performed as part of this refresh (not requested in th
 - No production migration was performed or is required.
 - No PR was merged, per the ticket's restrictions.
 - **WEB-MAINT-02 remains ready for final merge/deploy approval** — the branch is current with `main` through ISYNC-17 (`83f81e2`), both changesets are confirmed intact and non-overlapping, and all local validation passes.
+
+---
+
+## Railway staging validation after ISYNC-17 (2026-07-24) {#railway-staging-validation-after-isync-17-2026-07-24}
+
+### Why
+
+Local revalidation after the ISYNC-17 merge (above) passed. This section runs the required Railway staging validation before final merge/deploy approval, confirming the same behavior holds against the real staging database and staging admin account, not just local Postgres.
+
+### Branch / merge confirmation
+
+| Item | Result |
+|---|---|
+| Branch | `feature/WEB-MAINT-02-block-order-requests-during-maintenance` |
+| Latest `main` merged (includes ISYNC-17) | ✅ Confirmed via `git merge-base --is-ancestor origin/main HEAD` → true. Latest main commit: `83f81e2` |
+| Git status | Clean except pre-existing unrelated untracked files (inventory-sync/POST-ORD-QA-01 leftovers from earlier, unrelated sessions) |
+| `server/.env` staged/committed | ✅ No — confirmed via `git status --short server/.env` (no output) and `git ls-files server/.env` (not tracked); gitignored per `.gitignore:57` |
+| WEB-MAINT-02 guard present | ✅ Confirmed in `server/server.js` — `if (await getMaintenanceMode())` / `"Site is temporarily under maintenance..."` still the first statement in `POST /api/order-requests` |
+| ISYNC-17 changes present | ✅ Confirmed — `/api/admin/inventory-sync/apply` route and `updateArtworkFromInventoryById()` in `server/dbQueries.js` both present |
+| Syntax checks | `node --check server/server.js` → OK; `node --check server/dbQueries.js` → OK |
+
+### Railway staging target
+
+| Item | Value |
+|---|---|
+| Staging DB host:port | `shinkansen.proxy.rlwy.net:41009` |
+| Confirmed NOT production | ✅ — host does not contain `crossover`; `crossover.proxy.rlwy.net:54308` was never used or connected to |
+| Method | Local backend (this branch's code) run with `DATABASE_URL` pointed at the Railway staging Postgres, per this repo's established staging-validation convention |
+| Credential handling | Staging connection string was already saved (from the prior ISYNC-16 staging round) in the local, gitignored `server/.env`, reactivated for this validation, and restored to the local-only value immediately after. Never printed in full, never committed, never written to any tracked file |
+| Admin account used | `cks-admin` (documented staging admin, real login — not a minted token) |
+
+### Staging before counts
+
+| Table | Count |
+|---|---|
+| artworks | 67 |
+| artwork_sizes | 68 |
+| categories | 7 |
+| order_requests | 0 |
+| order_request_items | 0 |
+
+**Baseline `maintenance_mode` value:** `false` (OFF) — no pre-existing ON state to record or restore; validation proceeded directly.
+
+### Maintenance OFF validation
+
+| Step | Result |
+|---|---|
+| Submit valid `POST /api/order-requests` (`web-maint-02-staging-test@example.com`, artwork `art-1783882548608`) | `201` — **test request ID = 5** |
+| `order_requests` count | `0` → `1` (+1) ✅ |
+| `order_request_items` count | `0` → `1` (+1, matches 1 submitted item) ✅ |
+| Appears in admin list | `GET /api/admin/order-requests` → `200`, id 5 present |
+| Admin detail loads | `GET /api/admin/order-requests/5` → `200`, full snapshot returned |
+| Artwork data unchanged | `GET /api/artworks/art-1783882548608` identical before/after (price_inr, price_usd, sku, status, quantity, category all unchanged) |
+
+### Maintenance ON validation
+
+| Step | Result |
+|---|---|
+| Turn maintenance ON (`cks-admin`) | `200`, confirmed via `GET /api/config/maintenance-mode` → `true` |
+| Valid `POST /api/order-requests` while ON | **`503` `{ "error": "Site is temporarily under maintenance. Please try again later." }`** |
+| Invalid/empty payload (`{}`) while ON | Still **`503`**, same message — **not** `400` — confirms the maintenance check runs before normal validation on staging too |
+| New `order_requests` rows from blocked attempts | `0` — count stayed at `1` (unchanged from the OFF-test row) |
+| New `order_request_items` rows from blocked attempts | `0` — count stayed at `1` |
+
+### Admin route validation (maintenance ON)
+
+| Route | Result |
+|---|---|
+| Admin login (`cks-admin`) | `200` — reachable during maintenance |
+| Admin order request list | `200` |
+| Admin order request detail (id 5, the test request) | `200` |
+| Admin order request status update — **test request id 5 only** (`NEW` → `REVIEWING`) | `200`. No other/real staging order request was touched |
+| Admin turns maintenance OFF | `200`, `{"maintenanceMode":false}` |
+
+### Maintenance OFF again
+
+| Step | Result |
+|---|---|
+| Final `maintenance_mode` state | **`false` (OFF)** ✅ |
+| `POST /api/order-requests` works again | `201` — **second test request ID = 6** (`web-maint-02-staging-test-off2@example.com`), created to confirm recovery, then cleaned up |
+
+### ISYNC Preview smoke result
+
+- Minimal one-row `CREATE` test workbook (`Inventory_Import` sheet) submitted to `POST /api/admin/inventory-sync/preview`.
+- Response: **`200`**, `sheetUsed: "Inventory_Import"` ✅, row correctly classified `CREATE`, zero errors.
+- Confirmed no write: artwork count (public list) unchanged (`39` before and after).
+- **Preview/parser behavior confirmed working correctly on staging after the ISYNC-17 merge.**
+
+### Apply route non-write safety smoke result
+
+- Unauthenticated request → **`401` "Access token required"**.
+- Authenticated request, no file → **`400` "No workbook uploaded..."**.
+- Authenticated request, deliberately invalid workbook (bad `Action` value) → **`422` "Batch blocked — fix all errors before applying."**, `createdCount: 0, updatedCount: 0, skippedCount: 0` — batch rejected before the pricing-settings fetch, the transaction, or any write.
+- Artwork count (DB row count) before and after: **`67` → `67`, unchanged**.
+- **No Apply was executed. No data was imported.**
+
+### Cleanup confirmation
+
+| Item | Result |
+|---|---|
+| Test rows deleted | `order_requests` ids `5` (`web-maint-02-staging-test@example.com`) and `6` (`web-maint-02-staging-test-off2@example.com`) — both deleted via a targeted `DELETE ... WHERE customer_email IN (...)`, scoped only to these two test emails |
+| `order_request_items` | Cascade-deleted along with their parent rows |
+| Confirmed gone | Re-queried both ids after delete — neither present |
+| Real staging order requests | None existed before this validation (baseline was `0`) and none were created or touched outside the two test rows above |
+
+### Staging after counts
+
+| Table | Before | After | Match |
+|---|---|---|---|
+| artworks | 67 | 67 | ✅ unchanged |
+| artwork_sizes | 68 | 68 | ✅ unchanged |
+| categories | 7 | 7 | ✅ unchanged |
+| order_requests | 0 | 0 | ✅ back to baseline after cleanup |
+| order_request_items | 0 | 0 | ✅ back to baseline after cleanup |
+
+### Safety confirmations (staging validation)
+
+- ✅ No artwork/category/pricing/SKU/inventory data changed — before/after counts identical for `artworks`, `artwork_sizes`, `categories`; test artwork's own fields unchanged throughout.
+- ✅ No Inventory Apply run — only reachability/auth/input-validation was smoke-tested; the one workbook submitted to Apply was deliberately invalid so it could never reach the write path.
+- ✅ No production import run.
+- ✅ No price recalculation run.
+- ✅ No production database accessed — confirmed `shinkansen.proxy.rlwy.net:41009` (staging) before every operation; `crossover.proxy.rlwy.net:54308` (production) never used.
+- ✅ No production migration run.
+- ✅ No production deploy performed.
+- ✅ No PR was merged.
+- ✅ Maintenance mode left **OFF** at the end (final state confirmed via `GET /api/config/maintenance-mode`).
+- ✅ Only staging test order requests created during this validation were deleted (ids 5, 6, matched by test email); no real staging order requests existed or were touched.
+- ✅ Admin status-update testing was performed only on the test request (id 5) created in this run — no real staging customer/order data was modified.
+- ✅ `server/.env` was not committed — used only as a temporary local override, restored to the local-only value immediately after validation, and remains gitignored throughout.
+- ✅ No temp scripts, workbooks, payload files, or logs were committed — both smoke-test workbooks were created in the session scratchpad and removed from the repo directory immediately after use; temp token files were deleted after use.
+- ✅ No secrets were printed in full or written to any tracked file.
+
+### Production/deploy note (staging validation)
+
+- No production deployment was performed.
+- No production migration was performed or is required.
+- No production import was run.
+- No price recalculation was run.
+- No PR was merged, per the ticket's restrictions.
+- **WEB-MAINT-02 has now passed local validation and Railway staging validation after both the ISYNC-16 and ISYNC-17 merges.** The branch is current with `main` (`83f81e2`), both the WEB-MAINT-02 maintenance guard and the ISYNC-16/ISYNC-17 Preview/Apply changes are confirmed intact and functioning correctly together, and all acceptance criteria for merge/deploy approval are met.
