@@ -220,6 +220,7 @@ function parseInventoryBuffer(buffer, _filename) {
 
     const errors   = [];
     const warnings = [];
+    let   isReview = false;
 
     // --- Action validation ---
     if (!action) {
@@ -239,11 +240,13 @@ function parseInventoryBuffer(buffer, _filename) {
     // --- Action-specific validation ---
     if (action === 'CREATE') {
       if (existingId) {
+        isReview = true;
         warnings.push(
           `CREATE row has a value in Existing Artwork ID ("${existingId}") — this field should be blank for CREATE rows`
         );
       }
       if (sku) {
+        isReview = true;
         warnings.push(
           `CREATE row has SKU "${sku}" — SKU should be blank for CREATE rows (app generates it on first admin save when public/orderable)`
         );
@@ -379,6 +382,7 @@ function parseInventoryBuffer(buffer, _filename) {
       publicOrderable,
       errors,
       warnings,
+      isReview,
     });
   }
 
