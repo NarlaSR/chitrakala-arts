@@ -1535,45 +1535,50 @@ app.post(
         return res.status(400).json({ error: 'No workbook uploaded. Field name must be "file".' });
       }
 
-      const { rows, detectedColumns, missingColumns } =
+      const { rows, detectedColumns, missingColumns, sheetUsed } =
         parseInventoryBuffer(workbookFile.buffer, workbookFile.originalname);
 
       // Build image map from optional uploaded images/ZIP (no writes during preview)
       const { imageMap, errors: imageMapErrors } = buildImageMap(req.files);
 
-      // Read-only check: does artworks.sku column exist yet?
-      let skuColumnExists = false;
-      if (isDatabaseConfigured()) {
-        try {
-          const col = await pool.query(
-            `SELECT 1 FROM information_schema.columns
-             WHERE table_name = 'artworks' AND column_name = 'sku'`
-          );
-          skuColumnExists = col.rows.length > 0;
-        } catch (_) { /* DB unavailable — treat as no SKU column */ }
-      }
-
       const batchWarnings = [];
-      if (!skuColumnExists) {
+
+      // Warn if sheet fallback was used (workbook lacked an 'Inventory_Import' sheet)
+      if (sheetUsed && sheetUsed !== 'Inventory_Import') {
         batchWarnings.push(
-          'artworks table has no sku column — CREATE/UPDATE classification is not yet available. ' +
-          'Valid rows are classified as CREATE_CANDIDATE. ' +
-          'See docs/inventory-sync/INV-01-preview-endpoint.md for the recommended schema migration.'
+          `No "Inventory_Import" sheet found — parsed "${sheetUsed}" instead. ` +
+          'Rename the import sheet to "Inventory_Import" for reliable multi-sheet workbook support.'
         );
       }
 
-      // If SKU column exists, fetch matching SKUs from DB (no writes)
-      const existingSkus = new Set();
-      if (skuColumnExists) {
-        const validSkus = rows
-          .filter(r => r.sku && r.errors.length === 0)
-          .map(r => r.sku);
-        if (validSkus.length > 0) {
-          const found = await pool.query(
-            'SELECT sku FROM artworks WHERE sku = ANY($1)',
-            [validSkus]
+      // For UPDATE rows: verify that Existing Artwork ID values exist in the DB (read-only).
+      // No writes occur — this is purely a validation lookup.
+      const foundArtworkIds = new Set();
+      if (isDatabaseConfigured()) {
+        const updateIds = rows
+          .filter(r => r.action === 'UPDATE' && r.existingArtworkId && r.errors.length === 0)
+          .map(r => r.existingArtworkId);
+        if (updateIds.length > 0) {
+          try {
+            const found = await pool.query(
+              'SELECT id FROM artworks WHERE id = ANY($1)',
+              [updateIds]
+            );
+            found.rows.forEach(r => foundArtworkIds.add(r.id));
+          } catch (_) {
+            batchWarnings.push(
+              'Database unavailable — UPDATE artwork ID verification skipped. ' +
+              'UPDATE rows are classified as UPDATE_CANDIDATE.'
+            );
+          }
+        }
+      } else {
+        const hasUpdateRows = rows.some(r => r.action === 'UPDATE' && r.errors.length === 0);
+        if (hasUpdateRows) {
+          batchWarnings.push(
+            'Database not configured — UPDATE artwork ID verification skipped. ' +
+            'UPDATE rows are classified as UPDATE_CANDIDATE.'
           );
-          found.rows.forEach(r => existingSkus.add(r.sku));
         }
       }
 
@@ -1582,19 +1587,37 @@ app.post(
         return res.status(400).json({ error: imageMapErrors.join('; ') });
       }
 
-      // Classify each row and compute image status
+      // Classify each row and compute image status.
+      // Classification is based on the Action field from the workbook (not SKU matching).
       const referencedImageNames = new Set();
       const classifiedRows = rows.map(row => {
-        let classification;
-        if (row.errors.length > 0) {
-          classification = 'ERROR';
-        } else if (!skuColumnExists) {
-          classification = row.warnings.length > 0 ? 'REVIEW' : 'CREATE_CANDIDATE';
-        } else if (existingSkus.has(row.sku)) {
-          classification = row.warnings.length > 0 ? 'REVIEW' : 'UPDATE';
-        } else {
-          classification = row.warnings.length > 0 ? 'REVIEW' : 'CREATE';
+        // Accumulate any DB-level errors alongside parser errors
+        const allErrors = [...row.errors];
+
+        if (row.action === 'UPDATE' && row.existingArtworkId && row.errors.length === 0) {
+          if (isDatabaseConfigured() && !foundArtworkIds.has(row.existingArtworkId)) {
+            allErrors.push(
+              `Artwork ID "${row.existingArtworkId}" not found in the database — ` +
+              'verify the Existing Artwork ID matches a real artwork record'
+            );
+          }
         }
+
+        let classification;
+        if (allErrors.length > 0) {
+          classification = 'ERROR';
+        } else if (row.action === 'CREATE') {
+          classification = row.warnings.length > 0 ? 'REVIEW' : 'CREATE';
+        } else if (row.action === 'UPDATE') {
+          if (!isDatabaseConfigured()) {
+            classification = 'UPDATE_CANDIDATE';
+          } else {
+            classification = row.warnings.length > 0 ? 'REVIEW' : 'UPDATE';
+          }
+        } else {
+          classification = 'ERROR';
+        }
+
         // Image match status per row
         let imageStatus = 'not_provided';
         if (row.imageFilename) {
@@ -1606,7 +1629,8 @@ app.post(
             imageStatus = 'missing';
           }
         }
-        return { ...row, classification, imageStatus };
+
+        return { ...row, errors: allErrors, classification, imageStatus };
       });
 
       // Find uploaded images not referenced by any workbook row
@@ -1618,13 +1642,12 @@ app.post(
       }
 
       const summary = {
-        totalRows:   classifiedRows.length,
-        createCount: classifiedRows.filter(
-          r => r.classification === 'CREATE' || r.classification === 'CREATE_CANDIDATE'
-        ).length,
-        updateCount: classifiedRows.filter(r => r.classification === 'UPDATE').length,
-        reviewCount: classifiedRows.filter(r => r.classification === 'REVIEW').length,
-        errorCount:  classifiedRows.filter(r => r.classification === 'ERROR').length,
+        totalRows:         classifiedRows.length,
+        createCount:       classifiedRows.filter(r => r.classification === 'CREATE').length,
+        updateCount:       classifiedRows.filter(r => r.classification === 'UPDATE').length,
+        updateCandidates:  classifiedRows.filter(r => r.classification === 'UPDATE_CANDIDATE').length,
+        reviewCount:       classifiedRows.filter(r => r.classification === 'REVIEW').length,
+        errorCount:        classifiedRows.filter(r => r.classification === 'ERROR').length,
       };
 
       const imageSummary = {
@@ -1642,6 +1665,7 @@ app.post(
         warnings: batchWarnings,
         detectedColumns,
         missingColumns,
+        sheetUsed,
       });
     } catch (err) {
       console.error('Inventory preview error:', err);
