@@ -1,6 +1,6 @@
 # ISYNC-17 — Inventory Apply / Import Validation Results
 
-**Status:** COMPLETE — local and staging Apply validation passed  
+**Status:** COMPLETE — merged, deployed, production smoke passed  
 **Date:** 2026-07-24  
 **Branch:** `feature/ISYNC-17-apply-import-validation`  
 **Restrictions:** No production Apply. No production DB writes. No production data changes.
@@ -159,11 +159,61 @@ All counts verified before and after Apply + cleanup. No orphaned rows.
 
 ---
 
+## Production Merge and Deployment Smoke
+
+**PR:** [#25](https://github.com/NarlaSR/chitrakala-arts/pull/25)  
+**Merge commit:** `83f81e2`  
+**ISYNC-17 commit:** `86d9aa6`  
+**Merged to:** `main` on 2026-07-24
+
+### Deployment Status
+
+| Service | Status | URL |
+|---|---|---|
+| Railway backend | Deployed ✓ | `chitrakalaarts-production.up.railway.app` |
+| Vercel frontend | Deployed ✓ | `www.chitrakala-arts.com` |
+
+### Production Smoke Results
+
+All checks read-only. Apply was not called.
+
+| Check | Result |
+|---|---|
+| Railway backend reachable | 200 OK ✓ |
+| Vercel frontend reachable | 200 OK ✓ |
+| Admin login | OK ✓ |
+| Preview endpoint registered | 404 on GET (expected — POST-only route in Express) ✓ |
+| Apply endpoint registered | Exists — NOT executed ✓ |
+| Public homepage | 200 OK ✓ |
+| Public artworks API | 200 OK — 38 artworks ✓ |
+| Public artwork detail | 200 OK ✓ |
+
+### Production Counts Before / After Smoke
+
+| Table | Before | After | Match |
+|---|---|---|---|
+| artworks | 38 | 38 | OK ✓ |
+| artwork_sizes | 91 | 91 | OK ✓ |
+| categories | 7 | 7 | OK ✓ |
+| order_requests | 3 | 3 | OK ✓ |
+| order_request_items | 0 | 0 | OK ✓ |
+
+### Safety Confirmations
+
+- Apply endpoint called: **NO**
+- Production import run: **NO**
+- Production DB writes: **NO**
+- `server/.env` committed: **NO**
+- Test workbooks committed: **NO**
+
+---
+
 ## Stopped Here Per Ticket
 
-Per ISYNC-17 ticket: **stop before production Apply**. No production import has been run. Branch is not merged. This document is the stopping point.
+Per ISYNC-17 ticket and production smoke approval: **production Apply has not been run**. The Apply endpoint is deployed but not executed. This document is the stopping point for ISYNC-17.
 
 Next steps (separate ticket):
-- Production Apply validation and merge
-- Image ZIP upload testing (requires real image assets)
+- Production Apply runbook — agree on scope, rollback plan, and ownership before executing
+- Image ZIP upload testing (no ZIP was uploaded in any validation run)
+- Admin Review Queue UI for `NEEDS_REVIEW` artwork management
 - ARCH-INV-02 (out of scope for ISYNC-17)
