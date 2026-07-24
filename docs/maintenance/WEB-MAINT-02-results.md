@@ -1,9 +1,9 @@
 # WEB-MAINT-02 — Block Public Order Request Submissions During Maintenance Mode
 
-**Status:** Complete (local dev only — not deployed, no production migration)
-**Date:** 2026-07-23
+**Status:** Complete — revalidated after ISYNC-16 merge (local + Railway staging), not deployed, no production migration
+**Date:** 2026-07-23 (original implementation); revalidated 2026-07-24 after ISYNC-16 merge
 **Depends on:** WEB-MAINT-01, ORD-01, ORD-02 (all confirmed merged into `main`)
-**Branch:** `feature/WEB-MAINT-02-block-order-requests-during-maintenance` (created from updated `main`)
+**Branch:** `feature/WEB-MAINT-02-block-order-requests-during-maintenance` (created from updated `main`; later merged forward with latest `main` to pick up ISYNC-16 — see [Revalidation after ISYNC-16 merge](#revalidation-after-isync-16-merge-2026-07-24) below)
 
 ## Summary
 
@@ -138,8 +138,144 @@ Order requests id 5 and id 6 (created during tests 1 and 4 above) were deleted f
 - ✅ No production deploy performed.
 - ✅ No production migration performed (none needed — see below).
 
-## Production/deploy note
+## Production/deploy note (original implementation)
 
 - No production deployment was performed as part of this ticket.
 - No production migration was performed or is required — this change adds no new table, column, or setting; it only adds a conditional read of the already-existing `app_settings.maintenance_mode` value inside an existing route handler.
 - This change should be deployed only after WEB-MAINT-01, ORD-01, and ORD-02 are already live in production (or included in the same approved release), since it depends on all three already being present and does nothing on its own without them.
+
+---
+
+## Revalidation after ISYNC-16 merge (2026-07-24)
+
+### Why
+
+ISYNC-16 was merged into `main` after the original WEB-MAINT-02 implementation above, and it touched backend server/Preview-parser behavior (`server/server.js`, `server/inventoryParser.js`). Since WEB-MAINT-02 also modifies backend order-request behavior in `server/server.js`, the branch needed to be updated with latest `main` and fully revalidated before staging/merge, to confirm both changesets coexist correctly. This is a revalidation only — no new feature scope was added.
+
+### Merge confirmation
+
+| Item | Result |
+|---|---|
+| `main` commit merged into WEB-MAINT-02 | **`53609ea`** — "ISYNC-16 production preview smoke results" |
+| Merge sequence followed | `git checkout main` → `git pull origin main --ff-only` (fast-forwarded `4c4c185` → `53609ea`) → `git checkout feature/WEB-MAINT-02-block-order-requests-during-maintenance` → `git merge main` |
+| Conflicts occurred | **No.** `git merge` completed automatically via the `ort` strategy (merge commit `038c077`) |
+| Conflicting files | None — no manual conflict resolution was needed |
+| Files changed by the merge | `server/server.js`, `server/inventoryParser.js`, `docs/inventory-sync/ISYNC-16-preview-validation-results.md` (new file, brought in from `main`) |
+
+Even though there were no `git`-flagged conflicts, both changesets were independently verified to be intact post-merge (not just "no conflict markers"):
+
+- **WEB-MAINT-02 guard preserved:** the maintenance-mode check (`if (await getMaintenanceMode()) { return res.status(503)... }`) is still the first statement inside `POST /api/order-requests` (`server/server.js:1940-1950`), byte-identical to the original implementation.
+- **ISYNC-16 changes preserved:** `POST /api/admin/inventory-sync/preview` still contains the Action-based row classification (`CREATE`/`UPDATE`/`NO_CHANGE`), `sheetUsed` detection, and UPDATE-row artwork-ID verification introduced by ISYNC-16 — confirmed by diffing `server/server.js` between `4c4c185` (pre-ISYNC-16) and `53609ea` (post-ISYNC-16) and cross-checking the merged file contains the same logic.
+- **No overlap between the two changesets:** ISYNC-16's changes are entirely scoped to the `/api/admin/inventory-sync/preview` handler and `server/inventoryParser.js`; WEB-MAINT-02's changes are entirely scoped to `POST /api/order-requests`. The two routes share no code path, and `getMaintenanceMode()` itself (`server/server.js:42-52`) was untouched by ISYNC-16.
+
+### Local revalidation results
+
+Backend started locally (`node server/server.js`) against local Postgres (`DATABASE_URL` pointing at `localhost:5432`), branch at merge commit `038c077`.
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Syntax checks | `node --check server/server.js` → OK; `node --check server/dbQueries.js` → OK |
+| 2 | Maintenance OFF — submit valid request (`art-1782445237565`, size 646) | `201`, order id 8 created |
+| 2b | Appears in admin | `GET /api/admin/order-requests` → `200`, id 8 present |
+| 3 | Maintenance ON via `PATCH /api/admin/settings/maintenance-mode` | `200`, confirmed via `GET /api/config/maintenance-mode` → `true` |
+| 3b | Valid payload while ON | `503 { "error": "Site is temporarily under maintenance. Please try again later." }` |
+| 3c | Invalid/empty payload (`{}`) while ON | Still `503` with the same message — **not** `400` — maintenance check confirmed to run before validation |
+| 3d | No new `order_requests`/`order_request_items` rows from blocked attempts | `GET /api/admin/order-requests` unchanged (still only ids 8, 7, 4) |
+| 4 | Admin login reachable during maintenance | Wrong password → `401 "Invalid credentials"`, not `503` |
+| 4b | Admin order request list | `200` |
+| 4c | Admin order request detail (id 8) | `200` |
+| 4d | Admin order request status update (id 8: `NEW` → `REVIEWING`) | `200` |
+| 4e | Admin turns maintenance OFF | `200`, `{"maintenanceMode":false}` |
+| 5 | Maintenance OFF again — submit valid request | `201`, order id 9 created — confirms immediate recovery, no restart needed |
+| 6 | **ISYNC-16 Preview endpoint smoke test** | See dedicated section below |
+| 7 | Safety: artwork data unchanged | `GET /api/artworks/art-1782445237565` identical before/after (status, quantity, price_inr/usd, sku, category, show_on_website, updatedAt) |
+
+**Local cleanup:** order request ids 8 and 9 (created during this revalidation) were deleted from the local dev DB afterward. Pre-existing rows (id 7, id 4, from prior sessions) were left untouched.
+
+### ISYNC-16 Preview smoke result
+
+Per the ticket's restriction, only the **Preview** endpoint was smoke-tested — no Apply, no production import, no price recalculation.
+
+- Generated a minimal one-row test workbook (`Inventory_Import` sheet, header row `Action | Item Description | Category | ArtCode | Inventory Status | Quantity | Price INR`, one `CREATE` row) in the session scratchpad (not committed to the repo).
+- `POST /api/admin/inventory-sync/preview` (admin-authenticated) → **`200`**.
+- Response: `sheetUsed: "Inventory_Import"` ✅ (correct sheet-name detection, the core ISYNC-16 behavior), `detectedColumns` matched the workbook headers, 1 row classified as `CREATE` with zero errors, `summary.totalRows: 1`.
+- Confirmed the Preview call performed **no write**: re-queried `GET /api/artworks` afterward and confirmed no artwork titled "WEB-MAINT-02 smoke test item" exists in the database — Preview remained read-only, as designed.
+- **Conclusion: ISYNC-16 Preview/parser behavior was not broken by the merge.**
+
+### Railway staging validation
+
+**Method:** per this repo's established convention (see `docs/inventory-sync/ISYNC-09-staging-production-readiness-runbook.md`), staging validation runs the local backend (this branch's code) with `DATABASE_URL` pointed at the Railway staging Postgres instance, rather than a separately deployed staging app server.
+
+| Item | Result |
+|---|---|
+| Staging DB host | `shinkansen.proxy.rlwy.net:41009` |
+| Confirmed NOT production | ✅ — host does not contain `crossover` (the production host, `crossover.proxy.rlwy.net:54308`, was never used); `current_database()` returned `railway`; the known staging-only artwork `art-1783882548608` ("SKU-STAG-TEST S12a") was present, matching prior staging validation docs (ISYNC-16, INV-SKU-01) |
+| Admin login used | `cks-admin` (documented staging admin account from prior INV-SKU-01/ISYNC-16 validation) — real login, not a minted token |
+
+**Before counts:**
+
+| Table | Count |
+|---|---|
+| artworks | 67 |
+| artwork_sizes | 68 |
+| categories | 7 |
+| order_requests | 0 |
+| order_request_items | 0 |
+
+**Validation steps:**
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Maintenance OFF — submit valid public order request (`art-1783882548608`) | `201`, **staging test order_request id = 4** |
+| 2 | Admin login (`cks-admin`) | `200`, valid token issued |
+| 3 | Turn maintenance mode ON | `200`, confirmed via `GET /api/config/maintenance-mode` → `true` |
+| 4 | Valid payload while ON | `503 { "error": "Site is temporarily under maintenance. Please try again later." }` |
+| 5 | Invalid/empty payload (`{}`) while ON | Still `503`, not `400` — maintenance check runs before validation on staging too |
+| 6 | Confirm no new rows from blocked attempts | `GET /api/admin/order-requests` → only id 4 present (from step 1); no additional rows |
+| 7 | Admin login reachable during maintenance | `200` (re-logged in while maintenance was ON) |
+| 8 | Admin order request list during maintenance | `200` |
+| 9 | Admin order request detail (id 4) during maintenance | `200` |
+| 10 | Admin order request status update (id 4: `NEW` → `REVIEWING`) during maintenance | `200` |
+| 11 | Turn maintenance mode OFF | `200`, `{"maintenanceMode":false}` |
+| 12 | **Confirm final maintenance state** | `GET /api/config/maintenance-mode` → **`{"maintenanceMode":false}`** ✅ |
+
+**Test request IDs created on staging:** `order_requests.id = 4` (single test row; the blocked attempts in steps 4–5 created no rows).
+
+**Cleanup:** `DELETE FROM order_requests WHERE id = 4` — deleted directly (cascade removed its 1 `order_request_items` row). Confirmed `order_requests` count returned to `0` immediately after.
+
+**After counts:**
+
+| Table | Before | After | Match |
+|---|---|---|---|
+| artworks | 67 | 67 | ✅ unchanged |
+| artwork_sizes | 68 | 68 | ✅ unchanged |
+| categories | 7 | 7 | ✅ unchanged |
+| order_requests | 0 | 0 | ✅ back to expected count after cleanup |
+| order_request_items | 0 | 0 | ✅ back to expected count after cleanup |
+
+**Additional safety check:** re-fetched `GET /api/artworks/art-1783882548608` after all staging testing — `price_inr` (500.00), `price_usd` (12.00), `sku` (`CKS-2026-LA-00001`), `status` (`IN_STOCK`), `quantity` (1), `category` (`lippan-art`) all identical to the values captured in the test request's own snapshot at creation time. No drift.
+
+**Credential handling note:** the staging database connection string was supplied by the user directly into the local, gitignored `server/.env` file (never pasted into chat/commits). It was used only for the duration of this validation and the local `.env` was restored to its original local-Postgres `DATABASE_URL` immediately afterward. No staging credentials appear in this document, any commit, or any other tracked file.
+
+### Safety confirmations (revalidation)
+
+- ✅ Local: no artwork/category/pricing/SKU/inventory data changed (verified before/after).
+- ✅ Staging: no artwork/category/pricing/SKU/inventory data changed — before/after counts identical for `artworks`, `artwork_sizes`, `categories`; test artwork's own fields unchanged.
+- ✅ No Inventory Apply run (local or staging) — only the Preview endpoint was smoke-tested, exactly as instructed.
+- ✅ No production import run.
+- ✅ No price recalculation run.
+- ✅ No production database accessed at any point (`crossover.proxy.rlwy.net:54308` never used; confirmed staging host `shinkansen.proxy.rlwy.net:41009` before every staging operation).
+- ✅ No production migration run.
+- ✅ No production deploy performed.
+- ✅ No PR was merged.
+- ✅ Staging test order-request rows were created only for this validation and fully cleaned up (id 4 deleted; counts confirmed returned to pre-test values).
+- ✅ Maintenance mode left in its correct final state (**OFF**) on both local and staging after validation.
+- ✅ `server/.env` (containing the staging credential) was never committed — it is gitignored and was restored to its local-only value after use.
+- ✅ No temp scripts, workbooks, or logs were committed — the smoke-test workbook and token files were created in the session scratchpad (outside the repo) and/or removed after use.
+
+### Production/deploy note (revalidation)
+
+- No production deployment was performed.
+- No production migration was performed or is required — unchanged from the original implementation; this revalidation confirmed the same holds true after the ISYNC-16 merge (ISYNC-16 itself required no new migration for this behavior either).
+- No PR was merged as part of this revalidation, per the ticket's restrictions.
+- **WEB-MAINT-02 is ready for merge/deploy approval**, contingent on the acceptance criteria below.
