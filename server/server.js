@@ -1935,6 +1935,16 @@ async function sendOrderRequestNotificationEmail(orderRequest) {
 // orderable artwork state; nothing here mutates artworks.
 app.post('/api/order-requests', orderRequestLimiter, async (req, res) => {
   try {
+    // Block new public submissions while the site is in maintenance mode.
+    // Checked first, before any validation or database access, using the
+    // same admin-controlled source of truth as the rest of the site
+    // (getMaintenanceMode() / app_settings.maintenance_mode).
+    if (await getMaintenanceMode()) {
+      return res.status(503).json({
+        error: 'Site is temporarily under maintenance. Please try again later.',
+      });
+    }
+
     const { name, email, phone, message, items } = req.body;
 
     if (!validateString(name, 2, 255)) {
