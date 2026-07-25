@@ -612,3 +612,99 @@ Both rows remain in the production DB in `CANCELLED` state. They are distinguish
 ### Final status
 
 WEB-MAINT-02 is **COMPLETE**. The maintenance-mode guard on `POST /api/order-requests` is live in production and verified: maintenance ON blocks all public order submissions (valid and invalid payloads alike) with `503` before any validation or DB write; admin routes are unaffected; maintenance OFF restores normal `201` behavior immediately.
+
+---
+
+## Production smoke test row cleanup (2026-07-25) {#production-smoke-cleanup-2026-07-25}
+
+### Context
+
+The production smoke above created test order request rows (ids 4 and 5) which were left as `CANCELLED` because no `DELETE /api/admin/order-requests/:id` admin route exists. This section covers the controlled hard-delete of those two rows directly from the production DB.
+
+### Verification before cleanup
+
+Both rows were inspected before deletion:
+
+| id | status | customer_name | customer_email |
+|---|---|---|---|
+| 4 | CANCELLED | SMOKE TEST MAINT-OFF | `smoketest-webmaint02@example-test.invalid` |
+| 5 | CANCELLED | SMOKE TEST MAINT-OFF-2 | `smoketest-webmaint02@example-test.invalid` |
+
+Child rows (`order_request_items`) for ids 4 and 5:
+
+| order_request_id | item_id | artwork_id | qty |
+|---|---|---|---|
+| 4 | 5 | art-1782445237565 | 1 |
+| 5 | 6 | art-1782445237565 | 1 |
+
+All four fields (status = CANCELLED, name = "SMOKE TEST …", email = `smoketest-webmaint02@example-test.invalid`, message prefix = "WEB-MAINT-02 production smoke test") unambiguously identify both rows as smoke test rows. No real customer row was included. Script aborted safety checks passed.
+
+### Cleanup transaction
+
+Executed in a single transaction with rollback guards:
+
+```sql
+-- Step 1: delete child rows
+DELETE FROM order_request_items
+WHERE order_request_id IN (4, 5);
+-- 2 rows deleted
+
+-- Step 2: delete parent rows with safety conditions
+DELETE FROM order_requests
+WHERE id IN (4, 5)
+  AND status = 'CANCELLED'
+  AND customer_email LIKE '%smoketest%';
+-- 2 rows deleted
+
+-- Pre-commit guard: confirm real order requests still present
+SELECT COUNT(*) FROM order_requests WHERE id IN (1, 2, 3);
+-- 3 (confirmed) — COMMIT proceeded
+```
+
+Transaction committed. Real order requests (ids 1, 2, 3) confirmed present throughout.
+
+### After cleanup verification
+
+| Query | Result |
+|---|---|
+| `SELECT … FROM order_requests WHERE id IN (4, 5)` | **0 rows** ✅ |
+| `SELECT … FROM order_request_items WHERE order_request_id IN (4, 5)` | **0 rows** ✅ |
+| `SELECT id, status FROM order_requests WHERE id IN (1, 2, 3)` | id=1 CANCELLED, id=2 CANCELLED, id=3 NEW — **all present, untouched** ✅ |
+| `app_settings.maintenance_mode` | `false` (OFF) ✅ |
+
+### Before / after counts
+
+| Table | Before cleanup | After cleanup | Match |
+|---|---|---|---|
+| artworks | 38 | 38 | ✅ |
+| artwork_sizes | 91 | 91 | ✅ |
+| categories | 7 | 7 | ✅ |
+| order_requests | 5 | 3 | ✅ restored to original count |
+| order_request_items | 6 | 4 | ✅ (see note below) |
+| maintenance_mode | `false` | `false` | ✅ |
+
+**Note on `order_request_items`:** the production smoke section above reported `order_request_items: 0` because the admin list endpoint does not embed items per order in its response, making the API-level count appear as 0. The actual DB count before cleanup was 6: 4 item rows belonging to real order requests (ids 1, 2, 3) plus 2 smoke item rows. After deleting the 2 smoke item rows, 4 remain — all belonging to real order requests, none touched by this cleanup.
+
+### Safety confirmations (cleanup)
+
+- ✅ Apply endpoint called: **NO**
+- ✅ Production import run: **NO**
+- ✅ Artwork/inventory/category/pricing/SKU data modified: **NO**
+- ✅ Order requests 1, 2, 3 (real/pre-existing rows): **NOT touched** — confirmed present and unchanged after cleanup
+- ✅ Only rows verified as smoke test rows (ids 4, 5) were deleted — by id, status = CANCELLED, and smoke test email pattern
+- ✅ Maintenance mode: **OFF** at end of cleanup
+- ✅ `server/.env` not committed — used for direct DB connection only; restored to local dev value immediately after cleanup
+- ✅ No temp scripts committed
+
+### Final production state
+
+| Table | Final count |
+|---|---|
+| order_requests | 3 (ids 1, 2, 3) |
+| order_request_items | 4 (belonging to ids 1, 2, 3) |
+| artworks | 38 |
+| artwork_sizes | 91 |
+| categories | 7 |
+| maintenance_mode | `false` (OFF) |
+
+**WEB-MAINT-02 is fully closed.** Smoke test rows are removed; production DB is in the expected clean state; no artwork, category, pricing, SKU, or inventory data was modified at any point.
