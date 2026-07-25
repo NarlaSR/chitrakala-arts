@@ -1,6 +1,6 @@
 # WEB-MAINT-02 — Block Public Order Request Submissions During Maintenance Mode
 
-**Status:** Complete — Railway staging validation passed after ISYNC-17 merge; ready for final merge/deploy approval; not deployed, no production migration
+**Status:** COMPLETE — PR #23 merged to main (`9a13c00`), deployed to Railway + Vercel, production smoke passed 2026-07-25
 **Date:** 2026-07-23 (original implementation); revalidated 2026-07-24 after ISYNC-16 merge; refreshed 2026-07-24 after ISYNC-17 merge; staging-validated 2026-07-24 after ISYNC-17 merge
 **Depends on:** WEB-MAINT-01, ORD-01, ORD-02 (all confirmed merged into `main`)
 **Branch:** `feature/WEB-MAINT-02-block-order-requests-during-maintenance` (created from updated `main`; merged forward twice with latest `main` — once for ISYNC-16, once for ISYNC-17 — see [Revalidation after ISYNC-16 merge](#revalidation-after-isync-16-merge-2026-07-24), [Refresh after ISYNC-17 merge](#refresh-after-isync-17-merge-2026-07-24-2), and [Railway staging validation after ISYNC-17](#railway-staging-validation-after-isync-17-2026-07-24) below)
@@ -517,3 +517,98 @@ Local revalidation after the ISYNC-17 merge (above) passed. This section runs th
 - No price recalculation was run.
 - No PR was merged, per the ticket's restrictions.
 - **WEB-MAINT-02 has now passed local validation and Railway staging validation after both the ISYNC-16 and ISYNC-17 merges.** The branch is current with `main` (`83f81e2`), both the WEB-MAINT-02 maintenance guard and the ISYNC-16/ISYNC-17 Preview/Apply changes are confirmed intact and functioning correctly together, and all acceptance criteria for merge/deploy approval are met.
+
+---
+
+## Production deployment and smoke validation (2026-07-25) {#production-deployment-smoke-2026-07-25}
+
+### Deployment
+
+| Item | Result |
+|---|---|
+| PR | [#23](https://github.com/NarlaSR/chitrakala-arts/pull/23) — manually merged by the user |
+| Merge commit | `9a13c00` |
+| Files changed | `server/server.js` (+10 lines — maintenance guard in `POST /api/order-requests`), `docs/maintenance/WEB-MAINT-02-results.md` (new file, 519 additions) |
+| Railway auto-deploy | ✅ Deployed — `GET chitrakalaarts-production.up.railway.app/api/artworks` → `200 OK` |
+| Vercel auto-deploy | ✅ Deployed — `GET https://www.chitrakala-arts.com` → `200 OK` |
+| No DB migration | ✅ Confirmed — WEB-MAINT-02 adds no new table, column, or setting; no migration was run |
+
+### Production baseline (before smoke)
+
+| Table | Count |
+|---|---|
+| artworks | 38 |
+| artwork_sizes | 91 |
+| categories | 7 |
+| order_requests | 3 |
+| order_request_items | 0 |
+| maintenance_mode | `false` (OFF) |
+
+Existing order request IDs: `{1, 2, 3}`.
+
+### Smoke validation steps and results
+
+Smoke hit production endpoints directly (`chitrakalaarts-production.up.railway.app`, `www.chitrakala-arts.com`). Local server and `server/.env` were not involved. Admin: `cks-admin`.
+
+Test artwork used: `art-1782445237565` ("Aqua Blue Floral Wall Decor", `IN_STOCK`, size id `738`) — the first public/orderable artwork returned by `GET /api/artworks`.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Admin login | `200` OK |
+| 2 | Railway backend reachable | `200` OK |
+| 2b | Vercel frontend reachable | `200` OK |
+| 3 | Maintenance OFF — `POST /api/order-requests` (valid payload) | `201` — **smoke order id = 4** |
+| 3b | Admin can see order detail | `GET /api/admin/order-requests/4` → `200` |
+| 4 | Turn maintenance ON | `PATCH /api/admin/settings/maintenance-mode {"maintenanceMode":true}` → `200 {"maintenanceMode":true}` |
+| 4b | Confirmed via public endpoint | `GET /api/config/maintenance-mode` → `{"maintenanceMode":true}` ✅ |
+| 5 | Valid payload blocked during maintenance | `POST /api/order-requests` (valid) → `503 {"error":"Site is temporarily under maintenance. Please try again later."}` ✅ |
+| 6 | Invalid/empty payload blocked before validation | `POST /api/order-requests` (`{}`) → `503` with same maintenance message — **not** `400` — confirms maintenance check runs before normal validation ✅ |
+| 7 | No new rows from blocked attempts | `GET /api/admin/order-requests` → only existing `{1,2,3}` + smoke id 4; no new rows from steps 5–6 ✅ |
+| 8 | Admin login reachable during maintenance | Wrong-password `POST /api/auth/login` → `401`, not `503` ✅ |
+| 8b | Admin order request list during maintenance | `200` ✅ |
+| 8c | Admin order request detail during maintenance | `GET /api/admin/order-requests/4` → `200` ✅ |
+| 8d | Admin order request status update during maintenance | `PATCH /api/admin/order-requests/4/status {"status":"REVIEWING"}` → `200` (on smoke row only) ✅ |
+| 9 | Turn maintenance OFF | `PATCH /api/admin/settings/maintenance-mode {"maintenanceMode":false}` → `200 {"maintenanceMode":false}` |
+| 9b | Confirmed via public endpoint | `GET /api/config/maintenance-mode` → `{"maintenanceMode":false}` ✅ |
+| 10 | Maintenance OFF again — `POST /api/order-requests` works | `201` — **smoke order id = 5** ✅ — confirms immediate recovery, no restart needed |
+| 11 | Final maintenance state | `false` (OFF) ✅ |
+
+**All assertions passed.**
+
+### Cleanup
+
+`DELETE /api/admin/order-requests/:id` returns `404` — no hard-delete route exists for order requests in this app. Cleanup fell back to `PATCH /api/admin/order-requests/:id/status {"status":"CANCELLED"}` for both smoke rows:
+
+| Order ID | Customer email | Final status |
+|---|---|---|
+| 4 | `smoketest-webmaint02@example-test.invalid` | `CANCELLED` |
+| 5 | `smoketest-webmaint02@example-test.invalid` | `CANCELLED` |
+
+Both rows remain in the production DB in `CANCELLED` state. They are distinguishable from real orders by the `smoketest-webmaint02@example-test.invalid` email address. They can be hard-deleted from the Railway console's SQL editor if desired (`DELETE FROM order_requests WHERE id IN (4, 5)`), but `CANCELLED` is a terminal state and they will not appear in any active order workflow.
+
+### Production after-counts
+
+| Table | Before | After | Match |
+|---|---|---|---|
+| artworks | 38 | 38 | ✅ unchanged |
+| artwork_sizes | 91 | 91 | ✅ unchanged |
+| categories | 7 | 7 | ✅ unchanged |
+| order_requests | 3 | 5 | ℹ 2 CANCELLED smoke rows remain (no hard-delete route; see cleanup note above) |
+| order_request_items | 0 | 0 | ✅ unchanged |
+| maintenance_mode | `false` | `false` | ✅ OFF |
+
+### Safety confirmations (production smoke)
+
+- ✅ Apply endpoint called: **NO**
+- ✅ Production import run: **NO**
+- ✅ Artwork/inventory/category/pricing/SKU data modified: **NO**
+- ✅ Existing real order requests (ids 1, 2, 3) touched: **NO**
+- ✅ Maintenance mode left ON: **NO** — confirmed `false` via `GET /api/config/maintenance-mode` at end of smoke
+- ✅ `server/.env` committed: **NO** — `.env` was not involved; smoke hit production URLs directly
+- ✅ Secrets committed: **NO**
+- ✅ No migration run: **NO** — WEB-MAINT-02 requires no migration; none was run
+- ✅ Admin status-update performed only on smoke test rows (ids 4, 5), never on real customer order requests
+
+### Final status
+
+WEB-MAINT-02 is **COMPLETE**. The maintenance-mode guard on `POST /api/order-requests` is live in production and verified: maintenance ON blocks all public order submissions (valid and invalid payloads alike) with `503` before any validation or DB write; admin routes are unaffected; maintenance OFF restores normal `201` behavior immediately.
