@@ -66,6 +66,9 @@ server/.env
 # Local-only test workbooks (corrected copies for dev testing — not for commit)
 __test_workbooks/
 
+# Private local files — business data, import workbooks, image packages (never commit)
+_private/
+
 # Inventory sync test output
 preview-response.json
 preview-response-db.json
