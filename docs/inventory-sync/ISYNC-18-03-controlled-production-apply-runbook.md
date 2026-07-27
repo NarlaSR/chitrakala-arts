@@ -43,10 +43,35 @@ USD prices are calculated by the server at Apply time using production settings
 
 ---
 
+## Credential Safety
+
+**Never commit production credentials to this repository or any repository.**
+
+- Load admin credentials from environment variables at script runtime:
+  - `CHITRAKALA_ADMIN_USERNAME`
+  - `CHITRAKALA_ADMIN_PASSWORD`
+- Alternatively, use `getpass.getpass()` so the password is prompted interactively and
+  never appears in source code, shell history, or terminal output.
+- Never paste real passwords into runbook scripts, inline comments, or example commands.
+- Never log credential values. `print("Auth OK")` is acceptable; `print(password)` is not.
+- Before any commit, confirm `server/.env` is not staged: run `git status --short` and
+  verify `server/.env` is absent from the staged list.
+- After running a script, delete the temporary script file from the scratchpad.
+  Do not save scripts containing credentials to the project repo.
+- Clear shell history entries that contained credential values if necessary.
+
+The Python script templates in Sections D and E use environment variables for credentials.
+Set those variables in your shell before running the script — do not edit the source to
+embed the password inline.
+
+---
+
 ## A. Pre-Apply Owner Approval Checklist
 
-Owner must confirm all items below before operator runs Apply.
-This checklist is the gate — do not proceed to Step B without owner sign-off.
+**Owner approval must be obtained outside this document — confirm via Jira or chat before
+ISYNC-18-04 execution begins.** The checkbox table below is a reference summary only.
+A checked box in this file is not sufficient authorization. The operator must have a
+separate, explicit message or Jira approval from the owner before proceeding to Step B.
 
 | # | Item | Owner confirms |
 |---|---|---|
@@ -77,6 +102,7 @@ Do not proceed if the backup fails or produces a file smaller than 1 MB.
 ```powershell
 # Substitute the production DATABASE_URL password from server/.env
 # Production host: crossover.proxy.rlwy.net:54308  DB: railway
+# Do not paste the password into terminal history — set it as a variable.
 
 $date = Get-Date -Format "yyyyMMdd"
 $outFile = "C:\Development\backups\postgres\chitrakala_prod_${date}_pre_isync18.backup"
@@ -92,7 +118,6 @@ Write-Host "Backup written to: $outFile"
 ### Verification
 
 ```powershell
-# File must exist and be >= 1 MB
 $f = Get-Item "C:\Development\backups\postgres\chitrakala_prod_${date}_pre_isync18.backup"
 if ($f.Length -lt 1MB) { Write-Error "Backup too small — STOP" }
 ```
@@ -114,45 +139,83 @@ pg_restore -d "postgresql://postgres:<PASSWORD>@crossover.proxy.rlwy.net:54308/r
 
 ## C. Production Baseline Capture
 
-Record these values immediately after the backup, before running Apply.
-Use a read-only production API call (GET only — no writes).
+Record all values below immediately after the backup, before running Apply.
+These values are used in Section F to confirm Apply had exactly the expected effect.
+Use read-only calls only (GET for API, SELECT for DB — no writes).
 
-### Step C1 — Total public artwork count
-
-```
-GET https://chitrakalaarts-production.up.railway.app/api/artworks
-```
-
-Record: total count in response (expected ~38 as of ISYNC-18-00 check).
-
-### Step C2 — Category breakdown (admin — authenticated)
+### C1 — API-accessible counts
 
 ```
-GET https://chitrakalaarts-production.up.railway.app/api/admin/artworks
+# Authenticate (credentials from env — see Credential Safety section)
+POST /api/auth/login  →  save token
+
+# Public artworks (no auth required)
+GET /api/artworks
+
+# Admin artworks (all statuses, all categories)
+GET /api/admin/artworks
 Authorization: Bearer <token>
+
+# Categories
+GET /api/categories
 ```
 
-Record the count of artworks per category slug, especially:
-- `warli-art` (expected: 0)
-- `mixed-art` (expected: 0)
-- `texture-art` (expected: ≥1)
+**Public artwork definition:** An artwork is publicly visible when
+`status IN ('IN_STOCK', 'MADE_TO_ORDER') AND show_on_website = true`.
+The GET /api/artworks endpoint returns only artworks meeting this definition.
+The 4 imported rows will have status=NEEDS\_REVIEW and show\_on\_website=false —
+they do not qualify and must not appear in the public response.
 
-### Step C3 — NEEDS\_REVIEW count (admin)
+### C2 — DB-level counts (psql)
 
-From the admin artworks response, record how many rows have `status = NEEDS_REVIEW`
-(expected: 0 before this Apply; this is the baseline to compare against post-Apply).
+```sql
+-- Connect: postgresql://postgres:<PASSWORD>@crossover.proxy.rlwy.net:54308/railway
 
-### Baseline record (fill in before Apply)
+SELECT COUNT(*) AS artwork_sizes_count   FROM artwork_sizes;
+SELECT COUNT(*) AS order_requests_count  FROM order_requests;
+SELECT COUNT(*) AS order_request_items_count FROM order_request_items;
+SELECT COUNT(*) AS categories_count      FROM categories;
+
+SELECT key, value
+FROM app_settings
+WHERE key IN ('fx_rate', 'usd_multiplier', 'maintenance_mode');
+```
+
+### C3 — Baseline record (fill in before Apply)
 
 | Metric | Baseline value (fill in) |
 |---|---|
-| Total artworks (GET /api/artworks) | |
-| Total artworks admin (GET /api/admin/artworks) | |
-| warli-art count | |
-| mixed-art count | |
-| texture-art count | |
-| NEEDS\_REVIEW count | |
-| Public artworks (show\_on\_website=TRUE or status=IN\_STOCK) | |
+| Total artworks — admin (`/api/admin/artworks`) | |
+| Total artworks — public (`/api/artworks`) | |
+| artwork\_sizes count (DB) | |
+| categories count (DB or `/api/categories`) | |
+| order\_requests count (DB) | |
+| order\_request\_items count (DB) | |
+| `fx_rate` (app\_settings) | |
+| `usd_multiplier` (app\_settings) | |
+| `maintenance_mode` (app\_settings) | |
+| NEEDS\_REVIEW count (admin artworks, status = NEEDS\_REVIEW) | |
+| warli-art count (admin, all statuses) | |
+| mixed-art count (admin, all statuses) | |
+| texture-art count (admin, all statuses) | |
+
+### C4 — Expected changes after Apply
+
+| Metric | Expected change |
+|---|---|
+| Total artworks admin | +4 |
+| Total artworks public | unchanged (0 new public artworks) |
+| artwork\_sizes | unchanged |
+| categories | unchanged |
+| order\_requests | unchanged |
+| order\_request\_items | unchanged |
+| fx\_rate | unchanged |
+| usd\_multiplier | unchanged |
+| maintenance\_mode | unchanged |
+| NEEDS\_REVIEW count | +4 |
+| warli-art count (admin) | +2 |
+| mixed-art count (admin) | +1 |
+| texture-art count (admin) | +1 |
 
 ---
 
@@ -161,21 +224,28 @@ From the admin artworks response, record how many rows have `status = NEEDS_REVI
 Re-run Preview against production as the final gate check, immediately before Apply.
 Preview is read-only — no DB writes.
 
-### Command (Python — same pattern as run_preview.py in scratchpad)
+### Command
+
+Save this script to the scratchpad directory. Do not commit it.
+Set `CHITRAKALA_ADMIN_USERNAME` and `CHITRAKALA_ADMIN_PASSWORD` in your shell before running.
 
 ```python
-"""Final pre-Apply Preview check."""
-import json, requests
+"""Final pre-Apply Preview check. Save to scratchpad — do not commit."""
+import json, os, getpass, requests
 from pathlib import Path
 
 PROD     = "https://chitrakalaarts-production.up.railway.app"
 WB_PATH  = Path("C:/Development/Projects/chitrakala-arts/_private/inventory-import/ISYNC-18-production-import-package-DRAFT.xlsx")
 ZIP_PATH = Path("C:/Development/Projects/chitrakala-arts/_private/inventory-import/ISYNC-18-import-images-DRAFT.zip")
 
+username = os.environ.get("CHITRAKALA_ADMIN_USERNAME") or input("Admin username: ")
+password = os.environ.get("CHITRAKALA_ADMIN_PASSWORD") or getpass.getpass("Admin password: ")
+
 r = requests.post(f"{PROD}/api/auth/login",
-                  json={"username": "cks-admin", "password": "sonu@786"}, timeout=15)
-assert r.status_code == 200
+                  json={"username": username, "password": password}, timeout=15)
+assert r.status_code == 200, f"Login failed: {r.status_code}"
 token = r.json()["token"]
+print("Auth OK")
 
 with open(WB_PATH, "rb") as wf, open(ZIP_PATH, "rb") as zf:
     resp = requests.post(
@@ -235,21 +305,27 @@ failure does not roll back the artwork rows, but is reported in the response.
 
 ### Command
 
+Save this script to the scratchpad directory. Do not commit it.
+Set `CHITRAKALA_ADMIN_USERNAME` and `CHITRAKALA_ADMIN_PASSWORD` in your shell before running.
+
 ```python
 """
 ISYNC-18 Production Apply — 4-row controlled import.
 Run only after: backup taken, baseline recorded, final Preview passed.
-Save this file to scratchpad, not to the project repo.
+Save to scratchpad — do not commit to the project repo.
 """
-import json, requests
+import json, os, getpass, requests
 from pathlib import Path
 
 PROD     = "https://chitrakalaarts-production.up.railway.app"
 WB_PATH  = Path("C:/Development/Projects/chitrakala-arts/_private/inventory-import/ISYNC-18-production-import-package-DRAFT.xlsx")
 ZIP_PATH = Path("C:/Development/Projects/chitrakala-arts/_private/inventory-import/ISYNC-18-import-images-DRAFT.zip")
 
+username = os.environ.get("CHITRAKALA_ADMIN_USERNAME") or input("Admin username: ")
+password = os.environ.get("CHITRAKALA_ADMIN_PASSWORD") or getpass.getpass("Admin password: ")
+
 r = requests.post(f"{PROD}/api/auth/login",
-                  json={"username": "cks-admin", "password": "sonu@786"}, timeout=15)
+                  json={"username": username, "password": password}, timeout=15)
 assert r.status_code == 200, f"Login failed: {r.status_code}"
 token = r.json()["token"]
 print("Auth OK")
@@ -273,7 +349,6 @@ out = Path("C:/Development/Projects/chitrakala-arts/_private/apply-response.json
 out.write_text(json.dumps(data, indent=2), encoding="utf-8")
 print(f"Response saved to: {out}")
 
-# Print summary
 s = data.get("summary", {})
 print(f"\n--- Summary ---")
 print(f"  createdCount : {s.get('createdCount')}")
@@ -293,7 +368,11 @@ if data.get("imageFailures"):
         print(f"  {f}")
 ```
 
-### Expected response
+### Expected response shape
+
+Artwork IDs are generated at Apply time in the form `art-{timestamp}-{index}`, where
+timestamp (milliseconds since epoch) and index are determined at runtime.
+Do not assume specific ID values — record the exact IDs from the actual response.
 
 ```json
 {
@@ -307,10 +386,10 @@ if data.get("imageFailures"):
     "imagesFailed": 0
   },
   "created": [
-    {"rowNumber": ..., "artworkId": "art-<timestamp>-0", "sku": null, "title": "18\" Round Warli Art"},
-    {"rowNumber": ..., "artworkId": "art-<timestamp>-1", "sku": null, "title": "10\" Round Warli Art"},
-    {"rowNumber": ..., "artworkId": "art-<timestamp>-2", "sku": null, "title": "Decorative Tray 11\""},
-    {"rowNumber": ..., "artworkId": "art-<timestamp>-3", "sku": null, "title": "3 Partition Square Box ..."}
+    {"rowNumber": "<N>", "artworkId": "<record actual ID>", "sku": null, "title": "18\" Round Warli Art"},
+    {"rowNumber": "<N>", "artworkId": "<record actual ID>", "sku": null, "title": "10\" Round Warli Art"},
+    {"rowNumber": "<N>", "artworkId": "<record actual ID>", "sku": null, "title": "Decorative Tray 11\""},
+    {"rowNumber": "<N>", "artworkId": "<record actual ID>", "sku": null, "title": "3 Partition Square Box ..."}
   ],
   "updated": [],
   "skipped": [],
@@ -318,8 +397,8 @@ if data.get("imageFailures"):
 }
 ```
 
-**Record the 4 artwork IDs from the `created` array immediately.** They are required for
-rollback (Section G) and for the ISYNC-18-04 report.
+**Record the 4 artwork IDs from the `created` array immediately after Apply.**
+They are required for validation (Section F) and rollback (Section G).
 
 ### Stop condition
 
@@ -333,26 +412,33 @@ rollback (Section G) and for the ISYNC-18-04 report.
 
 Run all checks immediately after a successful Apply (HTTP 200, createdCount=4).
 
-### F1 — Artwork count (admin)
+### F1 — Artwork and table counts (admin + DB)
 
-```
-GET /api/admin/artworks
-```
+Compare against the baseline recorded in Section C3.
 
 | Metric | Expected | Actual |
 |---|---|---|
-| Total artworks | baseline + 4 | |
-| warli-art count | baseline warli + 2 | |
-| mixed-art count | baseline mixed + 1 | |
-| texture-art count | baseline texture + 1 | |
+| Total artworks (admin) | baseline + 4 | |
+| artwork\_sizes count | unchanged | |
+| categories count | unchanged | |
+| order\_requests count | unchanged | |
+| order\_request\_items count | unchanged | |
+| fx\_rate | unchanged | |
+| usd\_multiplier | unchanged | |
+| maintenance\_mode | unchanged | |
+| NEEDS\_REVIEW count | baseline + 4 | |
+| warli-art count (admin) | baseline warli + 2 | |
+| mixed-art count (admin) | baseline mixed + 1 | |
+| texture-art count (admin) | baseline texture + 1 | |
 
 ### F2 — Public API count unchanged
+
+Public artworks are defined as: `status IN ('IN_STOCK', 'MADE_TO_ORDER') AND show_on_website = true`.
+The 4 imported rows have `status = NEEDS_REVIEW` and `show_on_website = false` and must not appear.
 
 ```
 GET /api/artworks
 ```
-
-Public count must equal the pre-Apply baseline (no new artwork is public).
 
 | Check | Expected | Actual |
 |---|---|---|
@@ -387,14 +473,30 @@ Authorization: Bearer <token>
 Price USD is calculated at Apply time from live production settings
 `fx_rate=92.4 / usd_multiplier=2.25`. Minor rounding (±0.01) is acceptable.
 
-### F5 — Category landing pages (public)
+### F5 — Category API: no hidden import rows leak publicly
 
-Verify no new artwork appears on the public-facing category pages. The 4 new rows have
-`show_on_website=false` and must be invisible to the public catalog.
+Check that the public artworks-per-category counts are unchanged, and that warli-art
+and mixed-art do not appear in a public-only category listing (since this import adds
+no public artworks to those categories).
 
-- `GET /api/artworks?category=warli-art` — count unchanged from baseline
-- `GET /api/artworks?category=mixed-art` — count unchanged from baseline
-- `GET /api/artworks?category=texture-art` — count unchanged from baseline
+```
+GET /api/artworks?category=warli-art   → count unchanged from baseline
+GET /api/artworks?category=mixed-art   → count unchanged from baseline
+GET /api/artworks?category=texture-art → count unchanged from baseline
+```
+
+If the categories API supports a `publicOnly` filter:
+
+```
+GET /api/categories?publicOnly=true
+```
+
+- `warli-art` must not appear if it had zero public artworks before this import
+  (the 2 imported warli-art rows are NEEDS\_REVIEW + show\_on\_website=false and do not qualify)
+- `mixed-art` must not appear if it had zero public artworks before this import
+  (same reason — the 1 imported mixed-art row is hidden)
+- `texture-art` public behavior must be unchanged — if it appeared before Apply with
+  existing public artworks, it must still appear with the same count
 
 ### F6 — Admin Review Queue
 
@@ -418,42 +520,66 @@ Section D (final Preview check) when ready.
 If post-Apply validation (Section F) reveals unexpected state, stop and assess.
 Do not publish or edit any artwork until the discrepancy is resolved.
 
-**Option A — Targeted SQL cleanup (preferred for controlled recovery of the 4 import rows)**
+**Option A — Targeted SQL cleanup (preferred)**
 
-Use the 4 artwork IDs recorded from the Apply response.
+Use the 4 artwork IDs recorded from the Apply response. All image data is stored in the
+`artworks` table (`image_data`, `image_mime_type` columns) — there is no separate image table.
+Deleting the 4 artwork rows removes all associated data.
 
 ```sql
 -- Connect to production DB: crossover.proxy.rlwy.net:54308/railway
--- Confirm the IDs match the expected creation timestamp before deleting.
+-- Substitute the 4 artwork IDs from the Apply response.
+-- Read every comment. Review the SELECT output before running DELETE.
 
--- 1. Review what will be deleted
-SELECT id, title, category, status, show_on_website, created_at
+BEGIN;
+
+-- Step 1: Confirm all 4 rows match expected attributes.
+-- Stop and ROLLBACK if any of the following are true:
+--   - Fewer or more than 4 rows returned
+--   - Any title does not match an ISYNC-18 imported artwork
+--   - Any category is not one of: warli-art, warli-art, mixed-art, texture-art
+--   - Any status != 'NEEDS_REVIEW'
+--   - Any show_on_website = true
+--   - Any sku IS NOT NULL
+--   - Any created_at is before the Apply timestamp
+
+SELECT id, title, category, status, show_on_website, sku, created_at
 FROM artworks
 WHERE id IN (
-  'art-<timestamp>-0',
-  'art-<timestamp>-1',
-  'art-<timestamp>-2',
-  'art-<timestamp>-3'
+  '<artwork-id-row-1>',
+  '<artwork-id-row-2>',
+  '<artwork-id-row-3>',
+  '<artwork-id-row-4>'
 );
 
--- 2. Delete the 4 rows (image_data is in artworks table — no separate table to clean)
+-- Step 2: Delete only after Step 1 confirms all 4 rows are exactly as expected.
+-- The extra WHERE guards prevent accidental deletion of any unrelated artwork
+-- if an ID was miscopied or the wrong ID was used.
+
 DELETE FROM artworks
 WHERE id IN (
-  'art-<timestamp>-0',
-  'art-<timestamp>-1',
-  'art-<timestamp>-2',
-  'art-<timestamp>-3'
-);
+  '<artwork-id-row-1>',
+  '<artwork-id-row-2>',
+  '<artwork-id-row-3>',
+  '<artwork-id-row-4>'
+)
+  AND status = 'NEEDS_REVIEW'
+  AND show_on_website = false
+  AND sku IS NULL;
 
--- 3. Verify count returns to baseline
+-- Step 3: Confirm exactly 4 rows were affected.
+-- If the DELETE affected any count other than 4, run ROLLBACK (do not COMMIT).
+
+-- Step 4: Verify total count returns to baseline.
 SELECT COUNT(*) FROM artworks;
-
--- 4. Verify no NEEDS_REVIEW rows remain (if baseline was 0)
 SELECT COUNT(*) FROM artworks WHERE status = 'NEEDS_REVIEW';
-```
 
-Note: `image_data` and `image_mime_type` are columns in the `artworks` table.
-Deleting the artwork row removes the image data. No separate image table to clean.
+-- Step 5: Commit only if DELETE affected exactly 4 rows and counts match baseline.
+COMMIT;
+
+-- If DELETE row count was not exactly 4, or any check failed:
+-- ROLLBACK;
+```
 
 **Option B — Full DB restore from backup (for severe data corruption or unknown state)**
 
@@ -485,6 +611,8 @@ Stop immediately and do not proceed if any of the following occur:
 | H14 | Any new artwork appears in public `/api/artworks` response | Section F |
 | H15 | Price values differ from expected by more than ₹1 / $0.05 | Section F |
 | H16 | Network error or timeout during Apply | At Apply — do not retry without confirming DB state |
+| H17 | warli-art or mixed-art appears in public category listing with new artworks | Section F5 |
+| H18 | artwork\_sizes, order\_requests, or order\_request\_items count changed | Section F1 |
 
 When any stop condition is hit: pause, record what was observed, and do not take
 further action on production until the root cause is understood.
@@ -508,12 +636,12 @@ and fill in actual values after the Apply is complete.
 
 ## Apply Package
 
-| Row | Item | Category | Price INR | artworkId |
+| Row | Item | Category | Price INR | artworkId (from Apply response) |
 |---|---|---|---|---|
-| 1 | 18" Round Warli Art | warli-art | 7,000 | <art-id> |
-| 2 | 10" Round Warli Art | warli-art | 2,500 | <art-id> |
-| 3 | Decorative Tray 11" | mixed-art | 1,100 | <art-id> |
-| 4 | 3 Partition Square Box | texture-art | 1,600 | <art-id> |
+| 1 | 18" Round Warli Art | warli-art | 7,000 | <record actual ID> |
+| 2 | 10" Round Warli Art | warli-art | 2,500 | <record actual ID> |
+| 3 | Decorative Tray 11" | mixed-art | 1,100 | <record actual ID> |
+| 4 | 3 Partition Square Box | texture-art | 1,600 | <record actual ID> |
 
 ---
 
@@ -521,10 +649,30 @@ and fill in actual values after the Apply is complete.
 
 | Step | Result |
 |---|---|
-| Owner approval (Section A) | ✅ / ❌ |
+| Owner approval (Section A) — confirmed via Jira/chat | ✅ / ❌ |
 | Backup taken (Section B) | ✅ / ❌ — <filename> (<size> bytes) |
-| Baseline captured (Section C) | ✅ — baseline: <N> artworks |
+| Baseline captured (Section C) | ✅ |
 | Final Preview (Section D) | ✅ HTTP 200 / ❌ |
+
+---
+
+## Baseline Counts (fill in from Section C)
+
+| Metric | Baseline |
+|---|---|
+| Total artworks (admin) | |
+| Total artworks (public) | |
+| artwork_sizes | |
+| categories | |
+| order_requests | |
+| order_request_items | |
+| fx_rate | |
+| usd_multiplier | |
+| maintenance_mode | |
+| NEEDS_REVIEW count | |
+| warli-art (admin) | |
+| mixed-art (admin) | |
+| texture-art (admin) | |
 
 ---
 
@@ -547,10 +695,20 @@ and fill in actual values after the Apply is complete.
 | Check | Expected | Actual | Result |
 |---|---|---|---|
 | Total artworks (admin) | baseline + 4 | | |
-| warli-art count | baseline + 2 | | |
-| mixed-art count | baseline + 1 | | |
-| texture-art count | baseline + 1 | | |
-| Public artwork count | baseline (unchanged) | | |
+| artwork_sizes | unchanged | | |
+| categories | unchanged | | |
+| order_requests | unchanged | | |
+| order_request_items | unchanged | | |
+| fx_rate | unchanged | | |
+| usd_multiplier | unchanged | | |
+| maintenance_mode | unchanged | | |
+| NEEDS_REVIEW count | baseline + 4 | | |
+| warli-art count (admin) | baseline + 2 | | |
+| mixed-art count (admin) | baseline + 1 | | |
+| texture-art count (admin) | baseline + 1 | | |
+| Public artwork count | unchanged | | |
+| warli-art: no new public artworks | 0 new public | | |
+| mixed-art: no new public artworks | 0 new public | | |
 | All 4 new rows: status NEEDS_REVIEW | yes | | |
 | All 4 new rows: show_on_website = false | yes | | |
 | All 4 new rows: sku = null | yes | | |
@@ -572,7 +730,8 @@ After the admin reviews the 4 rows in the Review Queue:
 - Fill in Materials for all 4 rows before publishing
 - Fill in Dimension for Row 4 (3 Partition Square Box) before publishing
 - Review and update Item Descriptions if desired
-- Set show_on_website = TRUE and status = IN_STOCK only when each artwork is ready to go public
+- An artwork becomes public only when the admin sets show_on_website = TRUE and
+  status = IN_STOCK (or MADE_TO_ORDER) via an explicit admin edit and save
 
 ---
 
@@ -584,6 +743,7 @@ After the admin reviews the 4 rows in the Review Queue:
 - ✅ / ❌ Private workbook not committed
 - ✅ / ❌ Image ZIP not committed
 - ✅ / ❌ Apply response saved to _private/ (gitignored)
+- ✅ / ❌ No credentials committed or logged
 
 ---
 
@@ -604,6 +764,7 @@ Runbook: `docs/inventory-sync/ISYNC-18-03-controlled-production-apply-runbook.md
 - ✅ server/.env not committed
 - ✅ Private workbook not committed (`_private/` gitignored)
 - ✅ Image ZIP not committed
+- ✅ No credentials committed or logged
 - ✅ INV-PRICE-01 not implemented
 - ✅ ARCH-INV-02 not started
 
@@ -611,4 +772,4 @@ Runbook: `docs/inventory-sync/ISYNC-18-03-controlled-production-apply-runbook.md
 
 ## ISYNC-18-03 Status
 
-**COMPLETE** — Runbook created. Execution proceeds under ISYNC-18-04.
+**COMPLETE** — Runbook created and safety revisions applied. Execution proceeds under ISYNC-18-04.
