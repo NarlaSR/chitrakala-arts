@@ -1873,19 +1873,30 @@ app.post(
 // request and snapshot it at request time.
 
 // Best-effort business-owner notification for a newly created order request
-// (ORD-02). Reuses the same email infrastructure/recipient resolution as the
-// contact form. Never throws — a failure here must not lose the order
-// request, which has already been committed to the database by the time
-// this runs. Silently no-ops if RESEND_API_KEY isn't configured, so local
-// dev / environments without email still succeed at creating requests.
+// (ORD-02, hardened for reliability in ORD-04). Never throws — a failure
+// here must not lose the order request, which has already been committed
+// to the database by the time this runs.
+//
+// Recipient resolution is config-only (INQUIRY_EMAIL env var, then the
+// admin-managed contact record) — no hardcoded business email address is
+// used as a fallback (ORD-04). If no config is available, or the mail
+// provider isn't configured, this logs a clear warning identifying the
+// request and the reason, and sends nothing. The customer-facing request
+// creation flow is unaffected either way.
 async function sendOrderRequestNotificationEmail(orderRequest) {
   try {
-    if (!process.env.RESEND_API_KEY) return;
+    if (!process.env.RESEND_API_KEY) {
+      console.warn(`Order request #${orderRequest.id}: admin notification not sent — RESEND_API_KEY is not configured.`);
+      return;
+    }
 
     const contactData = await db.getContact();
-    const adminEmails = contactData?.emails || ['chitrakala.sanskriti@gmail.com'];
-    const envEmail = process.env.INQUIRY_EMAIL;
-    const recipientEmail = [envEmail || adminEmails[0] || 'chitrakala.sanskriti@gmail.com'];
+    const dbEmail = contactData?.emails?.[0] || null;
+    const recipientEmail = process.env.INQUIRY_EMAIL || dbEmail;
+    if (!recipientEmail) {
+      console.warn(`Order request #${orderRequest.id}: admin notification not sent — no recipient configured (set INQUIRY_EMAIL or a contact email in admin settings).`);
+      return;
+    }
 
     const itemsHtml = orderRequest.items.map(item => `
       <li>
@@ -1900,6 +1911,7 @@ async function sendOrderRequestNotificationEmail(orderRequest) {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #8b5a3c;">New Artwork Order Request #${orderRequest.id}</h2>
         <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Status:</strong> ${sanitizeHTML(orderRequest.status)}</p>
           <p><strong>Name:</strong> ${sanitizeHTML(orderRequest.customer_name)}</p>
           <p><strong>Email:</strong> ${sanitizeHTML(orderRequest.customer_email)}</p>
           <p><strong>Phone:</strong> ${orderRequest.customer_phone ? sanitizeHTML(orderRequest.customer_phone) : '—'}</p>
@@ -1916,17 +1928,17 @@ async function sendOrderRequestNotificationEmail(orderRequest) {
 
     const result = await getResend().emails.send({
       from: 'Chitrakala Arts <info@chitrakala-arts.com>',
-      to: recipientEmail,
+      to: [recipientEmail],
       replyTo: orderRequest.customer_email,
       subject: `New Artwork Order Request #${orderRequest.id} from ${orderRequest.customer_name}`,
       html,
     });
     if (result?.error) {
-      console.warn('Order request notification email failed (order request was still saved):', result.error);
+      console.warn(`Order request #${orderRequest.id}: admin notification failed (order request was still saved):`, result.error);
     }
   } catch (error) {
     // Logged only — never surfaced to the public submitter, and never blocks the response.
-    console.error('Order request notification email failed (order request was still saved):', error.message || error);
+    console.error(`Order request #${orderRequest.id}: admin notification failed (order request was still saved):`, error.message || error);
   }
 }
 
