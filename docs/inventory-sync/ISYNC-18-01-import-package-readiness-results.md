@@ -1,171 +1,164 @@
 # ISYNC-18-01 — Import Package Readiness Results
 
-**Status:** BLOCKED — no production import workbook in INV-03-10 format exists  
-**Date:** 2026-07-26  
-**Branch:** `feature/ISYNC-18-01-import-package-readiness`  
-**Restrictions:** Preview-only. Apply not run. No production data modified.
+**Branch:** `feature/ISYNC-18-01-import-package-readiness`
+**Status:** COMPLETE — Preview passed; 4 CREATE / 0 ERROR / 4 images matched
 
----
-
-## Branch
-
-| Item | Value |
-|---|---|
-| Branch | `feature/ISYNC-18-01-import-package-readiness` |
-| Created from | `main` at commit `27bc905` |
-| ISYNC-17 confirmed in history | ✅ `86d9aa6 ISYNC-17 apply import validation` |
-| WEB-MAINT-02 confirmed in history | ✅ `9a13c00 Merge pull request #23 from NarlaSR/feature/WEB-MAINT-02-block-order-requests-during-maintenance` |
-| Git status at branch time | Clean — only unrelated untracked files |
-
----
-
-## Workbook Candidates Examined
-
-All `.xlsx` files in the repository were inspected. None are in the INV-03-10 format required by the current parser (`inventoryParser.js`).
-
-### `__test_workbooks/shipmentDetails_20260628_corrected_inv03b_image-file-name.xlsx`
-
-| Check | Finding |
-|---|---|
-| Sheet name | `Sheet1` (not `Inventory_Import`) |
-| Format | Sales/shipment tracking record — not an import workbook |
-| Columns | `Item description`, `Quantity`, `Price per unit`, `Total`, `SKU`, `Art Work`, `Size`, `Year`, `Image File Name` |
-| `Action` column | **MISSING** — required by parser |
-| `Inventory Status` column | **MISSING** — required by parser |
-| `Existing Artwork ID` column | **MISSING** |
-| Data | 25 rows of individual artwork sales with unit quantities (10, 2, 1…) and a `Total` (price × qty) column; grand total row at end = ₹74,100. These are *units sold/shipped*, not inventory stock levels. |
-| Image File Name values present | 4 rows have values: `test-art-01.png`, `test-art-02.png`, `test-art-03.png`, `test-art-05.png` |
-| Parser compatibility | ❌ Would generate "Missing Action" and "Missing Inventory Status" errors on every row |
-| Verdict | **Not an import workbook.** This is a sales/accounting record adapted to include image filenames during early INV-03b exploration. Not usable for production Apply. |
-
-### `__test_workbooks/shipmentDetails_20260624_corrected_inv03b.xlsx`
-
-Same structure as above, without the `Image File Name` column. 25 data rows. Same verdict: not an import workbook.
-
-### `docs/inventory-sync/Chitrakala_Inventory_Sync_INV03_02_UPDATE_Validated.xlsx`
-
-| Check | Finding |
-|---|---|
-| Sheets | ReadMe, Sync_Summary, DB_Artworks_Export, DB_Artwork_Sizes_Export, DB_Categories_Export, Inventory_Master, Potential_Issues_Auto, Reconciliation_Report, Import_Validation_Rules, DB_to_Inventory_Field_Mapping |
-| Format | Legacy multi-sheet INV-03 format — different schema from current parser |
-| Inventory_Master columns | `Sync Action`, `Suggested Sync Action`, `Validation Status`, `DB id`, `Corrected title`, `Corrected category_slug`, `Corrected description`, etc. (41 columns) |
-| Parser compatibility | ❌ No `Inventory_Import` sheet. Parser would fall back to first sheet (`ReadMe`), which has no valid header. `Sync Action` header does not map to `Action` in `HEADER_MAP`. |
-| Data coverage | 36 artworks (UPDATE only — all existing); 73 size rows; 5 categories |
-| Verdict | **Incompatible format.** From a pre-ISYNC phase. The `INVENTORY_SYNC_ROADMAP.md` explicitly notes this format is "superseded by the ISYNC-01 through ISYNC-10 implementation." |
-
-### `docs/inventory-sync/Chitrakala_Inventory_Sync_INV03_01_REVIEW_Resolved.xlsx`
-
-Identical multi-sheet structure to INV03_02. Same verdict: incompatible, superseded format.
-
-### `docs/inventory-sync/Chitrakala_Inventory_Sync_v2_ReadyForCodingAgent.xlsx`
-
-Older version of the same multi-sheet format. Same verdict.
-
----
-
-## Required INV-03-10 Format
-
-The current parser (`inventoryParser.js`, ISYNC-16/17 aligned) expects:
-
-| Requirement | Detail |
-|---|---|
-| Sheet name | `Inventory_Import` (parser selects by name; falls back to first sheet) |
-| Row structure | Row 1: optional template note; Row 2: column headers; Row 3+: data |
-| Required columns | `Action`, `Item Description`, `Quantity`, `Inventory Status` |
-| Expected columns | `Existing Artwork ID`, `SKU`, `Category`, `ArtCode`, `Dimension`, `Size Label`, `Materials`, `Show_on_website`, `Price INR`, `Price USD`, `Price on Request`, `Image File Name`, `Featured`, `Owner Review Needed`, `Notes` |
-| Action values | `CREATE`, `UPDATE`, `NO_CHANGE` |
-| UPDATE rows | Must have `Existing Artwork ID` (production artwork `id`) |
-| CREATE rows | `Existing Artwork ID` must be blank; `SKU` must be blank |
-
-**The canonical template (`INV-03-10-production-workbook-template-FINAL-CORRECTED.xlsx`) referenced in the ISYNC-16 implementation docs is not present in the repository.** No workbook in this format exists in the project.
-
----
-
-## Image ZIP Check
-
-| Check | Finding |
-|---|---|
-| ZIP files found in project | **0** — no `.zip` files found anywhere in the repository |
-| Image files directly present | Not searched — images are expected in a ZIP alongside the workbook upload |
-| Image File Name values in shipmentDetails | 4 test placeholder names (`test-art-01.png` etc.) — not real production images |
-| Verdict | **No image ZIP available.** Even if a valid workbook existed, image matching would produce "missing image" warnings for any row with an `Image File Name` value. Image import must be handled separately (manual per-artwork upload via the admin editor) or deferred to a dedicated image ticket. |
-
----
-
-## Preview Run
-
-**Preview was not run.** No workbook in the INV-03-10 format exists to submit to the Preview endpoint. Running Preview against the available workbooks would produce parser errors on every row (missing required columns), providing no useful readiness signal. Attempting it would also require the local server and local DB to be running, which adds risk without benefit given the workbook gap.
-
----
-
-## BUS-REVIEW-01 Decision Status
-
-The `BUS-REVIEW-01-inventory-data-decisions.md` document captures 12 business decisions needed before production import. As of this readiness check, **all 12 are still PENDING**:
-
-| # | Topic | Status |
+| Phase | Date | Outcome |
 |---|---|---|
-| 1 | SKU assignment for existing 38 artworks | **PENDING** — INV-DATA-01 |
-| 2 | Initial status/quantity defaults | **PENDING** — INV-DATA-02 |
-| 3 | Dimensions field strategy | **PENDING** — INV-DATA-03 |
-| 4 | Saree/textile dimensions wording | **PENDING** — INV-DATA-03 |
-| 5 | Image filename strategy | **PENDING** — INV-DATA-02 |
-| 6a | Duplicate "Coaster Set (4 pieces)" titles | **PENDING** — INV-DATA-01 |
-| 6b | Duplicate "Decorative Wall Panel" titles | **PENDING** — INV-DATA-01 |
-| 7 | Missing pricing variants (2 artworks) | **PENDING** — INV-DATA-02 |
-| 8 | Generic title "Mirror Mosaic artwork" | **PENDING** — INV-DATA-01 |
-| 9 | Lippan materials correction | **PENDING** — INV-DATA-03 |
-| 10 | Textile-design category handling | **PENDING** — INV-DATA-04 |
-| 11 | Empty category handling (warli-art, mixed-art) | **PENDING** — WEB-CAT-01 (now merged) |
-
-Note: Decision 11 (WEB-CAT-01 empty category suppression) was resolved by code — `WEB-CAT-01` has been merged. All other 11 decisions remain open.
+| Phase 1 — Readiness check | 2026-07-26 | BLOCKED — no INV-03-10 workbook, no image ZIP |
+| Phase 2 — Preview run | 2026-07-27 | PASSED — all 4 rows valid CREATE, all images matched |
 
 ---
 
-## Blockers Summary
+## Phase 2 — Preview Run (2026-07-27)
 
-### Blocker 1 — No production import workbook (HARD BLOCKER)
+### Inputs used
 
-The production import workbook in INV-03-10 format (`Inventory_Import` sheet with `Action` / `Existing Artwork ID` / `Item Description` / `Inventory Status` / `Quantity` / `Price INR` column structure) **does not exist**.
-
-Without it:
-- Preview cannot be run against real production data
-- Apply cannot be run
-- Row classifications (CREATE / UPDATE / REVIEW / ERROR) cannot be validated
-- ISYNC-18-02 cannot start
-
-**Action required:** Business owner or data preparer must create the production import workbook using the INV-03-10 template format. The workbook should cover all 38 existing production artworks as UPDATE rows (with real production `id` values in `Existing Artwork ID`), plus any new CREATE rows intended for this import run.
-
-### Blocker 2 — No image ZIP (SECONDARY BLOCKER)
-
-No image ZIP file exists. Any workbook row with a non-blank `Image File Name` value will show a "missing image" warning in Preview and will not have an image applied by Apply.
-
-**Action required:** Decide whether to include image import in the first production Apply (requires assembling a ZIP of artwork images with filenames matching workbook `Image File Name` values), or proceed with image-less first Apply and upload images manually per artwork afterward.
-
-### Blocker 3 — BUS-REVIEW-01 decisions outstanding
-
-11 of 12 business decisions in `BUS-REVIEW-01` remain PENDING. Several directly affect what goes in the import workbook (SKU assignment, status/quantity defaults, dimensions strategy, duplicate title resolution).
-
-**Action required:** Business owner completes `BUS-REVIEW-01` before or in parallel with workbook preparation.
-
----
-
-## What Must Happen Before ISYNC-18-02 Can Start
-
-| # | Action | Owner |
+| Input | Path | Status |
 |---|---|---|
-| 1 | Create production import workbook in INV-03-10 format | Business owner / data preparer |
-| 2 | Populate UPDATE rows for all 38 existing artworks with real production artwork IDs | Business owner |
-| 3 | Resolve BUS-REVIEW-01 decisions (at minimum: SKU assignment, status/quantity, dimensions) | Business owner |
-| 4 | Decide image import strategy — bundled ZIP or post-import manual upload | Business owner |
-| 5 | Place workbook in a known location in the repo or share for review | Business owner |
+| Workbook | `_private/inventory-import/ISYNC-18-production-import-package-DRAFT.xlsx` | EXISTS — 6,280 bytes |
+| Image ZIP | `_private/inventory-import/ISYNC-18-import-images-DRAFT.zip` | EXISTS — 9,554,812 bytes |
 
-ISYNC-18-02 can start once item 1 is complete and the workbook has been placed for review.
+Both inputs are gitignored (`_private/`). Neither was committed.
+
+### Preview endpoint
+
+```
+POST https://chitrakalaarts-production.up.railway.app/api/admin/inventory-sync/preview
+Fields: file (workbook), imageZip (image ZIP)
+```
+
+Read-only. No Apply. No database writes. No production data modified.
+
+### HTTP result
+
+**200 OK** — Preview completed successfully.
+
+### Sheet and column detection
+
+| Check | Result |
+|---|---|
+| Sheet used | `Inventory_Import` — exact name matched, no fallback |
+| Detected columns | 19 / 19 — all expected columns present |
+| Missing columns | None |
+| Batch warnings | None |
+
+### Row classification summary
+
+| Classification | Count | Expected |
+|---|---|---|
+| **CREATE** | **4** | **4** |
+| UPDATE | 0 | 0 |
+| UPDATE_CANDIDATE | 0 | 0 |
+| REVIEW | 0 | 0 |
+| **ERROR** | **0** | **0** |
+| **Total rows** | **4** | **4** |
+
+### Image match summary
+
+| Metric | Value |
+|---|---|
+| Rows with Image File Name | 4 |
+| **Matched** | **4** |
+| Missing | 0 |
+| Not provided | 0 |
+| Unreferenced uploads | 0 |
+
+### Per-row detail
+
+| Row | Action | Item Description | Classification | Image File Name | Image Status |
+|---|---|---|---|---|---|
+| 1 | CREATE | 18" Round Warli Art | **CREATE** | `warli-round-18.png` | matched |
+| 2 | CREATE | 10" Round Warli Art | **CREATE** | `warli-round-10.png` | matched |
+| 3 | CREATE | Decorative Tray 11" | **CREATE** | `mixed-tray-11.png` | matched |
+| 4 | CREATE | 3 Partition Square Box with Handle | **CREATE** | `texture-box-3part.png` | matched |
+
+No per-row errors. No per-row warnings.
+
+### Validation checklist (per ticket)
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Inventory Preview ran successfully | ✅ HTTP 200 |
+| 2 | Workbook sheet detected correctly | ✅ `Inventory_Import` |
+| 3 | Header detected (all columns) | ✅ 19/19 |
+| 4 | All 4 rows classified correctly | ✅ 4 CREATE |
+| 5 | CREATE / UPDATE / REVIEW / ERROR counts | ✅ 4 / 0 / 0 / 0 |
+| 6 | All 4 images matched | ✅ 4/4 matched |
+| 7 | No missing-image warnings | ✅ 0 missing |
+| 8 | No unsafe filename warnings | ✅ No warnings of any kind |
+| 9 | Preview caused no database writes | ✅ Read-only endpoint |
+| 10 | Package ready for ISYNC-18-02 | ✅ — see below |
+
+---
+
+## Phase 1 — Readiness Check (2026-07-26, historical)
+
+Phase 1 ran before ISYNC-18-00 (the package build) was complete. It found the following
+blockers, which have since been resolved:
+
+| Blocker | Severity | Resolution |
+|---|---|---|
+| No workbook in INV-03-10 format | HARD | Resolved by ISYNC-18-00 — draft workbook built |
+| No image ZIP | HARD | Resolved — `ISYNC-18-import-images-DRAFT.zip` placed and validated |
+| BUS-REVIEW-01 decisions pending | SECONDARY | Still open — does not affect Preview or the 4-row package |
+
+**Phase 1 full detail** is preserved below for reference.
+
+### Workbook candidates examined (Phase 1)
+
+All `.xlsx` files in the repository at Phase 1 time were inspected. None were in INV-03-10 format:
+
+- `shipmentDetails_20260628_corrected_inv03b_image-file-name.xlsx` — sales/accounting record,
+  missing `Action`, `Inventory Status`, `Existing Artwork ID`; not an import workbook
+- `shipmentDetails_20260624_corrected_inv03b.xlsx` — same structure, no Image File Name column
+- `Chitrakala_Inventory_Sync_INV03_02_UPDATE_Validated.xlsx` — legacy multi-sheet INV-03 format,
+  no `Inventory_Import` sheet, incompatible parser schema
+- `Chitrakala_Inventory_Sync_INV03_01_REVIEW_Resolved.xlsx` — same legacy format
+- `Chitrakala_Inventory_Sync_v2_ReadyForCodingAgent.xlsx` — older version of same legacy format
+
+The canonical template (`INV-03-10-production-workbook-template-FINAL-CORRECTED.xlsx`) was not
+committed to the repository. It was placed in `_private/inventory-import/` (gitignored) before
+Phase 2. The ISYNC-18-00 draft workbook was built from that template.
 
 ---
 
 ## Rows Needing Correction Before Apply
 
-Cannot assess — no production workbook exists to evaluate row-by-row.
+No corrections needed based on Preview. All 4 rows classified as clean CREATE with no errors
+or warnings.
+
+**Before Apply can be scheduled (separate ticket):**
+- Materials field is blank on all 4 rows — owner must fill in before admin approval
+- Item descriptions need owner review for public-facing accuracy
+- Owner Review Needed = TRUE on all 4 rows — admin must review each record after import
+  and before any row is published (`show_on_website = TRUE`)
+
+These are not blockers for Preview and are not errors — they reflect the current
+NEEDS_REVIEW + show_on_website=FALSE import policy. Apply can proceed once the owner
+approves, under a separate ticket.
+
+---
+
+## BUS-REVIEW-01 Decision Status
+
+11 business decisions remain open. None affect the current 4-row controlled package.
+They affect the scope of any future expanded import run.
+
+| # | Topic | Status | Affects current package |
+|---|---|---|---|
+| 1 | SKU assignment for existing 38 artworks | PENDING | No (CREATE rows, no UPDATE) |
+| 2 | Initial status/quantity defaults | PENDING | No (all NEEDS_REVIEW, qty=1) |
+| 3 | Dimensions field strategy | PENDING | No (informational) |
+| 4 | Saree/textile dimensions wording | PENDING | No |
+| 5 | Image filename strategy | PENDING | No (images validated separately) |
+| 6a | Duplicate "Coaster Set (4 pieces)" titles | PENDING | No |
+| 6b | Duplicate "Decorative Wall Panel" titles | PENDING | No |
+| 7 | Missing pricing variants (2 artworks) | PENDING | No |
+| 8 | Generic title "Mirror Mosaic artwork" | PENDING | No |
+| 9 | Lippan materials correction | PENDING | No |
+| 10 | Textile-design category handling | PENDING | No |
+| 11 | Empty category handling (warli-art, mixed-art) | RESOLVED — WEB-CAT-01 merged | N/A |
 
 ---
 
@@ -175,16 +168,27 @@ Cannot assess — no production workbook exists to evaluate row-by-row.
 - ✅ Production import not run
 - ✅ Production data not modified
 - ✅ No artwork/category/pricing/SKU/inventory data changed
+- ✅ Production API access was read-only only (login + Preview POST — no writes)
 - ✅ Maintenance mode not touched
 - ✅ `server/.env` not committed
 - ✅ No migration run
+- ✅ No SKU backfill performed
+- ✅ No price recalculation performed
 - ✅ No secrets committed
 - ✅ No temp scripts committed
+- ✅ Private workbook not committed (`_private/` is gitignored)
+- ✅ Image ZIP not committed (`_private/` is gitignored)
 
 ---
 
 ## ISYNC-18-01 Status
 
-**COMPLETE** (as a readiness assessment) — the readiness check has been run and findings are documented.
+**COMPLETE** — Preview passed. All 4 rows valid CREATE. All 4 images matched. No errors.
 
-**ISYNC-18-02 status: BLOCKED** — cannot start until Blocker 1 (production workbook) is resolved.
+## ISYNC-18-02 Status
+
+**ISYNC-18-02 can start.** The 4-row controlled import package has passed Preview
+validation. There are no blocking issues for the package.
+
+ISYNC-18-02 is the Price Readiness Audit and INV-PRICE-01 Gate — not Apply.
+Apply requires a separate approved ticket and owner sign-off after ISYNC-18-02.
