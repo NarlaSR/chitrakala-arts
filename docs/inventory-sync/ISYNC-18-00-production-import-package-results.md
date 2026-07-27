@@ -1,21 +1,20 @@
 # ISYNC-18-00 — Production Import Package Results
 
 **Branch:** `feature/ISYNC-18-00-production-import-package`
-**Date:** 2026-07-26
-**Status:** DRAFT COMPLETE — BLOCKED (image ZIP not found)
+**Date:** 2026-07-27
+**Status:** DRAFT COMPLETE — READY FOR OWNER REVIEW (image ZIP validated; all 4 rows have matching images)
 
 ---
 
 ## Summary
 
-Source data reviewed, production state verified via read-only API, and a 4-row draft
-import workbook has been built. The draft is complete and correctly formatted for the
-INV-03-10 / ISYNC-16 Preview workflow.
+Source data reviewed, production state verified via read-only API, 4-row draft import
+workbook built from the INV-03-10 template, and image ZIP validated. All 4 workbook
+rows now have confirmed image filenames that exactly match the files in the ZIP.
 
-**The import package is blocked from Preview/Apply until the image ZIP is supplied.**
-Two of the four selected rows reference image filenames (`test-art-05.png`,
-`test-art-03.png`) that are not present locally. The other two rows have no image and
-require images to be uploaded manually via the admin UI before publishing.
+**The hard blockers from ISYNC-18-01 are resolved for this controlled package.**
+ISYNC-18-02 (Preview) can now proceed once the owner reviews Materials and
+Item Descriptions for the 4 rows. Preview is read-only and does not require Apply.
 
 ---
 
@@ -93,10 +92,10 @@ Criteria applied per ISYNC-18-00 ticket:
 
 | # | Item Description | Category | ArtCode | Size | Price INR | Image File Name | Why selected |
 |---|---|---|---|---|---|---|---|
-| 1 | 18" Round Warli Art | warli-art | WA | Large | ₹7,000 | test-art-05.png | warli-art empty in production; has image |
-| 2 | 10" Round Warli Art | warli-art | WA | Medium | ₹2,500 | (none) | warli-art empty in production |
-| 3 | Decorative Tray 11" | mixed-art | MA | Medium | ₹1,100 | (none) | mixed-art empty in production |
-| 4 | 3 Partition Square Box with Handle | texture-art | TA | Small | ₹1,600 | test-art-03.png | New TA product; no match in production |
+| 1 | 18" Round Warli Art | warli-art | WA | Large | ₹7,000 | warli-round-18.png | warli-art empty in production; has image |
+| 2 | 10" Round Warli Art | warli-art | WA | Medium | ₹2,500 | warli-round-10.png | warli-art empty in production |
+| 3 | Decorative Tray 11" | mixed-art | MA | Medium | ₹1,100 | mixed-tray-11.png | mixed-art empty in production |
+| 4 | 3 Partition Square Box with Handle | texture-art | TA | Small | ₹1,600 | texture-box-3part.png | New TA product; no match in production |
 
 **All 4 rows:** Action = CREATE, Existing Artwork ID = blank, SKU = blank,
 Inventory Status = NEEDS_REVIEW, show_on_website = FALSE, Owner Review Needed = TRUE.
@@ -133,43 +132,63 @@ Excluded rows requiring BUS-REVIEW-01 decisions before classification:
 ## Draft Workbook
 
 **Path:** `_private/inventory-import/ISYNC-18-production-import-package-DRAFT.xlsx`
-**Status:** Created 2026-07-26 — **not committed** (path is gitignored)
+**Status:** Updated 2026-07-27 — **not committed** (path is gitignored)
 **Sheet:** `Inventory_Import` — 1 header row + 4 CREATE data rows
 
 **Workbook will not be committed.** Business data stays in `_private/` (gitignored).
 
-**Before this workbook can be used for Preview:**
-1. Image ZIP must be supplied with `test-art-05.png` and `test-art-03.png`
-2. Materials for all 4 rows must be confirmed by owner and filled in
-3. Item descriptions should be reviewed by owner for public-facing accuracy
-4. Owner Review Needed = TRUE on all rows — admin must approve each before publish
+**Current workbook image filenames (verified 2026-07-27):**
+
+| Row | Item Description | Image File Name | Status |
+|---|---|---|---|
+| 1 | 18" Round Warli Art | `warli-round-18.png` | Matches ZIP |
+| 2 | 10" Round Warli Art | `warli-round-10.png` | Matches ZIP |
+| 3 | Decorative Tray 11" | `mixed-tray-11.png` | Matches ZIP |
+| 4 | 3 Partition Square Box with Handle | `texture-box-3part.png` | Matches ZIP |
+
+Note: original shipmentDetails placeholder filenames (`test-art-05.png`, `test-art-03.png`)
+have been replaced with the actual filenames from the image ZIP. Rows 2 and 3 were
+previously blank and are now also populated.
+
+**Before this workbook can be used for Apply (not required for Preview):**
+1. Materials for all 4 rows must be confirmed by owner and filled in
+2. Item descriptions should be reviewed by owner for public-facing accuracy
+3. Owner Review Needed = TRUE on all rows — admin must approve each before publish
 
 ---
 
 ## Image ZIP Status
 
-| File | Required for | Status |
-|---|---|---|
-| `test-art-05.png` | Row 1: 18" Round Warli Art | **MISSING** — referenced in shipmentDetails but not found locally |
-| `test-art-03.png` | Row 4: 3 Partition Square Box | **MISSING** — referenced in shipmentDetails but not found locally |
-| `test-art-01.png` | Not in package (24" lippan artwork excluded) | Not checked |
-| `test-art-02.png` | Not in package (canvas set is UPDATE, not CREATE) | Not checked |
+**ZIP:** `_private/inventory-import/ISYNC-18-import-images-DRAFT.zip`
+**Validated:** 2026-07-27 — not committed (gitignored)
 
-No image ZIP file was found in `_private/`, `__test_workbooks/`, or `docs/inventory-sync/`.
+| File in ZIP | Size | Top-level | Required for | Workbook match |
+|---|---|---|---|---|
+| `warli-round-18.png` | 2.5 MB | Yes | Row 1: 18" Round Warli Art | EXACT MATCH |
+| `warli-round-10.png` | 2.3 MB | Yes | Row 2: 10" Round Warli Art | EXACT MATCH |
+| `mixed-tray-11.png` | 2.6 MB | Yes | Row 3: Decorative Tray 11" | EXACT MATCH |
+| `texture-box-3part.png` | 2.4 MB | Yes | Row 4: 3 Partition Square Box | EXACT MATCH |
 
-Images for Rows 2 and 3 (Warli Art MD, Decorative Tray) have no filename in the source
-data — these must be uploaded via admin UI after CREATE.
+All 4 images are present, all top-level (no nested folders), all filenames match the
+workbook exactly. The ZIP contains exactly the 4 intended images — no extras.
+
+Original shipmentDetails placeholder filenames (`test-art-05.png`, `test-art-03.png`)
+have been replaced in the workbook. Rows 2–3 which previously had no image filename
+have also been updated with the correct filenames from the ZIP.
 
 ---
 
 ## Blockers
 
-| # | Blocker | Severity | Required before |
-|---|---|---|---|
-| 1 | Image ZIP not found (`test-art-05.png`, `test-art-03.png`) | HARD | Preview run |
-| 2 | Materials for all 4 rows not in source data | SECONDARY | Owner publish approval |
-| 3 | Item descriptions need owner review for public accuracy | SECONDARY | Owner publish approval |
-| 4 | BUS-REVIEW-01 decisions PENDING (affects 13+ excluded rows) | SECONDARY | Expanding package scope |
+| # | Blocker | Severity | Status | Required before |
+|---|---|---|---|---|
+| 1 | Image ZIP not found | HARD | **RESOLVED** — ZIP validated 2026-07-27 | Preview run |
+| 2 | Materials for all 4 rows not in source data | SECONDARY | Open | Owner publish approval (not Preview) |
+| 3 | Item descriptions need owner review for public accuracy | SECONDARY | Open | Owner publish approval (not Preview) |
+| 4 | BUS-REVIEW-01 decisions PENDING (affects 13+ excluded rows) | SECONDARY | Open | Expanding package scope |
+
+**No hard blockers remain for the 4-row controlled package.**
+Preview (read-only) can proceed. Apply requires blockers 2 and 3 to be resolved first.
 
 ---
 
@@ -186,12 +205,23 @@ data — these must be uploaded via admin UI after CREATE.
 
 ---
 
+## ISYNC-18-01 Restart Status
+
+ISYNC-18-01 found three blockers that prevented a Preview run:
+- HARD: No workbook in INV-03-10 format → **RESOLVED** (`ISYNC-18-production-import-package-DRAFT.xlsx`)
+- HARD: No image ZIP → **RESOLVED** (`ISYNC-18-import-images-DRAFT.zip`, all 4 images validated)
+- SECONDARY: BUS-REVIEW-01 decisions pending → still open (does not block Preview)
+
+**ISYNC-18-01 can restart.** Both hard blockers are resolved for the 4-row controlled
+package. The secondary BUS-REVIEW-01 blocker only affects expanding the package scope
+beyond these 4 rows and does not block Preview of the current draft.
+
 ## ISYNC-18-02 Status
 
-**BLOCKED** — image ZIP not found; Preview cannot proceed until blocker 1 is resolved.
+**READY** — hard blockers resolved; workbook and image ZIP are complete and validated.
 
-Next steps when image ZIP is available:
-1. Place image ZIP in `_private/inventory-import/`
-2. Confirm Materials and Item Description for all 4 rows with owner
-3. Run Preview against production (read-only, no Apply)
-4. Review Preview output with owner before scheduling Apply under a separate ticket
+Next steps:
+1. Owner reviews Item Description and Materials for all 4 rows (required before Apply, not Preview)
+2. Run Preview against production (read-only, no Apply) — workbook and ZIP are ready
+3. Review Preview output with owner
+4. Schedule Apply under a separate approved ticket after Preview and owner sign-off
