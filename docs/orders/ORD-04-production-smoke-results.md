@@ -84,9 +84,7 @@
 | RESEND_API_KEY | Configured in Railway env |
 | INQUIRY_EMAIL | Configured in Railway env |
 | Admin notification email sent | Expected (POST 201, no warning logged) |
-| Owner confirmation of receipt | **Pending — owner must confirm** |
-
-Email delivery cannot be verified programmatically from this side. The owner should confirm receipt of the admin notification email for the smoke order (from: ord04-production-smoke@example.com, subject line contains "ORD-04 Production Smoke Test").
+| Owner confirmation of receipt | Yes — received (Aqua Blue Floral Wall Decor) |
 
 ---
 
