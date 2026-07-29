@@ -6,6 +6,7 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import CategoryPage from './pages/CategoryPage';
 import ArtDetails from './pages/ArtDetails';
+import RequestConfirmation from './pages/RequestConfirmation';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import AdminLogin from './pages/AdminLogin';
@@ -39,6 +40,7 @@ function PublicSite() {
           <Route path="/" element={<Home />} />
           <Route path="/category/:categoryId" element={<CategoryPage />} />
           <Route path="/art/:artId" element={<ArtDetails />} />
+          <Route path="/request-confirmation" element={<RequestConfirmation />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
         </Routes>
