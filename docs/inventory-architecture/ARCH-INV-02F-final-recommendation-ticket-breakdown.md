@@ -148,7 +148,7 @@ The following behavior must remain exactly as-is until each corresponding future
 
 | Behavior | Preserved until |
 |---|---|
-| Public visibility rule: `status IN ('IN_STOCK','MADE_TO_ORDER') AND show_on_website=true` | Forever (rule does not change) |
+| Public visibility rule: `status IN ('IN_STOCK','MADE_TO_ORDER') AND show_on_website=true` | Unchanged for this architecture phase; any change to this rule requires a future explicitly approved ticket |
 | 38 public artworks remain publicly visible | Any future artwork status change requires explicit owner action |
 | 4 ISYNC-18 artworks remain NEEDS_REVIEW + hidden + sku=null | ISYNC-18-07 (after Phase 4 + owner approval) |
 | SKU generation: `maybeGenerateSku()` fires only when `(IN_STOCK or MADE_TO_ORDER) AND show_on_website=true AND sku IS NULL` | No change to this rule |
@@ -418,6 +418,8 @@ These decisions should be answered before implementation begins. Decisions D1–
 
 ## 9. Recommended Implementation Ticket Breakdown
 
+**Validation baseline note:** The check "public count = 38" in each phase's validation row confirms that no unintended publish occurred during that phase's deployment. This count reflects the starting baseline at the time ARCH-INV implementation begins. If an approved publish ticket (such as ISYNC-18-07) is intentionally executed between phases, the public count may increase — this is expected and is not a failure condition for subsequent phase validations. Each phase's validation check should be understood as "public count unchanged from its baseline at the time of this deployment."
+
 ### ARCH-INV-03 — Add Shipment and Physical Inventory Schema
 
 | Field | Detail |
@@ -617,7 +619,7 @@ These items are not included in ARCH-INV-02 or in tickets ARCH-INV-03 through AR
 |---|---|---|
 | Schema migration fails mid-run on production | High | Use `IF NOT EXISTS` throughout; staging-first policy; `pg_dump` backup before every production migration; verify backup before applying |
 | Phase 1 migration corrupts existing artworks or order data | High | Phase 1 is additive only; no existing tables are modified except one nullable column addition to order_request_items; rollback SQL is tested on staging first |
-| ISYNC-18 artworks accidentally published during Phase 3–4 setup | Medium | artworks.status and show_on_website are untouched by all Phase 1–4 operations; validation checks confirm public count = 38 after every deployment |
+| ISYNC-18 artworks accidentally published during Phase 3–4 setup | Medium | artworks.status and show_on_website are untouched by all Phase 1–4 operations; validation checks confirm public count is unchanged from deployment baseline after every phase; any increase is only acceptable if an approved publish ticket was intentionally executed |
 | Wrong artwork_id assigned to physical_inventory row | Medium | FK constraint enforced at DB level; admin UI uses an artwork picker dropdown, not free-text ID entry; cannot create orphan rows |
 | Double reservation: two admins race to reserve the same physical unit | Low | Database-level atomic status check prevents double-reservation; second attempt returns 409 |
 | SOLD recorded in system but artwork remains publicly orderable | Low | Phase 7 returns a post-fulfillment warning; owner manually updates artwork status; no auto-hide by design |
