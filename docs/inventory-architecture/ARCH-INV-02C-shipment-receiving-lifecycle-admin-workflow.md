@@ -143,7 +143,7 @@ A `physical_inventory` record represents an actual physical unit of a specific a
 | `RECEIVED` | Physical unit arrived at destination address | Admin marks shipment RECEIVED |
 | `INSPECTION_REQUIRED` | Received; needs owner physical inspection before it can be made available | Optional intermediate; set during receive action or by admin |
 | `INSPECTED` | Owner has physically reviewed the piece; confirmed it matches catalog data | Admin/owner marks inspection complete |
-| `AVAILABLE` | Confirmed physically present and ready; owner has decided it can be published | Admin sets when approving for publication |
+| `AVAILABLE` | Item received, inspected, and physically available internally. The business has a confirmed, usable unit ready for fulfillment. Does **not** mean the artwork has been publicly published — public publishing is a separate, subsequent owner decision. Must always be set **before** public publishing occurs. | Admin sets after INSPECTED; must precede any publish action |
 | `RESERVED` | Allocated to a confirmed customer order (future — ARCH-INV-02D scope) | Order confirmation |
 | `SOLD` | Fulfilled and delivered to customer | Order fulfillment |
 | `DAMAGED` | Damage recorded — at receipt, during inspection, or later | Admin notes damage |
@@ -186,7 +186,7 @@ Any state → ARCHIVED (admin manually retires item)
 
 **RECEIVED vs INSPECTION_REQUIRED:** For most small shipments, the admin will immediately mark items for inspection upon receipt. These two states can be presented as a single "received — needs inspection" state in the UI. RECEIVED is the timestamp state (when did it arrive?) and INSPECTION_REQUIRED makes explicit that no item should move to AVAILABLE without a deliberate inspect action.
 
-**INSPECTED vs AVAILABLE:** INSPECTED means the owner has physically checked the piece. AVAILABLE means the admin/owner has made a business decision that this item is ready for publishing and potential customer ordering. In many cases these happen together. The implementation may choose to treat them as a single state or as two steps. This document recommends keeping them separate so the audit record shows both events: when was it inspected, and when was it cleared for sale.
+**INSPECTED vs AVAILABLE:** INSPECTED means the owner has physically checked the piece. AVAILABLE means the admin has made a business decision that this item is ready for fulfillment — received, inspected, and physically confirmed. AVAILABLE must always be set **before** public publishing occurs. Public publishing (setting artworks.status = IN_STOCK + show_on_website = true) never automatically sets physical_inventory.status to AVAILABLE. These are kept as separate states so the audit record captures both events: when it was inspected, and when it was cleared for offering to customers.
 
 **AVAILABLE vs artworks.status = IN_STOCK:** These are parallel and independent. See Section 10 for the full treatment.
 
@@ -445,7 +445,7 @@ Note: In the admin UI, INSPECTED and AVAILABLE may be combined into a single "Ap
 - Artwork appears in `GET /api/artworks` (public API) immediately
 - Artwork becomes orderable via `POST /api/order-requests`
 
-**No change to physical_inventory happens automatically on publish.** The admin may update physical_inventory.status to AVAILABLE (if not already done in Step P2) as a parallel action.
+**No change to physical_inventory happens automatically on publish.** Public publishing does not and must not cause physical_inventory.status to become AVAILABLE. The physical_inventory item must already be at AVAILABLE (set in Step P2 above) before the owner proceeds with this step. Physical availability precedes public publishing — never the reverse.
 
 ### Step P4 — Post-publish validation
 
@@ -502,10 +502,11 @@ Physical availability is a prerequisite for publishing, but not a trigger for it
 
 1. Physical unit received
 2. Physical unit inspected and confirmed
-3. **Owner decides** to publish → sets status + show_on_website
-4. System applies SKU generation and public API exposure
+3. Admin sets `physical_inventory.status = AVAILABLE` — item is physically available internally
+4. **Owner decides** to publish → sets `artworks.status` = IN_STOCK (or MADE_TO_ORDER) and `show_on_website = true`
+5. System auto-generates SKU and exposes artwork in the public API
 
-The system does not auto-publish based on physical inventory status. The owner's explicit action (Step 3) is always required.
+The system does not auto-publish based on physical inventory status. Physical inventory reaching AVAILABLE never causes an artwork to be published. The owner's explicit publish action (Step 4) is always required — and it must be preceded by Step 3.
 
 ### Why this separation matters
 
@@ -630,14 +631,27 @@ Owner physically inspects each of the 4 artworks.
 
 This phase happens one artwork at a time, following the ISYNC-18-07 controlled publish workflow.
 
+**Required sequence for each artwork (must follow this order):**
+
+```
+physical_inventory.status: INSPECTED → AVAILABLE
+then:
+artworks.status: NEEDS_REVIEW → IN_STOCK  +  show_on_website: false → true
+then:
+SKU auto-generated on qualifying admin save
+```
+
+Physical availability (`AVAILABLE`) is always set first. Public publishing never causes `AVAILABLE` to be set. Public publishing (`IN_STOCK + show_on_website = true`) never happens before `AVAILABLE`.
+
 **For the first artwork to be published (owner chooses which one):**
 
-1. Admin sets `physical_inventory.status = AVAILABLE`
-2. Owner opens artwork in admin panel
-3. Owner completes final pre-publish checklist (Section 9, Step P1)
-4. Owner sets `artworks.status = IN_STOCK` and `show_on_website = true`
-5. System auto-generates SKU
-6. Admin validates: artwork appears in public API, SKU is set, no other hidden artworks became public
+1. Admin confirms `physical_inventory.status = INSPECTED`
+2. Admin sets `physical_inventory.status = AVAILABLE` — item physically confirmed and ready
+3. Owner opens artwork in admin panel
+4. Owner completes final pre-publish checklist (Section 9, Step P1)
+5. Owner sets `artworks.status = IN_STOCK` and `show_on_website = true` — this is the publish action
+6. System auto-generates SKU (triggered by qualifying admin save)
+7. Admin validates: artwork appears in public API, SKU is set, no other hidden artworks became public
 
 **For subsequent artworks:** Repeat for each one independently. The owner decides the order and timing.
 
