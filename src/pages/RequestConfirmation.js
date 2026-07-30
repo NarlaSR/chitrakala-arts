@@ -20,19 +20,28 @@ const formatItemPrice = (item) => {
 // sources only ever contain the customer's own submitted data plus the
 // public artwork snapshot already shown to them before they submitted —
 // nothing admin-only, and nothing fetched from any new API.
+//
+// `fresh` distinguishes "just navigated here straight from a successful
+// submit" (route state present) from "revisiting this URL later in the same
+// browser session" (sessionStorage only — e.g. back/forward, a refresh much
+// later, or typing/bookmarking the URL directly). The data is identical
+// either way, but the copy shown differs so a stale, previously-submitted
+// confirmation can never read as if a new request was just received.
 function readConfirmation(locationState) {
-  if (locationState?.confirmation) return locationState.confirmation;
+  if (locationState?.confirmation) {
+    return { data: locationState.confirmation, fresh: true };
+  }
   try {
     const stored = sessionStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : null;
+    return { data: stored ? JSON.parse(stored) : null, fresh: false };
   } catch {
-    return null;
+    return { data: null, fresh: false };
   }
 }
 
 const RequestConfirmation = () => {
   const location = useLocation();
-  const [confirmation] = useState(() => readConfirmation(location.state));
+  const [{ data: confirmation, fresh }] = useState(() => readConfirmation(location.state));
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -42,11 +51,11 @@ const RequestConfirmation = () => {
     return (
       <div className="request-confirmation-page">
         <div className="request-confirmation-card">
-          <h1>No request found</h1>
+          <h1>No recent request confirmation found</h1>
           <p>
-            We couldn&rsquo;t find a recent request to show here. If you just
-            submitted a request, please check your email for updates, or
-            browse the gallery to submit a new one.
+            We couldn&rsquo;t find a recent request confirmation stored in
+            this browser. If you just submitted a request, please check your
+            email for updates, or browse the gallery to submit a new one.
           </p>
           <Link to="/" className="btn-primary">Return to Gallery</Link>
         </div>
@@ -57,11 +66,26 @@ const RequestConfirmation = () => {
   return (
     <div className="request-confirmation-page">
       <div className="request-confirmation-card">
-        <h1>Thank you. Your request has been received.</h1>
-        <p className="request-confirmation-intro">
-          We will review it and contact you soon. This is an inquiry, not a
-          paid order &mdash; no payment has been collected.
-        </p>
+        {fresh ? (
+          <>
+            <h1>Thank you. Your request has been received.</h1>
+            <p className="request-confirmation-intro">
+              We will review it and contact you soon. This is an inquiry, not a
+              paid order &mdash; no payment has been collected.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1>Your Most Recent Request</h1>
+            <p className="request-confirmation-intro">
+              This is the most recent request confirmation stored in this
+              browser session. This is an inquiry, not a paid order &mdash;
+              no payment has been collected. Checking on an older or
+              different request? Please refer to our email reply or{' '}
+              <Link to="/contact">contact us</Link> directly.
+            </p>
+          </>
+        )}
 
         {confirmation.id && (
           <p className="request-confirmation-ref">

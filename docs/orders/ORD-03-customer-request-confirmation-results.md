@@ -155,6 +155,71 @@ No staging validation was performed, per the ticket's explicit instruction that 
 
 Automated screenshot capture was unavailable in this session (the browser tool's screenshot action timed out consistently, appearing to be an unrelated tooling issue — page content, interaction, and navigation all worked correctly throughout via `read_page`/`get_page_text`/`javascript_tool` checks). All UI states described above were verified through the live accessibility tree and direct DOM/sessionStorage inspection rather than visual screenshots. If visual screenshots are needed for review, they can be captured manually by running `npm start` (frontend) and `node server.js` (backend) locally and visiting `/art/art-1782445237565` → add to request → submit.
 
-## Ready for review
+## Ready for review (initial implementation)
 
 ✅ **Yes.** Implementation is complete, scoped to exactly the ticket's requirements, no backend changes, no stop conditions were hit, and all 20 required local validation checks passed.
+
+---
+
+## Reviewer follow-up: sessionStorage edge cases (2026-07-30)
+
+Before PR/merge readiness, a reviewer specifically flagged three `sessionStorage`-related scenarios to verify on `RequestConfirmation.js`. All three were tested live (not just by code inspection); one required a small, frontend-only fix.
+
+### 1. Direct visit to `/request-confirmation` without confirmation data
+
+**Result: already correct, no fix needed.** Live test: cleared `sessionStorage` entirely, navigated directly to `/request-confirmation`. The page correctly rendered the safe fallback state — no success framing, no request data, just:
+
+> "No recent request confirmation found — We couldn't find a recent request confirmation stored in this browser..."
+
+with a "Return to Gallery" link. (The heading copy was tightened from "No request found" to "No recent request confirmation found" while touching this file for item 2 below, to match the reviewer's suggested phrasing more closely — purely a wording change, same fallback logic.)
+
+### 2. Stale confirmation data — **fix applied**
+
+**Result: confirmed bug, fixed.** Live test: after a successful submission, navigated away to the homepage and then directly to `/request-confirmation` again (no fresh navigation state — the realistic "customer revisits this URL later" scenario). Before the fix, the page incorrectly showed "Thank you. Your request has been received. We will review it and contact you soon." — identical wording to a just-submitted confirmation, with no indication the data was from an earlier visit. This could confuse a customer into thinking they'd just submitted a new request.
+
+**Fix (frontend-only, `src/pages/RequestConfirmation.js`):** `readConfirmation()` now returns both the data and whether it came from fresh navigation state (`fresh: true`, i.e. arrived via `location.state.confirmation` immediately after a successful submit) or from the `sessionStorage` fallback only (`fresh: false`, i.e. a revisit). The page now renders different copy for each case:
+
+- **Fresh:** unchanged — "Thank you. Your request has been received. We will review it and contact you soon..."
+- **Revisit:** "Your Most Recent Request — This is the most recent request confirmation stored in this browser session. This is an inquiry, not a paid order — no payment has been collected. Checking on an older or different request? Please refer to our email reply or [contact us] directly."
+
+Both cases still show the same underlying data (reference number, contact details, item summary, next steps) — only the framing/heading changes, so the customer is never told a new request "has been received" when they're actually looking at an older one.
+
+**Note on browser behavior discovered during testing:** a same-page `window.location.reload()` on a freshly-shown confirmation still shows the "fresh" wording, because React Router's navigation state is stored in the browser's History API `state` object for that history entry, which persists across a reload of the same entry (confirmed directly via `window.history.state` inspection). This is correct, expected behavior, not a gap — reloading the page you just landed on after submitting is still the same visit. The "revisit" wording correctly triggers for the scenario the reviewer described: a genuinely new navigation to the URL (different tab, typed URL, bookmark, or return visit after navigating elsewhere) that carries no route state.
+
+No backend, API, or schema changes were made or needed — this is presentational logic over data the page already had.
+
+### 3. New successful request replaces old confirmation data
+
+**Result: already correct, no fix needed.** Live test: submitted Request A (id 18, size "18\"x18\"", ₹8,000) — confirmed `sessionStorage.orderRequestConfirmation` held id 18. Without clearing storage, added a different size of the same artwork to the cart and submitted Request B (id 19, size "24\"x24\"", ₹12,000) — the confirmation page immediately showed Request B's data (not Request A's), and `sessionStorage.orderRequestConfirmation` was confirmed to hold id 19. `sessionStorage.setItem()` naturally overwrites the previous value under the same key, and each successful submission always supplies fresh route state, so there is no path by which an old confirmation can persist after a new one succeeds.
+
+### Files changed (this follow-up)
+
+- `src/pages/RequestConfirmation.js` — only file changed. No backend file touched.
+
+### Validation performed
+
+| Check | Result |
+|---|---|
+| Frontend build (`CI=true npm run build`) | ✅ Compiled successfully, no warnings |
+| Direct visit, cleared `sessionStorage` → safe fallback, not success | ✅ |
+| Revisit (stale data, no route state) → "Your Most Recent Request" wording, not "just received" | ✅ (fixed) |
+| Fresh submission → "Thank you. Your request has been received." unchanged | ✅ (regression-checked after the fix) |
+| New successful request replaces old in both UI and `sessionStorage` | ✅ |
+| `git status` clean except unrelated untracked files | ✅ |
+| Branch pushed to `origin` | ✅ (already tracking `origin/feature/ORD-03-customer-request-confirmation`; this follow-up commit pushed after) |
+| No backend files changed | ✅ — `git status --short server/` empty throughout |
+| No schema migration added | ✅ — none needed, none added |
+| No new API endpoint added | ✅ |
+| No `server/.env`, secrets, logs, temp scripts, or private files committed | ✅ |
+| Local build passed | ✅ |
+| Local validation passed | ✅ |
+| Local test rows 15 and 16 cleaned up | ✅ — confirmed already absent from `order_requests` (cleaned up in the prior round); this round's new test rows (18, 19, 20) also deleted afterward |
+| No artwork/category/pricing/SKU/inventory data changed | ✅ — verified before/after via direct DB query |
+
+### Test data cleanup (this follow-up)
+
+`order_requests` ids 18, 19, 20 (created during this review pass) were deleted after validation. Pre-existing rows (4, 7, and 17 — a pre-existing "Test Customer" row not created by this session) were left untouched, since only test data created during this validation round is safe to remove.
+
+## Ready for review (after reviewer follow-up)
+
+✅ **Yes.** All three reviewer-flagged sessionStorage scenarios were verified live; the one real gap (stale confirmation data reading as a fresh success) is fixed with a small, frontend-only, presentational-only change. No backend/API/schema changes were made. All pre-PR checks pass.
