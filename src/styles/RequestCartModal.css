@@ -140,27 +140,6 @@
   border-radius: 6px;
 }
 
-.request-cart-confirmation {
-  text-align: center;
-  margin: 1.5rem 0;
-}
-
-.request-cart-confirmation h3 {
-  color: var(--primary-color);
-  margin-bottom: 0.5rem;
-}
-
-.request-cart-confirmation p {
-  color: var(--text-dark);
-  line-height: 1.6;
-  margin-bottom: 1.25rem;
-}
-
-.request-cart-confirmation .btn-primary {
-  padding: 0.6rem 1.5rem;
-  border-radius: 6px;
-}
-
 .request-cart-submit-error {
   margin-top: 0.5rem;
 }
