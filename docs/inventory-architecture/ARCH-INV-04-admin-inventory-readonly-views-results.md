@@ -6,7 +6,7 @@
 **Push:** `99bc015..42db397` → `origin/main`  
 **Commits:** `31053d5` (implementation), `83e304c` (staging DB query results), `d976260` (full validation)  
 **Date:** 2026-07-31  
-**Status:** Merged. Production deploy complete. Production smoke in progress — public checks verified; admin-authenticated checks pending user sign-in.
+**Status:** Done. Merged to main. Production smoke complete — all checks passed.
 
 ---
 
@@ -173,28 +173,26 @@ All 4 new endpoints tested against production backend without a Bearer token:
 
 ---
 
-## Production Smoke — Admin-Authenticated Checks (Requires cks-admin Login)
-
-**Pending user verification.** These require signing in as `cks-admin` on the production admin UI.
+## Production Smoke — Admin-Authenticated Checks
 
 | Check | Result |
 |---|---|
-| Admin login with `cks-admin` production credentials | Pending |
-| Admin dashboard loads | Pending |
-| Dashboard "Shipments" button visible | Pending |
-| Dashboard "Physical Inventory" button visible | Pending |
-| Admin Shipments page loads (`/ckk-secure-admin/shipments`) | Pending |
-| Shipments empty state renders | Pending |
-| Admin Physical Inventory page loads (`/ckk-secure-admin/physical-inventory`) | Pending |
-| Physical Inventory empty state renders | Pending |
-| Navigation between pages works | Pending |
-| Admin Order Requests page still works | Pending |
-| `GET /api/admin/shipments` authenticated → 200 `[]` | Pending |
-| `GET /api/admin/shipments/1` authenticated → 404 | Pending |
-| `GET /api/admin/physical-inventory` authenticated → 200 `[]` | Pending |
-| `GET /api/admin/inventory-movements` authenticated → 200 `[]` | Pending |
-| Production DB row counts: shipments=0, shipment_items=0, physical_inventory=0, inventory_movements=0 | Pending |
-| 4 ISYNC-18 artworks: status=NEEDS_REVIEW, show_on_website=false, sku=null | Pending |
+| Admin login with `cks-admin` production credentials | ✅ |
+| Admin dashboard loads | ✅ |
+| Dashboard "Shipments" button visible | ✅ |
+| Dashboard "Physical Inventory" button visible | ✅ |
+| Admin Shipments page loads (`/ckk-secure-admin/shipments`) | ✅ |
+| Shipments empty state renders | ✅ |
+| Admin Physical Inventory page loads (`/ckk-secure-admin/physical-inventory`) | ✅ |
+| Physical Inventory empty state renders | ✅ |
+| Navigation between pages works | ✅ |
+| Admin Order Requests page still works | ✅ |
+| `GET /api/admin/shipments` authenticated → 200 `[]` | ✅ |
+| `GET /api/admin/shipments/1` authenticated → 404 | ✅ |
+| `GET /api/admin/physical-inventory` authenticated → 200 `[]` | ✅ |
+| `GET /api/admin/inventory-movements` authenticated → 200 `[]` | ✅ |
+| Production DB row counts: shipments=0, shipment_items=0, physical_inventory=0, inventory_movements=0 | ✅ |
+| 4 ISYNC-18 artworks: status=NEEDS_REVIEW, show_on_website=false, sku=null | ✅ |
 
 ---
 
