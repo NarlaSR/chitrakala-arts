@@ -2152,6 +2152,21 @@ app.get('/api/admin/physical-inventory', authenticateToken, async (req, res) => 
   }
 });
 
+// GET /api/admin/physical-inventory/summary?artwork_id= — per-status counts for one artwork.
+app.get('/api/admin/physical-inventory/summary', authenticateToken, async (req, res) => {
+  try {
+    const { artwork_id } = req.query;
+    if (!artwork_id || !String(artwork_id).trim()) {
+      return res.status(400).json({ error: 'artwork_id query parameter is required' });
+    }
+    const rows = await db.getPhysicalInventorySummaryForArtwork(String(artwork_id).trim());
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching physical inventory summary:', error);
+    res.status(500).json({ error: 'Failed to fetch physical inventory summary' });
+  }
+});
+
 // GET /api/admin/inventory-movements — admin only. Optional ?physical_inventory_id= filter.
 app.get('/api/admin/inventory-movements', authenticateToken, async (req, res) => {
   try {
@@ -2170,6 +2185,19 @@ app.get('/api/admin/inventory-movements', authenticateToken, async (req, res) =>
 });
 
 // ─── ARCH-INV-05: Admin shipment creation and item assignment ────────────────
+
+// Forward-only transition map. Terminal states (DELIVERED, CLOSED, CANCELLED) are
+// represented by empty sets — no transitions are allowed out of them within this scope.
+const SHIPMENT_TRANSITION_MAP = {
+  DRAFT:          new Set(['READY_TO_SHIP', 'SHIPPED', 'CANCELLED']),
+  READY_TO_SHIP:  new Set(['SHIPPED', 'CANCELLED']),
+  SHIPPED:        new Set(['IN_TRANSIT']),
+  IN_TRANSIT:     new Set(['CUSTOMS']),
+  CUSTOMS:        new Set([]),
+  DELIVERED:      new Set([]),
+  CLOSED:         new Set([]),
+  CANCELLED:      new Set([]),
+};
 
 // POST /api/admin/shipments — create a new shipment record.
 app.post('/api/admin/shipments', authenticateToken, async (req, res) => {
@@ -2201,7 +2229,8 @@ app.post('/api/admin/shipments', authenticateToken, async (req, res) => {
 });
 
 // PATCH /api/admin/shipments/:id — update shipment fields and/or status.
-// Transitioning to SHIPPED cascades physical_inventory to IN_TRANSIT.
+// Validates forward-only status transitions. SHIPPED cascade (PI → IN_TRANSIT) only
+// fires on the actual transition into SHIPPED, never on same-status re-saves.
 app.patch('/api/admin/shipments/:id', authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -2209,16 +2238,31 @@ app.patch('/api/admin/shipments/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid shipment id' });
     }
     const { status, carrier, ...rest } = req.body;
-    if (status !== undefined && !db.ALLOWED_SHIPMENT_STATUSES_UPDATE.has(status)) {
-      return res.status(400).json({
-        error: `Invalid status. Allowed: ${[...db.ALLOWED_SHIPMENT_STATUSES_UPDATE].join(', ')}`,
-      });
+
+    // Fetch current shipment so we can validate the transition.
+    const current = await db.getShipmentByIdAdmin(id);
+    if (!current) return res.status(404).json({ error: 'Shipment not found' });
+
+    if (status !== undefined) {
+      const allowed = SHIPMENT_TRANSITION_MAP[current.status];
+      if (allowed === undefined) {
+        return res.status(400).json({ error: `Unknown current status: ${current.status}` });
+      }
+      if (status !== current.status && !allowed.has(status)) {
+        return res.status(400).json({
+          error: `Cannot transition shipment from ${current.status} to ${status}`,
+        });
+      }
     }
+
     if (status === 'SHIPPED' && !carrier && !rest.carrier) {
       return res.status(400).json({ error: 'carrier is required when marking shipment SHIPPED' });
     }
+
     const username = req.user?.username || null;
-    const shipment = await db.updateShipmentAdmin(id, { status, carrier, ...rest }, username);
+    const shipment = await db.updateShipmentAdmin(
+      id, { status, carrier, ...rest }, username, current.status
+    );
     if (!shipment) return res.status(404).json({ error: 'Shipment not found' });
     res.json(shipment);
   } catch (error) {

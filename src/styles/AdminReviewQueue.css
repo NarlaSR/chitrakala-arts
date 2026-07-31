@@ -317,6 +317,42 @@
 
 .rq-edit-grid textarea { resize: vertical; }
 
+.rq-pi-badge {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  background: #f8f5f0;
+  border: 1px solid #e8ddd0;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.rq-pi-badge-label {
+  font-weight: 700;
+  color: var(--primary-color, #8b4513);
+  white-space: nowrap;
+}
+
+.rq-pi-badge-label::after { content: ':'; margin-right: 0.25rem; }
+
+.rq-pi-badge-loading { color: var(--text-light, #888); font-style: italic; }
+
+.rq-pi-badge-empty { color: var(--text-light, #888); }
+
+.rq-pi-badge-counts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+.rq-pi-badge-item {
+  background: #ede9e3;
+  border-radius: 12px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4a3728;
+}
+
 .rq-edit-actions {
   display: flex;
   gap: 0.75rem;

@@ -242,6 +242,13 @@ export const inventoryAPI = {
     const response = await api.delete(`/admin/shipments/${shipmentId}/items/${itemId}`);
     return response.data;
   },
+
+  getPhysicalInventorySummaryForArtwork: async (artworkId) => {
+    const response = await api.get('/admin/physical-inventory/summary', {
+      params: { artwork_id: artworkId },
+    });
+    return response.data;
+  },
 };
 
 export default api;

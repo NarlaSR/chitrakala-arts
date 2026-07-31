@@ -828,7 +828,10 @@ async function createShipmentAdmin({ reference_number, source_location, destinat
 // Updates header fields and optionally status. When status transitions to
 // SHIPPED, cascades all PENDING_SHIPMENT physical_inventory rows to IN_TRANSIT
 // and writes a SHIPPED movement per row. All in a single transaction.
-async function updateShipmentAdmin(id, fields, username) {
+// currentStatus must be the shipment's status BEFORE this update.
+// The SHIPPED cascade (PENDING_SHIPMENT → IN_TRANSIT + movement logs) runs only
+// when transitioning INTO SHIPPED — not on same-status re-saves.
+async function updateShipmentAdmin(id, fields, username, currentStatus) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -861,7 +864,8 @@ async function updateShipmentAdmin(id, fields, username) {
     const shipment = result.rows[0];
     if (!shipment) { await client.query('ROLLBACK'); return null; }
 
-    if (status === 'SHIPPED') {
+    // Cascade only on the actual transition into SHIPPED, never on a same-status re-save.
+    if (status === 'SHIPPED' && currentStatus !== 'SHIPPED') {
       const piResult = await client.query(
         `UPDATE physical_inventory
          SET status = 'IN_TRANSIT', updated_at = CURRENT_TIMESTAMP
@@ -1020,6 +1024,18 @@ async function getPhysicalInventoryAdmin() {
   return result.rows;
 }
 
+async function getPhysicalInventorySummaryForArtwork(artworkId) {
+  const result = await pool.query(
+    `SELECT status, COUNT(*)::int AS count
+     FROM physical_inventory
+     WHERE artwork_id = $1
+     GROUP BY status
+     ORDER BY status`,
+    [artworkId]
+  );
+  return result.rows;
+}
+
 async function getInventoryMovementsAdmin(physicalInventoryId = null) {
   const query = physicalInventoryId
     ? `SELECT im.*, a.title AS artwork_title
@@ -1086,6 +1102,7 @@ module.exports = {
   getShipmentsAdmin,
   getShipmentByIdAdmin,
   getPhysicalInventoryAdmin,
+  getPhysicalInventorySummaryForArtwork,
   getInventoryMovementsAdmin,
   ALLOWED_SHIPMENT_STATUSES_CREATE,
   ALLOWED_SHIPMENT_STATUSES_UPDATE,
