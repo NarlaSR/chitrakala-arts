@@ -2169,6 +2169,150 @@ app.get('/api/admin/inventory-movements', authenticateToken, async (req, res) =>
   }
 });
 
+// ─── ARCH-INV-05: Admin shipment creation and item assignment ────────────────
+
+// POST /api/admin/shipments — create a new shipment record.
+app.post('/api/admin/shipments', authenticateToken, async (req, res) => {
+  try {
+    const { reference_number, source_location, destination_location,
+            status, expected_ship_date, notes } = req.body;
+    if (!reference_number || !String(reference_number).trim()) {
+      return res.status(400).json({ error: 'reference_number is required' });
+    }
+    const initialStatus = status || 'DRAFT';
+    if (!db.ALLOWED_SHIPMENT_STATUSES_CREATE.has(initialStatus)) {
+      return res.status(400).json({
+        error: `Invalid initial status. Allowed: ${[...db.ALLOWED_SHIPMENT_STATUSES_CREATE].join(', ')}`,
+      });
+    }
+    const shipment = await db.createShipmentAdmin({
+      reference_number: String(reference_number).trim(),
+      source_location, destination_location, status: initialStatus,
+      expected_ship_date: expected_ship_date || null, notes,
+    });
+    res.status(201).json(shipment);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'A shipment with that reference number already exists' });
+    }
+    console.error('Error creating shipment:', error);
+    res.status(500).json({ error: 'Failed to create shipment' });
+  }
+});
+
+// PATCH /api/admin/shipments/:id — update shipment fields and/or status.
+// Transitioning to SHIPPED cascades physical_inventory to IN_TRANSIT.
+app.patch('/api/admin/shipments/:id', authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid shipment id' });
+    }
+    const { status, carrier, ...rest } = req.body;
+    if (status !== undefined && !db.ALLOWED_SHIPMENT_STATUSES_UPDATE.has(status)) {
+      return res.status(400).json({
+        error: `Invalid status. Allowed: ${[...db.ALLOWED_SHIPMENT_STATUSES_UPDATE].join(', ')}`,
+      });
+    }
+    if (status === 'SHIPPED' && !carrier && !rest.carrier) {
+      return res.status(400).json({ error: 'carrier is required when marking shipment SHIPPED' });
+    }
+    const username = req.user?.username || null;
+    const shipment = await db.updateShipmentAdmin(id, { status, carrier, ...rest }, username);
+    if (!shipment) return res.status(404).json({ error: 'Shipment not found' });
+    res.json(shipment);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'A shipment with that reference number already exists' });
+    }
+    console.error('Error updating shipment:', error);
+    res.status(500).json({ error: 'Failed to update shipment' });
+  }
+});
+
+// POST /api/admin/shipments/:id/items — add an artwork to a shipment.
+// Creates shipment_items row + physical_inventory rows + CREATED movements.
+app.post('/api/admin/shipments/:id/items', authenticateToken, async (req, res) => {
+  try {
+    const shipmentId = Number(req.params.id);
+    if (!Number.isInteger(shipmentId)) {
+      return res.status(400).json({ error: 'Invalid shipment id' });
+    }
+    const { artwork_id, artwork_size_id, quantity, notes } = req.body;
+    if (!artwork_id || !String(artwork_id).trim()) {
+      return res.status(400).json({ error: 'artwork_id is required' });
+    }
+    const qty = quantity ? Number(quantity) : 1;
+    if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+      return res.status(400).json({ error: 'quantity must be an integer between 1 and 100' });
+    }
+
+    // Validate shipment exists and is in an addable state
+    const shipment = await db.getShipmentByIdAdmin(shipmentId);
+    if (!shipment) return res.status(404).json({ error: 'Shipment not found' });
+    if (!['DRAFT', 'READY_TO_SHIP'].includes(shipment.status)) {
+      return res.status(400).json({
+        error: `Cannot add items to a shipment with status ${shipment.status}`,
+      });
+    }
+
+    // Validate artwork exists
+    const artwork = await db.getArtworkById(artwork_id);
+    if (!artwork) return res.status(404).json({ error: 'Artwork not found' });
+
+    // Validate artwork_size_id belongs to this artwork (if provided)
+    if (artwork_size_id) {
+      const size = await db.getArtworkSizeForArtwork(Number(artwork_size_id), artwork_id);
+      if (!size) {
+        return res.status(400).json({ error: 'artwork_size_id does not belong to this artwork' });
+      }
+    }
+
+    // Prevent duplicate artwork+size in same shipment
+    const existing = shipment.items?.find(i =>
+      i.artwork_id === artwork_id &&
+      (artwork_size_id ? i.artwork_size_id === Number(artwork_size_id) : !i.artwork_size_id)
+    );
+    if (existing) {
+      return res.status(409).json({ error: 'This artwork (and size) is already in the shipment' });
+    }
+
+    const username = req.user?.username || null;
+    const result = await db.addShipmentItemAdmin(
+      shipmentId,
+      { artwork_id, artwork_size_id: artwork_size_id ? Number(artwork_size_id) : null, quantity: qty, notes },
+      username
+    );
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error adding shipment item:', error);
+    res.status(500).json({ error: 'Failed to add shipment item' });
+  }
+});
+
+// DELETE /api/admin/shipments/:id/items/:item_id — remove item from DRAFT shipment.
+// Also deletes associated PENDING_SHIPMENT physical_inventory rows.
+app.delete('/api/admin/shipments/:id/items/:item_id', authenticateToken, async (req, res) => {
+  try {
+    const shipmentId = Number(req.params.id);
+    const itemId = Number(req.params.item_id);
+    if (!Number.isInteger(shipmentId) || !Number.isInteger(itemId)) {
+      return res.status(400).json({ error: 'Invalid shipment or item id' });
+    }
+    const shipment = await db.getShipmentByIdAdmin(shipmentId);
+    if (!shipment) return res.status(404).json({ error: 'Shipment not found' });
+    if (shipment.status !== 'DRAFT') {
+      return res.status(400).json({ error: 'Items can only be removed from DRAFT shipments' });
+    }
+    const result = await db.removeShipmentItemAdmin(shipmentId, itemId);
+    if (!result) return res.status(404).json({ error: 'Shipment item not found' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error removing shipment item:', error);
+    res.status(500).json({ error: 'Failed to remove shipment item' });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });

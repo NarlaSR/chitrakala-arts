@@ -198,7 +198,7 @@ export const orderRequestsAPI = {
   },
 };
 
-// ARCH-INV-04: Admin Inventory Read-Only Views
+// ARCH-INV-04/05: Admin Inventory Views + Mutations
 export const inventoryAPI = {
   getShipments: async () => {
     const response = await api.get('/admin/shipments');
@@ -219,6 +219,27 @@ export const inventoryAPI = {
     const response = await api.get('/admin/inventory-movements', {
       params: physicalInventoryId ? { physical_inventory_id: physicalInventoryId } : {},
     });
+    return response.data;
+  },
+
+  // ARCH-INV-05 mutations
+  createShipment: async (data) => {
+    const response = await api.post('/admin/shipments', data);
+    return response.data;
+  },
+
+  updateShipment: async (id, fields) => {
+    const response = await api.patch(`/admin/shipments/${id}`, fields);
+    return response.data;
+  },
+
+  addShipmentItem: async (shipmentId, data) => {
+    const response = await api.post(`/admin/shipments/${shipmentId}/items`, data);
+    return response.data;
+  },
+
+  removeShipmentItem: async (shipmentId, itemId) => {
+    const response = await api.delete(`/admin/shipments/${shipmentId}/items/${itemId}`);
     return response.data;
   },
 };
