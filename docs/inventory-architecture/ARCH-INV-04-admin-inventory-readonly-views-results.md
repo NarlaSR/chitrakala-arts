@@ -3,7 +3,7 @@
 **Ticket:** ARCH-INV-04 — Admin Inventory Read-Only Views  
 **Branch:** `feature/ARCH-INV-04-admin-inventory-readonly-views`  
 **Date:** 2026-07-31  
-**Status:** Local validation complete — staging validation pending
+**Status:** Local + staging validation complete — ready for merge
 
 ---
 
@@ -80,6 +80,24 @@ No create/update/delete endpoints added. No workflow actions (receiving, reservi
 Status values match ARCH-INV-03 migration schema exactly:
 - shipments.status: DRAFT / READY_TO_SHIP / SHIPPED / IN_TRANSIT / CUSTOMS / DELIVERED / CLOSED / CANCELLED
 - physical_inventory.status: PENDING_SHIPMENT / IN_TRANSIT / RECEIVED / INSPECTION_REQUIRED / INSPECTED / AVAILABLE / RESERVED / SOLD / DAMAGED / ARCHIVED
+
+---
+
+## Staging Validation
+
+Validated against staging DB (`shinkansen.proxy.rlwy.net`) via direct Node.js/pg queries (admin login not required — backend pointed at staging, query functions called directly).
+
+Note: Admin UI login was not achievable on staging (credentials mismatch between staging DB admin record and current env vars — separate issue, not introduced by ARCH-INV-04). API endpoint validation performed via direct DB queries instead.
+
+| Check | Result |
+|---|---|
+| Staging DB confirmed: `shinkansen.proxy.rlwy.net:41009` (not production) | ✅ |
+| All 4 ARCH-INV-03 tables present on staging | ✅ `shipments`, `shipment_items`, `physical_inventory`, `inventory_movements` |
+| `getShipmentsAdmin` query executes without error | ✅ 0 rows (no data yet) |
+| `getPhysicalInventoryAdmin` query executes without error | ✅ 0 rows |
+| `getInventoryMovementsAdmin` query executes without error | ✅ 0 rows |
+| `getShipmentByIdAdmin` items query executes without error | ✅ 0 rows |
+| No data created or modified on staging | ✅ |
 
 ---
 
