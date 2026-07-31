@@ -7,6 +7,62 @@
 
 ---
 
+## PR Review Verification — Shipment Status (RECEIVED vs DELIVERED)
+
+**Review question:** Should `shipments.status` use `RECEIVED` or `DELIVERED`?
+
+### Cross-document findings
+
+| Document | Shipment arrival state | Basis |
+|---|---|---|
+| ARCH-INV-02C | `RECEIVED` | Operational workflow doc; defines "Mark Shipment RECEIVED" action and `/receive` endpoint |
+| ARCH-INV-02E | `RECEIVED` | Migration plan doc; uses same naming as 02C; endpoint named `POST /api/admin/shipments/:id/receive` |
+| **ARCH-INV-02F (final)** | **`DELIVERED`** | Final recommendation; shipment lifecycle: `CUSTOMS → DELIVERED → CLOSED`; ISYNC-18 example: "Admin marks SHIP-2026-001 as **DELIVERED**; 4 physical_inventory rows → **RECEIVED**" |
+
+### Conclusion
+
+**The migration is correct. No change needed.**
+
+ARCH-INV-02F deliberately separated the semantics:
+- The *shipment* (the package) is **`DELIVERED`** by the carrier → `shipments.status = DELIVERED`
+- The *physical items* are **`RECEIVED`** by the admin → `physical_inventory.status = RECEIVED`
+
+ARCH-INV-02C and ARCH-INV-02E used `RECEIVED` for the shipment state, which conflated the two events. ARCH-INV-02F (the final source of truth) clarified this distinction and changed the shipment state to `DELIVERED`. The migration implements 02F's naming.
+
+Confirmation in ARCH-INV-02F:
+- Shipment lifecycle diagram: `CUSTOMS → DELIVERED → CLOSED` (no `RECEIVED` on shipments)
+- Physical inventory lifecycle diagram: `IN_TRANSIT ↓ (shipment is marked DELIVERED) → RECEIVED`
+- ISYNC-18 example: "Admin marks SHIP-2026-001 as DELIVERED → 4 physical_inventory rows → RECEIVED"
+
+### Final status values — confirmed correct per ARCH-INV-02F
+
+**`shipments.status` CHECK constraint (8 values):**
+`DRAFT`, `READY_TO_SHIP`, `SHIPPED`, `IN_TRANSIT`, `CUSTOMS`, `DELIVERED`, `CLOSED`, `CANCELLED`
+
+**`physical_inventory.status` CHECK constraint (10 values):**
+`PENDING_SHIPMENT`, `IN_TRANSIT`, `RECEIVED`, `INSPECTION_REQUIRED`, `INSPECTED`, `AVAILABLE`, `RESERVED`, `SOLD`, `DAMAGED`, `ARCHIVED`
+
+`RECEIVED` appears only on `physical_inventory`, not on `shipments`. This matches ARCH-INV-02F exactly.
+
+---
+
+## Additional PR Review Verifications
+
+| Check | Finding |
+|---|---|
+| `physical_inventory` has no `quantity` column | ✅ Confirmed — no `quantity` column exists (D3). The stale ARCH-INV-02B schema block was not used as the template. |
+| `shipment_items.quantity` conflicts with D3? | ✅ No conflict. D3 says no `quantity` on `physical_inventory`. `shipment_items.quantity` is the *manifest count* for how many units were expected in the shipment — a separate, valid field on the shipment manifest table. |
+| `inventory_movements` uses ARCH-INV-02D 13 movement types exactly | ✅ Confirmed: `CREATED`, `SHIPPED`, `RECEIVED`, `INSPECTED`, `PUBLISHED`, `REQUEST_CREATED`, `RESERVED`, `RESERVATION_RELEASED`, `SOLD`, `RETURNED`, `ADJUSTED`, `DAMAGED`, `ARCHIVED`. Uses `RESERVATION_RELEASED` (not the stale `RELEASED` from ARCH-INV-02B). |
+| `order_request_items.physical_inventory_id` is nullable | ✅ Confirmed: `is_nullable = YES`, `data_type = integer` |
+| `order_request_items.physical_inventory_id` ON DELETE SET NULL | ✅ Confirmed: FK delete rule = SET NULL |
+| No backfill occurred | ✅ All new tables at 0 rows on local and staging |
+| Existing counts unchanged | ✅ Confirmed on both environments (see no-change count checks below) |
+| No production migration run | ✅ Production (`crossover.proxy.rlwy.net:54308`) not touched |
+| Local validation still valid | ✅ No migration change made; local DB remains in validated state |
+| Railway staging still valid | ✅ No migration change made; staging DB remains in validated state |
+
+---
+
 ## Confirmed Owner Decisions (D1–D3)
 
 | Decision | Question | Confirmed Answer |
