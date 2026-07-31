@@ -2,9 +2,11 @@
 
 **Ticket:** ARCH-INV-04 — Admin Inventory Read-Only Views  
 **Branch:** `feature/ARCH-INV-04-admin-inventory-readonly-views`  
-**Commits:** `31053d5` (implementation), `83e304c` (staging DB query results), `[this commit]` (full validation)  
+**Merge commit:** `42db397` — Merge feature/ARCH-INV-04-admin-inventory-readonly-views into main  
+**Push:** `99bc015..42db397` → `origin/main`  
+**Commits:** `31053d5` (implementation), `83e304c` (staging DB query results), `d976260` (full validation)  
 **Date:** 2026-07-31  
-**Status:** Option B local validation complete — staging admin UI blocked by pre-existing credential mismatch
+**Status:** Merged. Production deploy complete. Production smoke in progress — public checks verified; admin-authenticated checks pending user sign-in.
 
 ---
 
@@ -131,6 +133,68 @@ Validated against staging DB (`shinkansen.proxy.rlwy.net`) via Node.js/pg direct
 | `getInventoryMovementsAdmin` query executes cleanly | ✅ 0 rows |
 | `getShipmentByIdAdmin` items JOIN query executes cleanly | ✅ 0 rows |
 | No staging data created or modified | ✅ |
+
+---
+
+## Production Smoke — Deploy
+
+| Check | Result |
+|---|---|
+| Merge commit | `42db397` — Merge feature/ARCH-INV-04-admin-inventory-readonly-views into main |
+| Push to origin/main | ✅ `99bc015..42db397` |
+| Railway backend auto-deploy | ✅ `chitrakalaarts-production.up.railway.app` responding |
+| Vercel frontend auto-deploy | ✅ `www.chitrakala-arts.com` responding |
+
+---
+
+## Production Smoke — Public Checks (No Auth Required)
+
+| Check | Result |
+|---|---|
+| Production frontend homepage loads | ✅ Nav, featured artworks, categories all render |
+| Public artwork detail page loads | ✅ "Rhythms of Heritage – Blue Mirror Mosaic Art Work" — title, description, prices, size selector render |
+| "Add to Request" button works | ✅ Button changes to "Added to Request" |
+| Request cart opens | ✅ Cart modal opens with artwork item and contact form (Name, Email, Phone, Message, Submit) |
+| Admin login page loads | ✅ `/ckk-secure-admin` renders "Admin Login" form |
+| No browser console errors on production frontend | ✅ |
+
+---
+
+## Production Smoke — Unauthenticated Endpoint Rejection (Production)
+
+All 4 new endpoints tested against production backend without a Bearer token:
+
+| Endpoint | Expected | Result |
+|---|---|---|
+| `GET /api/admin/shipments` | 401 | ✅ 401 `{"error":"Access token required"}` |
+| `GET /api/admin/shipments/1` | 401 | ✅ 401 `{"error":"Access token required"}` |
+| `GET /api/admin/physical-inventory` | 401 | ✅ 401 `{"error":"Access token required"}` |
+| `GET /api/admin/inventory-movements` | 401 | ✅ 401 `{"error":"Access token required"}` |
+
+---
+
+## Production Smoke — Admin-Authenticated Checks (Requires cks-admin Login)
+
+**Pending user verification.** These require signing in as `cks-admin` on the production admin UI.
+
+| Check | Result |
+|---|---|
+| Admin login with `cks-admin` production credentials | Pending |
+| Admin dashboard loads | Pending |
+| Dashboard "Shipments" button visible | Pending |
+| Dashboard "Physical Inventory" button visible | Pending |
+| Admin Shipments page loads (`/ckk-secure-admin/shipments`) | Pending |
+| Shipments empty state renders | Pending |
+| Admin Physical Inventory page loads (`/ckk-secure-admin/physical-inventory`) | Pending |
+| Physical Inventory empty state renders | Pending |
+| Navigation between pages works | Pending |
+| Admin Order Requests page still works | Pending |
+| `GET /api/admin/shipments` authenticated → 200 `[]` | Pending |
+| `GET /api/admin/shipments/1` authenticated → 404 | Pending |
+| `GET /api/admin/physical-inventory` authenticated → 200 `[]` | Pending |
+| `GET /api/admin/inventory-movements` authenticated → 200 `[]` | Pending |
+| Production DB row counts: shipments=0, shipment_items=0, physical_inventory=0, inventory_movements=0 | Pending |
+| 4 ISYNC-18 artworks: status=NEEDS_REVIEW, show_on_website=false, sku=null | Pending |
 
 ---
 
