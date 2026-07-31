@@ -140,10 +140,17 @@ async function enrichArtworkRows(rows) {
 }
 
 // Public-facing: only artworks that are IN_STOCK or MADE_TO_ORDER AND enabled by admin.
-async function getArtworks() {
-  const result = await pool.query(
-    "SELECT * FROM artworks WHERE status IN ('IN_STOCK', 'MADE_TO_ORDER') AND show_on_website = true ORDER BY created_at DESC"
-  );
+// Optional categorySlug (matches artworks.category, e.g. 'dot-mandala') narrows the
+// result server-side (WEB-CAT-02) — omitted/null behaves exactly as before this change.
+async function getArtworks(categorySlug = null) {
+  const result = categorySlug
+    ? await pool.query(
+        "SELECT * FROM artworks WHERE status IN ('IN_STOCK', 'MADE_TO_ORDER') AND show_on_website = true AND category = $1 ORDER BY created_at DESC",
+        [categorySlug]
+      )
+    : await pool.query(
+        "SELECT * FROM artworks WHERE status IN ('IN_STOCK', 'MADE_TO_ORDER') AND show_on_website = true ORDER BY created_at DESC"
+      );
   return enrichArtworkRows(result.rows);
 }
 
