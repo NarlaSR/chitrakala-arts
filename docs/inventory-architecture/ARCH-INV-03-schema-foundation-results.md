@@ -252,33 +252,123 @@ API regression was validated against the local server (which runs against the lo
 
 ---
 
-## Production Migration Status
+## Production Migration Results
 
-**Production migration: NOT RUN.**
+**Date:** 2026-07-30  
+**Database:** `crossover.proxy.rlwy.net:54308` (Railway production)
 
-Production database (`crossover.proxy.rlwy.net:54308`) was not touched. No connection to production was made during this ticket.
+### Backup
 
-### Production migration notes (for future execution)
+| Field | Value |
+|---|---|
+| Backup file | `chitrakala_prod_20260730_pre_arch_inv03.backup` |
+| Size | 13,403 KB (13,724,832 bytes) |
+| Format | pg_dump custom format (-F c) |
+| Location | `C:\Development\backups\postgres\` (not committed) |
 
-When ready to apply to production:
+### Pre-migration production baseline
 
-1. Take a backup first:
-   ```
-   pg_dump -h crossover.proxy.rlwy.net -p 54308 -U postgres -d railway > backup_pre_arch_inv03_YYYYMMDD.sql
-   ```
-2. Apply migration:
-   ```
-   psql -h crossover.proxy.rlwy.net -p 54308 -U postgres -d railway -f server/dbMigration/migrate_arch_inv03_shipment_physical_inventory.sql
-   ```
-3. Validate: confirm 4 tables, 11 new indexes, 3 CHECK constraints, no backfill rows, counts unchanged from production baseline (38 public artworks, 42 total artworks, 3 order_requests)
-4. Migration is idempotent — safe to re-run if interrupted
+| Entity | Count |
+|---|---|
+| artworks | 42 |
+| artwork_sizes | 91 |
+| categories | 7 |
+| order_requests | 3 |
+| order_request_items | 4 |
+| Public artworks (IN_STOCK/MADE_TO_ORDER + show_on_website=true) | 38 |
+| NEEDS_REVIEW + hidden (ISYNC-18) | 4 |
+| maintenance_mode | false |
+| ARCH-INV-03 tables pre-existing | None |
 
-**Expected production baseline counts after migration (unchanged):**
-- artworks: 42 (38 public IN_STOCK, 4 NEEDS_REVIEW hidden)
-- artwork_sizes: (current count)
-- order_requests: 3
-- order_request_items: (current count)
-- New tables: 0 rows each
+### Migration execution
+
+| Step | Result |
+|---|---|
+| `CREATE TABLE shipments` | ✅ |
+| `CREATE INDEX idx_shipments_status` | ✅ |
+| `CREATE TABLE shipment_items` | ✅ |
+| `CREATE INDEX idx_shipment_items_shipment_id` | ✅ |
+| `CREATE INDEX idx_shipment_items_artwork_id` | ✅ |
+| `CREATE TABLE physical_inventory` | ✅ |
+| `CREATE INDEX idx_physical_inventory_artwork_id` | ✅ |
+| `CREATE INDEX idx_physical_inventory_status` | ✅ |
+| `CREATE INDEX idx_physical_inventory_shipment_id` | ✅ |
+| `CREATE TABLE inventory_movements` | ✅ |
+| `CREATE INDEX idx_inventory_movements_physical_inventory_id` | ✅ |
+| `CREATE INDEX idx_inventory_movements_artwork_id` | ✅ |
+| `CREATE INDEX idx_inventory_movements_movement_type` | ✅ |
+| `ALTER TABLE order_request_items ADD COLUMN physical_inventory_id` | ✅ |
+| `CREATE INDEX idx_order_request_items_physical_inventory_id` | ✅ |
+| **Total** | 15 statements — 0 errors |
+
+### Production schema validation
+
+| Check | Result |
+|---|---|
+| `shipments` table exists | ✅ |
+| `shipment_items` table exists | ✅ |
+| `physical_inventory` table exists | ✅ |
+| `inventory_movements` table exists | ✅ |
+| `physical_inventory` has no `quantity` column (D3) | ✅ |
+| `order_request_items.physical_inventory_id` exists | ✅ |
+| `physical_inventory_id` is nullable | ✅ `is_nullable = YES` |
+| `physical_inventory_id` data type | ✅ integer |
+| FK to `physical_inventory(id)` ON DELETE SET NULL | ✅ |
+| `shipments.status` includes DELIVERED, not RECEIVED | ✅ 8 values: DRAFT, READY_TO_SHIP, SHIPPED, IN_TRANSIT, CUSTOMS, DELIVERED, CLOSED, CANCELLED |
+| `physical_inventory.status` includes RECEIVED | ✅ 10 values confirmed |
+| `inventory_movements.movement_type` — 13 ARCH-INV-02D types | ✅ All 13 confirmed including RESERVATION_RELEASED, REQUEST_CREATED |
+| All 12 expected indexes present | ✅ |
+| All 4 CHECK constraints present | ✅ |
+
+### Production data validation (post-migration)
+
+| Entity | Pre-migration | Post-migration | Changed? |
+|---|---|---|---|
+| artworks | 42 | 42 | ✅ No |
+| artwork_sizes | 91 | 91 | ✅ No |
+| categories | 7 | 7 | ✅ No |
+| order_requests | 3 | 3 | ✅ No |
+| order_request_items | 4 | 4 | ✅ No |
+| public artworks | 38 | 38 | ✅ No |
+| NEEDS_REVIEW + hidden | 4 | 4 | ✅ No |
+| shipments rows | — | 0 | ✅ No backfill |
+| shipment_items rows | — | 0 | ✅ No backfill |
+| physical_inventory rows | — | 0 | ✅ No backfill |
+| inventory_movements rows | — | 0 | ✅ No backfill |
+| non-null physical_inventory_id on order_request_items | — | 0 | ✅ All null |
+
+### ISYNC-18 artworks (production)
+
+| Artwork ID | Status | show_on_website | sku |
+|---|---|---|---|
+| art-1785182575357-0 | NEEDS_REVIEW | false | null |
+| art-1785182575357-1 | NEEDS_REVIEW | false | null |
+| art-1785182575357-2 | NEEDS_REVIEW | false | null |
+| art-1785182575357-3 | NEEDS_REVIEW | false | null |
+
+All 4 unchanged. ✅
+
+### Production smoke test
+
+**Smoke request ID:** 8  
+**Artwork used:** art-1782445237565 (size 738)  
+**Customer name:** ARCH-INV-03 prod smoke  
+
+| Check | Result |
+|---|---|
+| `GET /api/artworks` — 200, 38 artworks | ✅ |
+| Hidden NEEDS_REVIEW artworks not in public response | ✅ |
+| `GET /api/admin/order-requests` without token — 401 | ✅ Auth enforced |
+| `POST /api/order-requests` — 201, order #8 created | ✅ |
+| Order #8 item `physical_inventory_id = null` | ✅ Confirmed via psql |
+| Admin login succeeds, `GET /api/admin/order-requests/8` — 200 | ✅ |
+| Admin detail shows correct customer, status=NEW, 1 item | ✅ |
+| Admin detail item `physical_inventory_id` is null | ✅ |
+| Smoke cleanup: DELETE order_request_items WHERE order_request_id=8 | ✅ DELETE 1 |
+| Smoke cleanup: DELETE order_requests WHERE id=8 | ✅ DELETE 1 |
+| order_requests restored to baseline: 3 | ✅ |
+| order_request_items restored to baseline: 4 | ✅ |
+| maintenance_mode unchanged: false | ✅ |
 
 ---
 
@@ -300,8 +390,8 @@ Rollback is safe: all new tables are empty, the dropped FK column has only null 
 
 | Check | Result |
 |---|---|
-| Production migration run | ✅ Not run |
-| Production data modified | ✅ Not modified |
+| Production migration run | ✅ Run 2026-07-30 — additive only, 15 statements, 0 errors |
+| Production data modified | ✅ No existing data modified — additive only |
 | Existing artworks backfilled with physical_inventory rows | ✅ None |
 | 4 ISYNC-18 artworks status changed | ✅ Not touched |
 | `show_on_website` changed on any artwork | ✅ Not changed |
@@ -322,6 +412,6 @@ Rollback is safe: all new tables are empty, the dropped FK column has only null 
 
 ## ARCH-INV-03 Status
 
-✅ **ARCH-INV-03 is ready for PR review.**
+✅ **ARCH-INV-03 is Done.**
 
-Migration applied cleanly to local and Railway staging. All 36 validation checks passed (18 local + 18 staging). No-change counts confirmed on both environments. Public visibility unchanged. No backfill. No application code changes. No production data touched.
+Migration applied cleanly to local dev, Railway staging, and production. All validation checks passed across all three environments. No-change counts confirmed. Public visibility unchanged. No backfill. No application code changes. Production smoke test passed and cleaned up. ARCH-INV-03 branch merged to main at `910e4e2`.
