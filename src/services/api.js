@@ -198,4 +198,29 @@ export const orderRequestsAPI = {
   },
 };
 
+// ARCH-INV-04: Admin Inventory Read-Only Views
+export const inventoryAPI = {
+  getShipments: async () => {
+    const response = await api.get('/admin/shipments');
+    return response.data;
+  },
+
+  getShipmentById: async (id) => {
+    const response = await api.get(`/admin/shipments/${id}`);
+    return response.data;
+  },
+
+  getPhysicalInventory: async () => {
+    const response = await api.get('/admin/physical-inventory');
+    return response.data;
+  },
+
+  getInventoryMovements: async (physicalInventoryId = null) => {
+    const response = await api.get('/admin/inventory-movements', {
+      params: physicalInventoryId ? { physical_inventory_id: physicalInventoryId } : {},
+    });
+    return response.data;
+  },
+};
+
 export default api;

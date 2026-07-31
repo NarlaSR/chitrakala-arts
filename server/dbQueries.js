@@ -800,6 +800,68 @@ async function updateOrderRequestStatus(id, status) {
   return result.rows[0] || null;
 }
 
+// ─── ARCH-INV-04: Admin read-only inventory views ────────────────────────────
+
+async function getShipmentsAdmin() {
+  const result = await pool.query(`
+    SELECT s.*, COUNT(si.id)::int AS item_count
+    FROM shipments s
+    LEFT JOIN shipment_items si ON si.shipment_id = s.id
+    GROUP BY s.id
+    ORDER BY s.created_at DESC
+  `);
+  return result.rows;
+}
+
+async function getShipmentByIdAdmin(id) {
+  const shipmentResult = await pool.query(
+    'SELECT * FROM shipments WHERE id = $1',
+    [id]
+  );
+  const shipment = shipmentResult.rows[0];
+  if (!shipment) return null;
+  const itemsResult = await pool.query(
+    `SELECT si.*, a.title AS artwork_title
+     FROM shipment_items si
+     JOIN artworks a ON a.id = si.artwork_id
+     WHERE si.shipment_id = $1
+     ORDER BY si.id ASC`,
+    [id]
+  );
+  shipment.items = itemsResult.rows;
+  return shipment;
+}
+
+async function getPhysicalInventoryAdmin() {
+  const result = await pool.query(`
+    SELECT pi.*,
+           a.title AS artwork_title, a.sku AS artwork_sku,
+           s.reference_number AS shipment_reference
+    FROM physical_inventory pi
+    JOIN artworks a ON a.id = pi.artwork_id
+    LEFT JOIN shipments s ON s.id = pi.shipment_id
+    ORDER BY pi.created_at DESC
+  `);
+  return result.rows;
+}
+
+async function getInventoryMovementsAdmin(physicalInventoryId = null) {
+  const query = physicalInventoryId
+    ? `SELECT im.*, a.title AS artwork_title
+       FROM inventory_movements im
+       LEFT JOIN artworks a ON a.id = im.artwork_id
+       WHERE im.physical_inventory_id = $1
+       ORDER BY im.created_at DESC
+       LIMIT 500`
+    : `SELECT im.*, a.title AS artwork_title
+       FROM inventory_movements im
+       LEFT JOIN artworks a ON a.id = im.artwork_id
+       ORDER BY im.created_at DESC
+       LIMIT 500`;
+  const result = await pool.query(query, physicalInventoryId ? [physicalInventoryId] : []);
+  return result.rows;
+}
+
 module.exports = {
   getUsers,
   getUserByUsername,
@@ -846,4 +908,8 @@ module.exports = {
   getOrderRequestsAdmin,
   getOrderRequestById,
   updateOrderRequestStatus,
+  getShipmentsAdmin,
+  getShipmentByIdAdmin,
+  getPhysicalInventoryAdmin,
+  getInventoryMovementsAdmin,
 };
