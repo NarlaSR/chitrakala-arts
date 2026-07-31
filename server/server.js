@@ -2112,6 +2112,63 @@ app.patch('/api/admin/order-requests/:id/status', authenticateToken, async (req,
   }
 });
 
+// ─── ARCH-INV-04: Admin Inventory Read-Only Views ────────────────────────────
+
+// GET /api/admin/shipments — admin only. List all shipments with item counts.
+app.get('/api/admin/shipments', authenticateToken, async (req, res) => {
+  try {
+    const shipments = await db.getShipmentsAdmin();
+    res.json(shipments);
+  } catch (error) {
+    console.error('Error fetching shipments:', error);
+    res.status(500).json({ error: 'Failed to fetch shipments' });
+  }
+});
+
+// GET /api/admin/shipments/:id — admin only. Full detail with line items.
+app.get('/api/admin/shipments/:id', authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid shipment id' });
+    }
+    const shipment = await db.getShipmentByIdAdmin(id);
+    if (!shipment) return res.status(404).json({ error: 'Shipment not found' });
+    res.json(shipment);
+  } catch (error) {
+    console.error('Error fetching shipment:', error);
+    res.status(500).json({ error: 'Failed to fetch shipment' });
+  }
+});
+
+// GET /api/admin/physical-inventory — admin only. List all physical inventory rows.
+app.get('/api/admin/physical-inventory', authenticateToken, async (req, res) => {
+  try {
+    const rows = await db.getPhysicalInventoryAdmin();
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching physical inventory:', error);
+    res.status(500).json({ error: 'Failed to fetch physical inventory' });
+  }
+});
+
+// GET /api/admin/inventory-movements — admin only. Optional ?physical_inventory_id= filter.
+app.get('/api/admin/inventory-movements', authenticateToken, async (req, res) => {
+  try {
+    const physicalInventoryId = req.query.physical_inventory_id
+      ? Number(req.query.physical_inventory_id)
+      : null;
+    if (physicalInventoryId !== null && !Number.isInteger(physicalInventoryId)) {
+      return res.status(400).json({ error: 'Invalid physical_inventory_id' });
+    }
+    const movements = await db.getInventoryMovementsAdmin(physicalInventoryId || null);
+    res.json(movements);
+  } catch (error) {
+    console.error('Error fetching inventory movements:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory movements' });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
