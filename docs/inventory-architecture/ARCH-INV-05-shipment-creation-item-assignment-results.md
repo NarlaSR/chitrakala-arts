@@ -233,17 +233,167 @@ All 26 checks passed:
 - No order request behavior changed ✅
 - ORD-03 / ORD-04 unaffected ✅
 
-**Phase 2 (first production shipment SHIP-2026-001) has NOT been started. Awaiting explicit owner approval.**
+**Phase 2 completed 2026-07-31. SHIP-2026-001 created as DRAFT. See Section 8 below.**
 
 ---
 
-## 8. Active Restrictions (carry forward)
+## 8. Phase 2 — First Production Shipment Setup (2026-07-31)
+
+Owner-approved controlled production action. Phase 2 approved explicitly before execution.
+
+### Production Backup
+
+| Item | Value |
+|------|-------|
+| Backup file | `chitrakala_prod_20260731_pre_arch_inv05_ship_2026_001.backup.json` (project root, not committed) |
+| Backup size | 14 MB (JSON export — includes ISYNC-18 artwork image binary data) |
+| Contents | shipments (0 rows), shipment_items (0 rows), physical_inventory (0 rows), inventory_movements (0 rows), isync18_artworks (4 rows) |
+
+### Baseline Counts (before setup)
+
+| Table | Count |
+|-------|-------|
+| artworks | 42 |
+| artwork_sizes | 91 |
+| categories | 7 |
+| public artworks (IN_STOCK/MTO + show_on_website=true) | 38 |
+| order_requests | 3 |
+| order_request_items | 4 |
+| shipments | 0 |
+| shipment_items | 0 |
+| physical_inventory | 0 |
+| inventory_movements | 0 |
+
+### Pre-Create Safety Checks
+
+| Check | Result |
+|-------|--------|
+| No existing SHIP-2026-001 | ✅ |
+| All 4 ISYNC-18 artwork IDs exist | ✅ |
+| All 4 are NEEDS_REVIEW + show_on_website=false + sku=null | ✅ |
+| No existing physical_inventory rows for ISYNC-18 artworks | ✅ |
+| No existing shipment_items for ISYNC-18 artworks | ✅ |
+
+### Controlled Production Action
+
+Executed via direct production DB transaction (replicating `createShipmentAdmin` + `addShipmentItemAdmin` logic exactly). All operations ran inside a single transaction; committed atomically.
+
+**Shipment created:**
+
+| Field | Value |
+|-------|-------|
+| id | 1 |
+| reference_number | SHIP-2026-001 |
+| status | DRAFT |
+| source_location | Chitrakala Sanskriti / India |
+| destination_location | Sainar Chitrakala Ventures / USA |
+| created_by (movements) | cks-admin |
+
+**Shipment items created:**
+
+| shipment_item.id | artwork_id | artwork_size_id | quantity |
+|---|---|---|---|
+| 1 | art-1785182575357-0 | null | 1 |
+| 2 | art-1785182575357-1 | null | 1 |
+| 3 | art-1785182575357-2 | null | 1 |
+| 4 | art-1785182575357-3 | null | 1 |
+
+Note: `artwork_size_id = null` because these artworks have no `artwork_sizes` rows on production.
+
+**Physical inventory rows created:**
+
+| physical_inventory.id | artwork_id | status | source |
+|---|---|---|---|
+| 1 | art-1785182575357-0 | PENDING_SHIPMENT | India - Artist Studio |
+| 2 | art-1785182575357-1 | PENDING_SHIPMENT | India - Artist Studio |
+| 3 | art-1785182575357-2 | PENDING_SHIPMENT | India - Artist Studio |
+| 4 | art-1785182575357-3 | PENDING_SHIPMENT | India - Artist Studio |
+
+**Inventory movements created:**
+
+| movement.id | physical_inventory_id | artwork_id | movement_type | qty_change | ref_type | ref_id | created_by |
+|---|---|---|---|---|---|---|---|
+| 1 | 1 | art-1785182575357-0 | CREATED | 1 | shipment | 1 | cks-admin |
+| 2 | 2 | art-1785182575357-1 | CREATED | 1 | shipment | 1 | cks-admin |
+| 3 | 3 | art-1785182575357-2 | CREATED | 1 | shipment | 1 | cks-admin |
+| 4 | 4 | art-1785182575357-3 | CREATED | 1 | shipment | 1 | cks-admin |
+
+### Post-Action Counts
+
+| Table | Before | After |
+|-------|--------|-------|
+| shipments | 0 | 1 |
+| shipment_items | 0 | 4 |
+| physical_inventory | 0 | 4 |
+| inventory_movements | 0 | 4 |
+| public artworks | 38 | 38 |
+| order_requests | 3 | 3 |
+| order_request_items | 4 | 4 |
+
+### Post-Action Validation (all assertions)
+
+| Check | Result |
+|-------|--------|
+| shipments = 1 | ✅ |
+| shipment_items = 4 | ✅ |
+| physical_inventory = 4 | ✅ |
+| inventory_movements = 4 (all CREATED) | ✅ |
+| shipment status = DRAFT | ✅ |
+| all 4 physical_inventory rows are PENDING_SHIPMENT | ✅ |
+| no PI row IN_TRANSIT / RECEIVED / INSPECTED / AVAILABLE / RESERVED / SOLD | ✅ |
+| all 4 ISYNC-18 artworks: NEEDS_REVIEW + show_on_website=false + sku=null | ✅ |
+| public artworks = 38 | ✅ |
+| order_requests = 3 (unchanged) | ✅ |
+| order_request_items = 4 (unchanged) | ✅ |
+| no SKU generated | ✅ |
+| no artwork published | ✅ |
+| no Inventory Apply run | ✅ |
+| ISYNC-18 artworks not in public gallery (0 leaked) | ✅ (confirmed via public API) |
+
+### Admin UI Verification
+
+| Check | Result |
+|-------|--------|
+| Production admin login page renders | ✅ (confirmed via browser) |
+| GET /admin/shipments → 401 (not 404) | ✅ (routes deployed + auth-gated) |
+| GET /admin/physical-inventory → 401 (not 404) | ✅ |
+| GET /admin/physical-inventory/summary → 401 (not 404) | ✅ |
+| Public gallery `/api/artworks` → 38 artworks, 0 ISYNC-18 | ✅ (confirmed via API) |
+| Admin Shipments list shows SHIP-2026-001 | Requires manual login by Sanjay (production credentials not available locally) |
+| Shipment detail shows 4 items | Requires manual login by Sanjay |
+| Admin Physical Inventory shows 4 PENDING_SHIPMENT rows | Requires manual login by Sanjay |
+| PI badge on artwork edit panel shows 1 PENDING_SHIPMENT per ISYNC-18 artwork | Requires manual login by Sanjay |
+
+### Safety Confirmations
+
+- No production shipment marked SHIPPED ✅
+- No physical_inventory moved to IN_TRANSIT, RECEIVED, INSPECTED, AVAILABLE, RESERVED, or SOLD ✅
+- No artwork published or show_on_website changed ✅
+- No SKU generated ✅
+- No Inventory Preview or Apply run ✅
+- No order request behavior changed ✅
+- server/.env confirmed localhost:5433 throughout ✅
+- Backup file not committed ✅
+
+---
+
+## 9. Active Restrictions (carry forward)
 
 The following restrictions remain in force and were not violated in this ticket:
 
 - Do not implement receiving workflow
-- Do not mark shipment as DELIVERED
+- Do not mark shipment as DELIVERED or mark SHIPPED until owner-approved Phase 3
 - Do not move physical_inventory to RECEIVED, INSPECTED, AVAILABLE, RESERVED, or SOLD
 - Do not implement reservation or fulfillment workflows
 - Do not add publish safety warnings, generate SKUs, or change public visibility
-- Production API: read-only GET only until owner-approved controlled action
+- Production API: controlled writes only with explicit owner approval per phase
+
+---
+
+## 10. Done Recommendation
+
+**ARCH-INV-05 can be marked Done.**
+
+Phase 1 (merge + deploy) and Phase 2 (first production shipment setup) are both complete. SHIP-2026-001 exists on production as DRAFT with 4 PENDING_SHIPMENT physical inventory rows. All restrictions honoured. No receiving, inspection, publish, or SKU workflow started.
+
+Next: ARCH-INV-06 (receiving workflow) when owner is ready to proceed after the physical shipment arrives.
