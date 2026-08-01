@@ -19,6 +19,8 @@ import AdminInventorySync from './pages/AdminInventorySync';
 import AdminReviewQueue from './pages/AdminReviewQueue';
 import AdminOrderRequests from './pages/AdminOrderRequests';
 import AdminShipments from './pages/AdminShipments';
+import AdminCreateShipment from './pages/AdminCreateShipment';
+import AdminShipmentDetail from './pages/AdminShipmentDetail';
 import AdminPhysicalInventory from './pages/AdminPhysicalInventory';
 import DebugEnv from './pages/DebugEnv';
 import Maintenance from './pages/Maintenance';
@@ -69,6 +71,8 @@ function App() {
             <Route path="/ckk-secure-admin/review-queue" element={<AdminReviewQueue />} />
             <Route path="/ckk-secure-admin/order-requests" element={<AdminOrderRequests />} />
             <Route path="/ckk-secure-admin/shipments" element={<AdminShipments />} />
+            <Route path="/ckk-secure-admin/shipments/create" element={<AdminCreateShipment />} />
+            <Route path="/ckk-secure-admin/shipments/:id" element={<AdminShipmentDetail />} />
             <Route path="/ckk-secure-admin/physical-inventory" element={<AdminPhysicalInventory />} />
             <Route path="/debug-env" element={<DebugEnv />} />
 

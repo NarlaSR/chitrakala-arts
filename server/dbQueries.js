@@ -800,6 +800,185 @@ async function updateOrderRequestStatus(id, status) {
   return result.rows[0] || null;
 }
 
+// ─── ARCH-INV-05: Admin shipment creation and item assignment ────────────────
+
+const ALLOWED_SHIPMENT_STATUSES_CREATE = new Set(['DRAFT', 'READY_TO_SHIP']);
+const ALLOWED_SHIPMENT_STATUSES_UPDATE = new Set([
+  'DRAFT', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT', 'CUSTOMS', 'CANCELLED',
+]);
+
+async function createShipmentAdmin({ reference_number, source_location, destination_location, status, expected_ship_date, notes }) {
+  const result = await pool.query(
+    `INSERT INTO shipments
+       (reference_number, source_location, destination_location, status, expected_ship_date, notes, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+     RETURNING *`,
+    [
+      reference_number,
+      source_location || null,
+      destination_location || null,
+      status || 'DRAFT',
+      expected_ship_date || null,
+      notes || null,
+    ]
+  );
+  return result.rows[0];
+}
+
+// Updates header fields and optionally status. When status transitions to
+// SHIPPED, cascades all PENDING_SHIPMENT physical_inventory rows to IN_TRANSIT
+// and writes a SHIPPED movement per row. All in a single transaction.
+// currentStatus must be the shipment's status BEFORE this update.
+// The SHIPPED cascade (PENDING_SHIPMENT → IN_TRANSIT + movement logs) runs only
+// when transitioning INTO SHIPPED — not on same-status re-saves.
+async function updateShipmentAdmin(id, fields, username, currentStatus) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { status, reference_number, source_location, destination_location,
+            carrier, tracking_number, expected_ship_date, shipped_date,
+            delivered_date, notes } = fields;
+
+    const result = await client.query(
+      `UPDATE shipments SET
+         reference_number     = COALESCE($2, reference_number),
+         source_location      = COALESCE($3, source_location),
+         destination_location = COALESCE($4, destination_location),
+         carrier              = COALESCE($5, carrier),
+         tracking_number      = COALESCE($6, tracking_number),
+         status               = COALESCE($7, status),
+         expected_ship_date   = COALESCE($8, expected_ship_date),
+         shipped_date         = COALESCE($9, shipped_date),
+         delivered_date       = COALESCE($10, delivered_date),
+         notes                = COALESCE($11, notes),
+         updated_at           = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [id, reference_number ?? null, source_location ?? null,
+       destination_location ?? null, carrier ?? null,
+       tracking_number ?? null, status ?? null,
+       expected_ship_date ?? null, shipped_date ?? null,
+       delivered_date ?? null, notes ?? null]
+    );
+    const shipment = result.rows[0];
+    if (!shipment) { await client.query('ROLLBACK'); return null; }
+
+    // Cascade only on the actual transition into SHIPPED, never on a same-status re-save.
+    if (status === 'SHIPPED' && currentStatus !== 'SHIPPED') {
+      const piResult = await client.query(
+        `UPDATE physical_inventory
+         SET status = 'IN_TRANSIT', updated_at = CURRENT_TIMESTAMP
+         WHERE shipment_id = $1 AND status = 'PENDING_SHIPMENT'
+         RETURNING id, artwork_id`,
+        [id]
+      );
+      for (const row of piResult.rows) {
+        await client.query(
+          `INSERT INTO inventory_movements
+             (physical_inventory_id, artwork_id, movement_type, quantity_change,
+              reference_type, reference_id, notes, created_by)
+           VALUES ($1, $2, 'SHIPPED', 0, 'shipment', $3, 'Shipment marked SHIPPED', $4)`,
+          [row.id, row.artwork_id, String(id), username || null]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return shipment;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Adds one artwork (optionally a specific size) to a shipment, creates
+// `quantity` individual physical_inventory rows at PENDING_SHIPMENT, and
+// writes a CREATED inventory_movement per row. All in a single transaction.
+async function addShipmentItemAdmin(shipmentId, { artwork_id, artwork_size_id, quantity, notes }, username) {
+  const qty = quantity || 1;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const siResult = await client.query(
+      `INSERT INTO shipment_items (shipment_id, artwork_id, artwork_size_id, quantity, notes)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [shipmentId, artwork_id, artwork_size_id || null, qty, notes || null]
+    );
+    const shipmentItem = siResult.rows[0];
+
+    const piRows = [];
+    for (let i = 0; i < qty; i++) {
+      const piResult = await client.query(
+        `INSERT INTO physical_inventory (artwork_id, artwork_size_id, shipment_id, status, source, updated_at)
+         VALUES ($1, $2, $3, 'PENDING_SHIPMENT', 'India - Artist Studio', CURRENT_TIMESTAMP)
+         RETURNING *`,
+        [artwork_id, artwork_size_id || null, shipmentId]
+      );
+      const pi = piResult.rows[0];
+      piRows.push(pi);
+      await client.query(
+        `INSERT INTO inventory_movements
+           (physical_inventory_id, artwork_id, movement_type, quantity_change,
+            reference_type, reference_id, notes, created_by)
+         VALUES ($1, $2, 'CREATED', 1, 'shipment', $3, 'Physical inventory row created', $4)`,
+        [pi.id, artwork_id, String(shipmentId), username || null]
+      );
+    }
+
+    await client.query('COMMIT');
+    return { shipmentItem, physicalInventoryRows: piRows };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Removes a shipment item (DRAFT shipments only). Deletes the associated
+// PENDING_SHIPMENT physical_inventory rows for that artwork + size + shipment.
+async function removeShipmentItemAdmin(shipmentId, itemId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const itemResult = await client.query(
+      'SELECT * FROM shipment_items WHERE id = $1 AND shipment_id = $2',
+      [itemId, shipmentId]
+    );
+    const item = itemResult.rows[0];
+    if (!item) { await client.query('ROLLBACK'); return null; }
+
+    await client.query(
+      `DELETE FROM physical_inventory
+       WHERE id IN (
+         SELECT id FROM physical_inventory
+         WHERE shipment_id = $1
+           AND artwork_id = $2
+           AND (artwork_size_id = $3 OR ($3 IS NULL AND artwork_size_id IS NULL))
+           AND status = 'PENDING_SHIPMENT'
+         LIMIT $4
+       )`,
+      [shipmentId, item.artwork_id, item.artwork_size_id || null, item.quantity]
+    );
+
+    await client.query('DELETE FROM shipment_items WHERE id = $1', [itemId]);
+
+    await client.query('COMMIT');
+    return { deleted: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // ─── ARCH-INV-04: Admin read-only inventory views ────────────────────────────
 
 async function getShipmentsAdmin() {
@@ -842,6 +1021,18 @@ async function getPhysicalInventoryAdmin() {
     LEFT JOIN shipments s ON s.id = pi.shipment_id
     ORDER BY pi.created_at DESC
   `);
+  return result.rows;
+}
+
+async function getPhysicalInventorySummaryForArtwork(artworkId) {
+  const result = await pool.query(
+    `SELECT status, COUNT(*)::int AS count
+     FROM physical_inventory
+     WHERE artwork_id = $1
+     GROUP BY status
+     ORDER BY status`,
+    [artworkId]
+  );
   return result.rows;
 }
 
@@ -911,5 +1102,12 @@ module.exports = {
   getShipmentsAdmin,
   getShipmentByIdAdmin,
   getPhysicalInventoryAdmin,
+  getPhysicalInventorySummaryForArtwork,
   getInventoryMovementsAdmin,
+  ALLOWED_SHIPMENT_STATUSES_CREATE,
+  ALLOWED_SHIPMENT_STATUSES_UPDATE,
+  createShipmentAdmin,
+  updateShipmentAdmin,
+  addShipmentItemAdmin,
+  removeShipmentItemAdmin,
 };

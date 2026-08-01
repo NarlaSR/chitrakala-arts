@@ -153,12 +153,14 @@
 
 /* View button */
 .sh-btn {
+  display: inline-block;
   border: none;
   border-radius: 5px;
   padding: 0.3rem 0.75rem;
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .sh-btn-view {
