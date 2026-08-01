@@ -804,7 +804,8 @@ async function updateOrderRequestStatus(id, status) {
 
 const ALLOWED_SHIPMENT_STATUSES_CREATE = new Set(['DRAFT', 'READY_TO_SHIP']);
 const ALLOWED_SHIPMENT_STATUSES_UPDATE = new Set([
-  'DRAFT', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT', 'CUSTOMS', 'CANCELLED',
+  'DRAFT', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT', 'CUSTOMS',
+  'DELIVERED', 'CLOSED', 'CANCELLED',
 ]);
 
 async function createShipmentAdmin({ reference_number, source_location, destination_location, status, expected_ship_date, notes }) {
@@ -879,6 +880,26 @@ async function updateShipmentAdmin(id, fields, username, currentStatus) {
              (physical_inventory_id, artwork_id, movement_type, quantity_change,
               reference_type, reference_id, notes, created_by)
            VALUES ($1, $2, 'SHIPPED', 0, 'shipment', $3, 'Shipment marked SHIPPED', $4)`,
+          [row.id, row.artwork_id, String(id), username || null]
+        );
+      }
+    }
+
+    // ARCH-INV-06: DELIVERED cascade — all IN_TRANSIT PI rows become RECEIVED.
+    if (status === 'DELIVERED' && currentStatus !== 'DELIVERED') {
+      const piResult = await client.query(
+        `UPDATE physical_inventory
+         SET status = 'RECEIVED', received_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE shipment_id = $1 AND status = 'IN_TRANSIT'
+         RETURNING id, artwork_id`,
+        [id]
+      );
+      for (const row of piResult.rows) {
+        await client.query(
+          `INSERT INTO inventory_movements
+             (physical_inventory_id, artwork_id, movement_type, quantity_change,
+              reference_type, reference_id, notes, created_by)
+           VALUES ($1, $2, 'RECEIVED', 0, 'shipment', $3, 'Shipment marked DELIVERED', $4)`,
           [row.id, row.artwork_id, String(id), username || null]
         );
       }
@@ -1011,7 +1032,9 @@ async function getShipmentByIdAdmin(id) {
   return shipment;
 }
 
-async function getPhysicalInventoryAdmin() {
+async function getPhysicalInventoryAdmin(shipmentId = null) {
+  const whereClause = shipmentId ? 'WHERE pi.shipment_id = $1' : '';
+  const params = shipmentId ? [shipmentId] : [];
   const result = await pool.query(`
     SELECT pi.*,
            a.title AS artwork_title, a.sku AS artwork_sku,
@@ -1019,9 +1042,96 @@ async function getPhysicalInventoryAdmin() {
     FROM physical_inventory pi
     JOIN artworks a ON a.id = pi.artwork_id
     LEFT JOIN shipments s ON s.id = pi.shipment_id
+    ${whereClause}
     ORDER BY pi.created_at DESC
-  `);
+  `, params);
   return result.rows;
+}
+
+// ─── ARCH-INV-06: Physical inventory status transitions ──────────────────────
+
+const PI_TRANSITION_MAP = {
+  IN_TRANSIT:           new Set(['RECEIVED']),
+  RECEIVED:             new Set(['INSPECTION_REQUIRED', 'INSPECTED', 'DAMAGED', 'ARCHIVED']),
+  INSPECTION_REQUIRED:  new Set(['INSPECTED', 'DAMAGED', 'ARCHIVED']),
+  INSPECTED:            new Set(['AVAILABLE', 'DAMAGED', 'ARCHIVED']),
+  AVAILABLE:            new Set(['DAMAGED', 'ARCHIVED']),
+  DAMAGED:              new Set(['AVAILABLE', 'ARCHIVED']),
+  PENDING_SHIPMENT:     new Set([]),
+  RESERVED:             new Set([]),
+  SOLD:                 new Set([]),
+  ARCHIVED:             new Set([]),
+};
+
+function _piMovementType(toStatus) {
+  if (toStatus === 'RECEIVED') return 'RECEIVED';
+  if (toStatus === 'INSPECTED') return 'INSPECTED';
+  if (toStatus === 'DAMAGED') return 'DAMAGED';
+  if (toStatus === 'ARCHIVED') return 'ARCHIVED';
+  return 'ADJUSTED'; // INSPECTION_REQUIRED and AVAILABLE
+}
+
+function _piMovementNotes(fromStatus, toStatus) {
+  if (toStatus === 'INSPECTION_REQUIRED') return `Status changed from ${fromStatus} to INSPECTION_REQUIRED`;
+  if (toStatus === 'AVAILABLE') return `Status changed from ${fromStatus} to AVAILABLE`;
+  return null;
+}
+
+async function updatePhysicalInventoryStatusAdmin(piId, newStatus, username, conditionNotes) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const piResult = await client.query(
+      'SELECT id, artwork_id, status FROM physical_inventory WHERE id = $1 FOR UPDATE',
+      [piId]
+    );
+    const pi = piResult.rows[0];
+    if (!pi) { await client.query('ROLLBACK'); return null; }
+
+    const allowed = PI_TRANSITION_MAP[pi.status];
+    if (!allowed || !allowed.has(newStatus)) {
+      const err = new Error(`Cannot transition physical inventory from ${pi.status} to ${newStatus}`);
+      err.code = 'INVALID_PI_TRANSITION';
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    const dateFields = [];
+    if (newStatus === 'RECEIVED') dateFields.push('received_date = CURRENT_TIMESTAMP');
+    if (newStatus === 'INSPECTED' || newStatus === 'AVAILABLE') dateFields.push('inspected_date = CURRENT_TIMESTAMP');
+
+    const dateSet = dateFields.length > 0 ? ', ' + dateFields.join(', ') : '';
+    const conditionSet = conditionNotes ? ', condition_notes = $3' : '';
+    const params = conditionNotes ? [newStatus, piId, conditionNotes] : [newStatus, piId];
+
+    const updated = await client.query(
+      `UPDATE physical_inventory
+       SET status = $1, updated_at = CURRENT_TIMESTAMP${dateSet}${conditionSet}
+       WHERE id = $2
+       RETURNING *`,
+      params
+    );
+
+    const movType = _piMovementType(newStatus);
+    const movNotes = _piMovementNotes(pi.status, newStatus) || conditionNotes || null;
+
+    await client.query(
+      `INSERT INTO inventory_movements
+         (physical_inventory_id, artwork_id, movement_type, quantity_change,
+          reference_type, reference_id, notes, created_by)
+       VALUES ($1, $2, $3, 0, 'physical_inventory', $4, $5, $6)`,
+      [piId, pi.artwork_id, movType, String(piId), movNotes, username || null]
+    );
+
+    await client.query('COMMIT');
+    return updated.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function getPhysicalInventorySummaryForArtwork(artworkId) {
@@ -1110,4 +1220,6 @@ module.exports = {
   updateShipmentAdmin,
   addShipmentItemAdmin,
   removeShipmentItemAdmin,
+  PI_TRANSITION_MAP,
+  updatePhysicalInventoryStatusAdmin,
 };

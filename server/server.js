@@ -2141,10 +2141,14 @@ app.get('/api/admin/shipments/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/admin/physical-inventory — admin only. List all physical inventory rows.
+// GET /api/admin/physical-inventory — admin only. Optional ?shipment_id= filter.
 app.get('/api/admin/physical-inventory', authenticateToken, async (req, res) => {
   try {
-    const rows = await db.getPhysicalInventoryAdmin();
+    const shipmentId = req.query.shipment_id ? Number(req.query.shipment_id) : null;
+    if (req.query.shipment_id && !Number.isInteger(shipmentId)) {
+      return res.status(400).json({ error: 'Invalid shipment_id' });
+    }
+    const rows = await db.getPhysicalInventoryAdmin(shipmentId || null);
     res.json(rows);
   } catch (error) {
     console.error('Error fetching physical inventory:', error);
@@ -2164,6 +2168,35 @@ app.get('/api/admin/physical-inventory/summary', authenticateToken, async (req, 
   } catch (error) {
     console.error('Error fetching physical inventory summary:', error);
     res.status(500).json({ error: 'Failed to fetch physical inventory summary' });
+  }
+});
+
+// PATCH /api/admin/physical-inventory/:id/status — ARCH-INV-06 receiving/inspection transitions.
+app.patch('/api/admin/physical-inventory/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const piId = Number(req.params.id);
+    if (!Number.isInteger(piId)) {
+      return res.status(400).json({ error: 'Invalid physical inventory id' });
+    }
+    const { status, condition_notes } = req.body;
+    if (!status) {
+      return res.status(400).json({ error: 'status is required' });
+    }
+    if (status === 'DAMAGED' && !condition_notes?.trim()) {
+      return res.status(400).json({ error: 'condition_notes is required when marking as DAMAGED' });
+    }
+    const username = req.user?.username || null;
+    const updated = await db.updatePhysicalInventoryStatusAdmin(
+      piId, status, username, condition_notes?.trim() || null
+    );
+    if (!updated) return res.status(404).json({ error: 'Physical inventory item not found' });
+    res.json(updated);
+  } catch (error) {
+    if (error.code === 'INVALID_PI_TRANSITION') {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error updating physical inventory status:', error);
+    res.status(500).json({ error: 'Failed to update physical inventory status' });
   }
 });
 
@@ -2193,8 +2226,8 @@ const SHIPMENT_TRANSITION_MAP = {
   READY_TO_SHIP:  new Set(['SHIPPED', 'CANCELLED']),
   SHIPPED:        new Set(['IN_TRANSIT']),
   IN_TRANSIT:     new Set(['CUSTOMS']),
-  CUSTOMS:        new Set([]),
-  DELIVERED:      new Set([]),
+  CUSTOMS:        new Set(['DELIVERED']),
+  DELIVERED:      new Set(['CLOSED']),
   CLOSED:         new Set([]),
   CANCELLED:      new Set([]),
 };

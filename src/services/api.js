@@ -249,6 +249,21 @@ export const inventoryAPI = {
     });
     return response.data;
   },
+
+  // ARCH-INV-06
+  getPhysicalInventoryByShipment: async (shipmentId) => {
+    const response = await api.get('/admin/physical-inventory', {
+      params: { shipment_id: shipmentId },
+    });
+    return response.data;
+  },
+
+  updatePhysicalInventoryStatus: async (piId, status, conditionNotes = null) => {
+    const body = { status };
+    if (conditionNotes) body.condition_notes = conditionNotes;
+    const response = await api.patch(`/admin/physical-inventory/${piId}/status`, body);
+    return response.data;
+  },
 };
 
 export default api;

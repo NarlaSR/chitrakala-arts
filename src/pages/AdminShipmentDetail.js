@@ -27,8 +27,65 @@ const STATUS_COLORS = {
 };
 
 const UPDATABLE_STATUSES = [
-  'DRAFT', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT', 'CUSTOMS', 'CANCELLED',
+  'DRAFT', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT', 'CUSTOMS', 'DELIVERED', 'CANCELLED',
 ];
+
+const PI_STATUS_LABELS = {
+  PENDING_SHIPMENT: 'Pending',
+  IN_TRANSIT: 'In Transit',
+  RECEIVED: 'Received',
+  INSPECTION_REQUIRED: 'Needs Inspection',
+  INSPECTED: 'Inspected',
+  AVAILABLE: 'Available',
+  RESERVED: 'Reserved',
+  SOLD: 'Sold',
+  DAMAGED: 'Damaged',
+  ARCHIVED: 'Archived',
+};
+
+const PI_STATUS_COLORS = {
+  PENDING_SHIPMENT: 'pi-status-pending',
+  IN_TRANSIT: 'pi-status-transit',
+  RECEIVED: 'pi-status-received',
+  INSPECTION_REQUIRED: 'pi-status-inspection',
+  INSPECTED: 'pi-status-inspected',
+  AVAILABLE: 'pi-status-available',
+  RESERVED: 'pi-status-reserved',
+  SOLD: 'pi-status-sold',
+  DAMAGED: 'pi-status-damaged',
+  ARCHIVED: 'pi-status-archived',
+};
+
+// Allowed transitions per PI status — mirrors server PI_TRANSITION_MAP.
+const PI_TRANSITIONS = {
+  IN_TRANSIT: [
+    { status: 'RECEIVED', label: 'Mark Received', btnClass: 'asd-btn-pi-received' },
+  ],
+  RECEIVED: [
+    { status: 'INSPECTION_REQUIRED', label: 'Needs Inspection', btnClass: 'asd-btn-pi-inspection' },
+    { status: 'INSPECTED', label: 'Mark Inspected', btnClass: 'asd-btn-pi-inspected' },
+    { status: 'DAMAGED', label: 'Mark Damaged', btnClass: 'asd-btn-pi-damaged', requiresNotes: true },
+    { status: 'ARCHIVED', label: 'Archive', btnClass: 'asd-btn-pi-archive' },
+  ],
+  INSPECTION_REQUIRED: [
+    { status: 'INSPECTED', label: 'Mark Inspected', btnClass: 'asd-btn-pi-inspected' },
+    { status: 'DAMAGED', label: 'Mark Damaged', btnClass: 'asd-btn-pi-damaged', requiresNotes: true },
+    { status: 'ARCHIVED', label: 'Archive', btnClass: 'asd-btn-pi-archive' },
+  ],
+  INSPECTED: [
+    { status: 'AVAILABLE', label: 'Mark Available', btnClass: 'asd-btn-pi-available' },
+    { status: 'DAMAGED', label: 'Mark Damaged', btnClass: 'asd-btn-pi-damaged', requiresNotes: true },
+    { status: 'ARCHIVED', label: 'Archive', btnClass: 'asd-btn-pi-archive' },
+  ],
+  AVAILABLE: [
+    { status: 'DAMAGED', label: 'Mark Damaged', btnClass: 'asd-btn-pi-damaged', requiresNotes: true },
+    { status: 'ARCHIVED', label: 'Archive', btnClass: 'asd-btn-pi-archive' },
+  ],
+  DAMAGED: [
+    { status: 'AVAILABLE', label: 'Mark Available', btnClass: 'asd-btn-pi-available' },
+    { status: 'ARCHIVED', label: 'Archive', btnClass: 'asd-btn-pi-archive' },
+  ],
+};
 
 const fmtDate = (val) =>
   val ? new Date(val).toLocaleDateString() : '—';
@@ -45,7 +102,7 @@ const AdminShipmentDetail = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const [statusForm, setStatusForm] = useState({ status: '', carrier: '' });
+  const [statusForm, setStatusForm] = useState({ status: '', carrier: '', delivered_date: '' });
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [statusSuccess, setStatusSuccess] = useState('');
   const [statusError, setStatusError] = useState('');
@@ -58,17 +115,40 @@ const AdminShipmentDetail = () => {
 
   const [removingId, setRemovingId] = useState(null);
 
+  // Physical inventory rows for this shipment
+  const [physicalItems, setPhysicalItems] = useState([]);
+  const [piActions, setPiActions] = useState({}); // { [piId]: { damagedInput, conditionNotes, submitting, error } }
+
   useEffect(() => {
     if (!authLoading && !isAdmin()) navigate('/ckk-secure-admin');
   }, [authLoading, isAdmin, navigate]);
+
+  const loadPhysicalItems = useCallback(async () => {
+    try {
+      const data = await inventoryAPI.getPhysicalInventoryByShipment(id);
+      setPhysicalItems(Array.isArray(data) ? data : []);
+    } catch {
+      // non-fatal — shipment data is primary
+    }
+  }, [id]);
 
   const loadShipment = useCallback(async () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      const data = await inventoryAPI.getShipmentById(id);
-      setShipment(data);
-      setStatusForm({ status: data.status, carrier: data.carrier || '' });
+      const [shipData, piData] = await Promise.all([
+        inventoryAPI.getShipmentById(id),
+        inventoryAPI.getPhysicalInventoryByShipment(id),
+      ]);
+      setShipment(shipData);
+      setStatusForm({
+        status: shipData.status,
+        carrier: shipData.carrier || '',
+        delivered_date: shipData.delivered_date
+          ? new Date(shipData.delivered_date).toISOString().split('T')[0]
+          : '',
+      });
+      setPhysicalItems(Array.isArray(piData) ? piData : []);
     } catch (err) {
       setErrorMsg(
         err?.response?.status === 404 ? 'Shipment not found.' : 'Failed to load shipment.'
@@ -94,9 +174,14 @@ const AdminShipmentDetail = () => {
     try {
       const fields = { status: statusForm.status };
       if (statusForm.carrier.trim()) fields.carrier = statusForm.carrier.trim();
+      if (statusForm.status === 'DELIVERED' && statusForm.delivered_date) {
+        fields.delivered_date = statusForm.delivered_date;
+      }
       const updated = await inventoryAPI.updateShipment(id, fields);
       setShipment(prev => ({ ...prev, ...updated }));
       setStatusSuccess(`Status updated to ${STATUS_LABELS[updated.status]}.`);
+      // Reload PI items in case DELIVERED cascade changed them
+      await loadPhysicalItems();
     } catch (err) {
       setStatusError(err?.response?.data?.error || 'Failed to update status.');
     } finally {
@@ -145,6 +230,27 @@ const AdminShipmentDetail = () => {
       setErrorMsg(err?.response?.data?.error || 'Failed to remove item.');
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const handlePiAction = async (piId, toStatus, conditionNotes = null) => {
+    setPiActions(prev => ({
+      ...prev,
+      [piId]: { ...prev[piId], submitting: true, error: '' },
+    }));
+    try {
+      await inventoryAPI.updatePhysicalInventoryStatus(piId, toStatus, conditionNotes);
+      await loadPhysicalItems();
+      setPiActions(prev => { const n = { ...prev }; delete n[piId]; return n; });
+    } catch (err) {
+      setPiActions(prev => ({
+        ...prev,
+        [piId]: {
+          ...prev[piId],
+          submitting: false,
+          error: err?.response?.data?.error || 'Failed to update status.',
+        },
+      }));
     }
   };
 
@@ -226,6 +332,10 @@ const AdminShipmentDetail = () => {
               <span className="asd-meta-value">{fmtDate(shipment.shipped_date)}</span>
             </div>
             <div className="asd-meta-item">
+              <span className="asd-meta-label">Delivered Date</span>
+              <span className="asd-meta-value">{fmtDate(shipment.delivered_date)}</span>
+            </div>
+            <div className="asd-meta-item">
               <span className="asd-meta-label">Created</span>
               <span className="asd-meta-value">{fmtDateTime(shipment.created_at)}</span>
             </div>
@@ -262,6 +372,16 @@ const AdminShipmentDetail = () => {
                   placeholder="Carrier (required)"
                   value={statusForm.carrier}
                   onChange={(e) => setStatusForm(prev => ({ ...prev, carrier: e.target.value }))}
+                  disabled={statusSubmitting}
+                />
+              )}
+              {statusForm.status === 'DELIVERED' && (
+                <input
+                  className="asd-input"
+                  type="date"
+                  title="Delivered date (optional)"
+                  value={statusForm.delivered_date}
+                  onChange={(e) => setStatusForm(prev => ({ ...prev, delivered_date: e.target.value }))}
                   disabled={statusSubmitting}
                 />
               )}
@@ -390,6 +510,125 @@ const AdminShipmentDetail = () => {
                   {itemSubmitting ? 'Adding…' : 'Add to Shipment'}
                 </button>
               </form>
+            </div>
+          )}
+        </div>
+
+        {/* Physical Inventory */}
+        <div className="asd-card">
+          <h3 className="asd-section-title">
+            Physical Inventory ({physicalItems.length})
+          </h3>
+          {physicalItems.length === 0 ? (
+            <p className="asd-empty">No physical inventory rows for this shipment.</p>
+          ) : (
+            <div className="asd-table-wrap">
+              <table className="asd-table asd-pi-table">
+                <thead>
+                  <tr>
+                    <th>PI ID</th>
+                    <th>Artwork</th>
+                    <th>Status</th>
+                    <th>Received</th>
+                    <th>Inspected</th>
+                    <th>Condition Notes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {physicalItems.map(pi => {
+                    const transitions = PI_TRANSITIONS[pi.status] || [];
+                    const actionState = piActions[pi.id] || {};
+                    return (
+                      <tr key={pi.id}>
+                        <td>#{pi.id}</td>
+                        <td>
+                          {pi.artwork_title}{' '}
+                          <span className="asd-artwork-id">({pi.artwork_id})</span>
+                        </td>
+                        <td>
+                          <span className={`pi-status-badge ${PI_STATUS_COLORS[pi.status] || ''}`}>
+                            {PI_STATUS_LABELS[pi.status] || pi.status}
+                          </span>
+                        </td>
+                        <td className="asd-td-date">{fmtDate(pi.received_date)}</td>
+                        <td className="asd-td-date">{fmtDate(pi.inspected_date)}</td>
+                        <td className="asd-td-notes">{pi.condition_notes || '—'}</td>
+                        <td className="asd-pi-action-cell">
+                          {actionState.error && (
+                            <div className="asd-pi-row-error">{actionState.error}</div>
+                          )}
+                          {transitions.length === 0 ? (
+                            <span className="asd-pi-no-actions">—</span>
+                          ) : (
+                            <div className="asd-pi-actions">
+                              {transitions.map(t =>
+                                t.requiresNotes ? (
+                                  actionState.damagedInput ? (
+                                    <div key={t.status} className="asd-pi-notes-inline">
+                                      <input
+                                        className="asd-input asd-pi-notes-input"
+                                        type="text"
+                                        placeholder="Condition notes (required)"
+                                        value={actionState.conditionNotes || ''}
+                                        onChange={e => setPiActions(prev => ({
+                                          ...prev,
+                                          [pi.id]: { ...prev[pi.id], conditionNotes: e.target.value },
+                                        }))}
+                                        disabled={actionState.submitting}
+                                      />
+                                      <div className="asd-pi-notes-btns">
+                                        <button
+                                          className={`asd-btn-pi-action ${t.btnClass}`}
+                                          onClick={() => handlePiAction(pi.id, t.status, actionState.conditionNotes)}
+                                          disabled={actionState.submitting || !actionState.conditionNotes?.trim()}
+                                        >
+                                          {actionState.submitting ? '…' : 'Confirm'}
+                                        </button>
+                                        <button
+                                          className="asd-btn-pi-action asd-btn-pi-cancel"
+                                          onClick={() => setPiActions(prev => ({
+                                            ...prev,
+                                            [pi.id]: { ...prev[pi.id], damagedInput: false, conditionNotes: '' },
+                                          }))}
+                                          disabled={actionState.submitting}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      key={t.status}
+                                      className={`asd-btn-pi-action ${t.btnClass}`}
+                                      onClick={() => setPiActions(prev => ({
+                                        ...prev,
+                                        [pi.id]: { ...prev[pi.id], damagedInput: true },
+                                      }))}
+                                      disabled={actionState.submitting}
+                                    >
+                                      {t.label}
+                                    </button>
+                                  )
+                                ) : (
+                                  <button
+                                    key={t.status}
+                                    className={`asd-btn-pi-action ${t.btnClass}`}
+                                    onClick={() => handlePiAction(pi.id, t.status)}
+                                    disabled={actionState.submitting}
+                                  >
+                                    {actionState.submitting ? '…' : t.label}
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

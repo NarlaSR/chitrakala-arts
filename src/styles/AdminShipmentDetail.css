@@ -297,3 +297,80 @@
 .asd-add-btn {
   align-self: flex-start;
 }
+
+/* ── Physical Inventory panel ─────────────────────────────── */
+
+.asd-td-date  { white-space: nowrap; }
+.asd-td-notes { max-width: 200px; font-size: 0.83rem; color: var(--text-light, #666); }
+
+.asd-pi-table th:last-child,
+.asd-pi-table td:last-child { min-width: 200px; }
+
+.asd-pi-action-cell { vertical-align: top; padding-top: 0.6rem; }
+
+.asd-pi-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.asd-pi-no-actions {
+  color: var(--text-light, #aaa);
+  font-size: 0.85rem;
+}
+
+.asd-pi-row-error {
+  font-size: 0.8rem;
+  color: #991b1b;
+  margin-bottom: 0.35rem;
+}
+
+/* PI action buttons */
+.asd-btn-pi-action {
+  border: none;
+  border-radius: 4px;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.asd-btn-pi-action:disabled { opacity: 0.5; cursor: default; }
+
+.asd-btn-pi-received    { background: #d1fae5; color: #065f46; }
+.asd-btn-pi-inspection  { background: #fef3c7; color: #92400e; }
+.asd-btn-pi-inspected   { background: #dbeafe; color: #1e40af; }
+.asd-btn-pi-available   { background: #bbf7d0; color: #14532d; }
+.asd-btn-pi-damaged     { background: #fee2e2; color: #991b1b; }
+.asd-btn-pi-archive     { background: #f1f5f9; color: #475569; }
+.asd-btn-pi-cancel      { background: #f1f5f9; color: #475569; }
+
+/* Inline damaged notes input */
+.asd-pi-notes-inline { display: flex; flex-direction: column; gap: 0.35rem; }
+.asd-pi-notes-input  { font-size: 0.82rem; min-width: 200px; }
+.asd-pi-notes-btns   { display: flex; gap: 0.35rem; }
+
+/* PI status badges — mirrors AdminPhysicalInventory.css */
+.pi-status-badge {
+  display: inline-block;
+  padding: 0.18rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.pi-status-pending    { background: #f1f5f9; color: #475569; }
+.pi-status-transit    { background: #fef3c7; color: #92400e; }
+.pi-status-received   { background: #d1fae5; color: #065f46; }
+.pi-status-inspection { background: #fef9c3; color: #854d0e; }
+.pi-status-inspected  { background: #dbeafe; color: #1e40af; }
+.pi-status-available  { background: #bbf7d0; color: #14532d; }
+.pi-status-reserved   { background: #ede9fe; color: #5b21b6; }
+.pi-status-sold       { background: #e0f2fe; color: #0369a1; }
+.pi-status-damaged    { background: #fee2e2; color: #991b1b; }
+.pi-status-archived   { background: #f1f5f9; color: #334155; }
