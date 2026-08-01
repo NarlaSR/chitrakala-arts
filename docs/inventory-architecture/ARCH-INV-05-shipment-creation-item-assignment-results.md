@@ -174,6 +174,69 @@ All 26 checks passed:
 
 ---
 
+## 7. Production Deploy and Read-Only Smoke (2026-07-31)
+
+**Merge commit:** `cf8100a` — Merge feature/ARCH-INV-05-shipment-creation-item-assignment into main
+**Latest main commit:** `cf8100a`
+**Push:** `7fcf362..cf8100a  main -> main`
+**Railway backend auto-deploy:** confirmed — new endpoint live on first probe (attempt 1)
+**Vercel frontend auto-deploy:** confirmed — `www.chitrakala-arts.com` serving production build
+
+### Public HTTP Checks
+
+| Check | Result |
+|---|---|
+| `GET /api/artworks` returns 200 | ✅ |
+| Public artworks count = 38 | ✅ 38 |
+| All public artworks are IN_STOCK | ✅ only `["IN_STOCK"]` |
+| ISYNC-18 artworks not in public list | ✅ none leaked |
+| `GET /api/categories` returns 200 | ✅ |
+| Production admin login page renders | ✅ — `www.chitrakala-arts.com/ckk-secure-admin` |
+| `/ckk-secure-admin/shipments` → redirects to login (route deployed + guard works) | ✅ |
+| `/ckk-secure-admin/shipments/create` → redirects to login (route deployed + guard works) | ✅ |
+| Public gallery homepage loads | ✅ — `www.chitrakala-arts.com` |
+
+### New Endpoint Deployment
+
+| Check | Result |
+|---|---|
+| `GET /admin/physical-inventory/summary?artwork_id=test` → 401 (not 404) | ✅ deployed |
+| `GET /admin/shipments` → 401 (not 404) | ✅ deployed |
+| `POST /admin/shipments` → 401 (not 404) | ✅ deployed |
+
+### Production DB — Safety Counts (read-only, crossover confirmed)
+
+| Check | Result |
+|---|---|
+| Production DB host (crossover, not shinkansen) | ✅ confirmed |
+| No production shipment rows | ✅ count=0 |
+| No production physical_inventory rows | ✅ count=0 |
+| No SHIPPED/RECEIVED/INSPECTED movement rows | ✅ count=0 |
+| Production public artworks = 38 (show_on_website=true + IN_STOCK/MTO) | ✅ count=38 |
+| ISYNC-18 artworks present (4 rows) | ✅ count=4 |
+| ISYNC-18 artworks all have show_on_website=false | ✅ all hidden |
+| No artworks status-changed to IN_STOCK/MTO in last 2h (Apply not run) | ✅ count=0 recent changes |
+| Production admin user (cks-admin) exists with role=admin | ✅ |
+| order_requests table accessible | ✅ 3 existing rows |
+
+**Admin login via HTTP:** Not verified programmatically — production credentials (`cks-admin` / Railway env) not available in local environment. Admin user confirmed present in DB. Routes confirmed deployed and auth-gated. Manual verification by Sanjay recommended.
+
+**server/.env restored to local after production smoke:** confirmed — active host `localhost:5433`.
+
+### Safety Confirmations
+
+- No production shipment rows created ✅
+- No production physical_inventory rows created ✅
+- No artwork published or visibility changed ✅
+- No SKU generated ✅
+- No Inventory Preview or Apply run ✅
+- No order request behavior changed ✅
+- ORD-03 / ORD-04 unaffected ✅
+
+**Phase 2 (first production shipment SHIP-2026-001) has NOT been started. Awaiting explicit owner approval.**
+
+---
+
 ## 8. Active Restrictions (carry forward)
 
 The following restrictions remain in force and were not violated in this ticket:
