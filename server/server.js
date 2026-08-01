@@ -2255,7 +2255,8 @@ app.patch('/api/admin/shipments/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    if (status === 'SHIPPED' && !carrier && !rest.carrier) {
+    // Carrier required only on the actual transition into SHIPPED, not on same-status re-saves.
+    if (status === 'SHIPPED' && current.status !== 'SHIPPED' && !carrier && !rest.carrier) {
       return res.status(400).json({ error: 'carrier is required when marking shipment SHIPPED' });
     }
 
