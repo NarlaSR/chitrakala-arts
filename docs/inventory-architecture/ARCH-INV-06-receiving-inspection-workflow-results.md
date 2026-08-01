@@ -80,6 +80,12 @@ The DELIVERED cascade (IN_TRANSIT → RECEIVED) guard mirrors the SHIPPED cascad
 
 By design — no transition out of `ARCHIVED`. If an archived item needs re-entry into inventory, a new PI row is created in a new shipment. The UI renders "Archived" with no action buttons.
 
+### Decision 6 — inspected_date is stamped on INSPECTED only, not AVAILABLE
+
+`inspected_date` is set to `CURRENT_TIMESTAMP` only when `newStatus === 'INSPECTED'`. Transitioning to `AVAILABLE` does not touch `inspected_date` — the original inspection timestamp is preserved. AVAILABLE is audited through `inventory_movements` with `movement_type = ADJUSTED` and clear notes. No `available_date` column is added; no migration is needed.
+
+This was corrected during PR review before merge. Verification: direct DB test confirmed `inspected_date` unchanged after INSPECTED → AVAILABLE, and ADJUSTED movement logged with correct notes.
+
 ---
 
 ## 3. Files Changed
@@ -145,6 +151,8 @@ All checks passed:
 | DAMAGED → AVAILABLE | 1 | ✅ |
 | * → ARCHIVED (terminal — no action buttons after) | 1 | ✅ |
 | Public gallery regression | 1 | ✅ |
+| PR review fix — inspected_date NOT overwritten on AVAILABLE (local DB test) | 1 | ✅ |
+| PR review fix — ADJUSTED movement logged for AVAILABLE with correct notes (local DB test) | 1 | ✅ |
 
 **UI verification (browser):**
 - Physical Inventory card renders in shipment detail ✅

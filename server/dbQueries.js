@@ -1099,7 +1099,7 @@ async function updatePhysicalInventoryStatusAdmin(piId, newStatus, username, con
 
     const dateFields = [];
     if (newStatus === 'RECEIVED') dateFields.push('received_date = CURRENT_TIMESTAMP');
-    if (newStatus === 'INSPECTED' || newStatus === 'AVAILABLE') dateFields.push('inspected_date = CURRENT_TIMESTAMP');
+    if (newStatus === 'INSPECTED') dateFields.push('inspected_date = CURRENT_TIMESTAMP');
 
     const dateSet = dateFields.length > 0 ? ', ' + dateFields.join(', ') : '';
     const conditionSet = conditionNotes ? ', condition_notes = $3' : '';
