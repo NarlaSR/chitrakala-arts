@@ -193,9 +193,9 @@ All checks passed:
 
 ---
 
-## 7. Production Read-Only Smoke (2026-08-01)
+## 7. Pre-Merge Production Read-Only Smoke (2026-08-01)
 
-ARCH-INV-06 has not been deployed to production at time of this smoke check. Production admin UI does not yet have the Physical Inventory panel (pre-deployment). Smoke confirms production data was not accidentally touched during staging testing.
+ARCH-INV-06 had not yet been deployed to production at time of this check. Smoke confirmed production data was not accidentally touched during staging testing.
 
 **Verification method:** Owner (Sanjay Narla) logged into production admin — manual read-only review.
 
@@ -208,7 +208,77 @@ ARCH-INV-06 has not been deployed to production at time of this smoke check. Pro
 
 ---
 
-## 8. Active Restrictions (carry forward)
+## 8. Post-Deploy Production Smoke (2026-08-01)
+
+**Merge commit:** `961f9bc` — Merge pull request #29 from NarlaSR/feature/ARCH-INV-06-receiving-inspection-workflow
+**Latest main commit:** `961f9bc` (includes `fd50d1c` inspected_date fix)
+**Railway backend:** `chitrakalaarts-production.up.railway.app`
+**Vercel frontend:** `www.chitrakala-arts.com`
+
+### Railway Deploy Verification
+
+| Check | Result |
+|-------|--------|
+| `PATCH /api/admin/physical-inventory/1/status` → 401 (not 404) | ✅ new endpoint deployed and auth-gated |
+| `GET /api/admin/shipments` → 401 | ✅ |
+| `GET /api/admin/physical-inventory` → 401 | ✅ |
+| `GET /api/admin/physical-inventory/summary` → 401 | ✅ |
+
+### Vercel Frontend Deploy Verification
+
+| Check | Result |
+|-------|--------|
+| Production frontend loads (`www.chitrakala-arts.com`) | ✅ 200 |
+| JS bundle contains ARCH-INV-06 UI code (`INSPECTION_REQUIRED`, `asd-btn-pi-action`) | ✅ confirmed in deployed bundle |
+
+### Public HTTP Checks
+
+| Check | Result |
+|-------|--------|
+| `GET /api/artworks` returns 200 | ✅ |
+| Public artworks count | ✅ 38 |
+| All public artworks are IN_STOCK | ✅ only `["IN_STOCK"]` |
+| ISYNC-18 artworks not in public gallery | ✅ none of 4 IDs present |
+| `GET /api/categories` returns 200 | ✅ count=7 |
+
+### Production Data Safety (HTTP-verifiable)
+
+| Check | Result |
+|-------|--------|
+| Public artwork count unchanged (38) — no artwork published | ✅ |
+| No ISYNC-18 artwork visible — show_on_website not changed | ✅ |
+| No operational production action performed | ✅ |
+
+### Admin UI and DB Checks (requires authenticated session — manual verification by Sanjay)
+
+Production credentials not available to automated smoke. Sanjay must verify the following after logging into `www.chitrakala-arts.com/ckk-secure-admin`:
+
+| Check | Expected | Verified by |
+|-------|----------|-------------|
+| Shipment Detail page loads for SHIP-2026-001 | ✅ loads | Sanjay |
+| Physical Inventory panel appears (new in ARCH-INV-06) | ✅ panel visible | Sanjay |
+| SHIP-2026-001 status = DRAFT | ✅ DRAFT | Sanjay |
+| Manifest Items = 4 | ✅ 4 items | Sanjay |
+| All 4 PI rows status = PENDING_SHIPMENT | ✅ PENDING_SHIPMENT | Sanjay |
+| No PI status changed (no operational action taken) | ✅ unchanged | Sanjay |
+| No SKU generated on ISYNC-18 artworks | ✅ sku=null | Sanjay |
+| Order requests unchanged | ✅ 3 rows | Sanjay |
+
+**Instruction:** Read only — do not click any status-change or action button in the admin UI during this verification.
+
+### Safety Confirmations
+
+- No production shipment status changed ✅
+- No production physical_inventory status changed ✅
+- No artwork published or show_on_website changed ✅
+- No SKU generated ✅
+- No Inventory Preview or Apply run ✅
+- No order request behavior changed ✅
+- server/.env confirmed localhost throughout ✅
+
+---
+
+## 9. Active Restrictions (carry forward)
 
 The following restrictions remain in force and were not violated in this ticket:
 
@@ -225,10 +295,10 @@ The following restrictions remain in force and were not violated in this ticket:
 
 ---
 
-## 9. Done Recommendation
+## 10. Done Recommendation
 
-**ARCH-INV-06 can be marked Done.**
+**ARCH-INV-06 can be marked Done — deployed but not yet operationally used.**
 
-The full receiving and inspection lifecycle is implemented and validated on local and staging. All PI status transitions, movement logging, DELIVERED cascade, and inline DAMAGED notes work as specified. Production data is confirmed untouched. ARCHIVED is terminal by design. Restrictions honoured.
+The receiving and inspection lifecycle is implemented, validated (local + staging), merged, and deployed to production. The new PATCH endpoint is live and auth-gated. The frontend Physical Inventory panel is deployed. No production data was modified. SHIP-2026-001 remains DRAFT with 4 PENDING_SHIPMENT rows. All restrictions honoured.
 
-Next: deploy ARCH-INV-06 to production (Railway auto-deploy on push to main), then owner-approved Phase 3 — advance SHIP-2026-001 through SHIPPED → DELIVERED when the physical shipment arrives.
+Operational use begins with owner-approved Phase 3: advance SHIP-2026-001 to SHIPPED when the physical shipment departs India, then DELIVERED when it arrives, which will trigger the DELIVERED cascade and activate the Physical Inventory panel for receiving and inspection.
