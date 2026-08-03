@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { artworksAPI } from '../services/api';
+import { artworksAPI, inventoryAPI } from '../services/api';
 import '../styles/AdminReviewQueue.css';
 
 const STATUS_OPTIONS = ['NEEDS_REVIEW', 'IN_STOCK', 'MADE_TO_ORDER', 'OUT_OF_STOCK', 'SOLD', 'ARCHIVED'];
@@ -42,6 +42,8 @@ const AdminReviewQueue = () => {
   const [editError,    setEditError]    = useState('');
   const [actionMsg,    setActionMsg]    = useState('');
   const [brokenImageIds, setBrokenImageIds] = useState(() => new Set());
+  const [piSummary,    setPiSummary]    = useState(null);
+  const [piLoading,    setPiLoading]    = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin()) navigate('/ckk-secure-admin');
@@ -104,9 +106,20 @@ const AdminReviewQueue = () => {
       show_on_website: Boolean(artwork.show_on_website),
     });
     setEditError('');
+    setPiSummary(null);
+    setPiLoading(true);
+    inventoryAPI.getPhysicalInventorySummaryForArtwork(artwork.id)
+      .then(rows => setPiSummary(rows))
+      .catch(() => setPiSummary([]))
+      .finally(() => setPiLoading(false));
   };
 
-  const cancelEdit = () => { setEditingId(null); setEditForm(EMPTY_EDIT); setEditError(''); };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm(EMPTY_EDIT);
+    setEditError('');
+    setPiSummary(null);
+  };
 
   const saveEdit = async (artwork) => {
     setEditSaving(true);
@@ -381,6 +394,24 @@ const AdminReviewQueue = () => {
                                 <textarea rows={2} value={editForm.notes}
                                   onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
                               </label>
+                            </div>
+                            <div className="rq-pi-badge">
+                              <span className="rq-pi-badge-label">Physical Inventory</span>
+                              {piLoading && (
+                                <span className="rq-pi-badge-loading">Loading…</span>
+                              )}
+                              {!piLoading && piSummary !== null && piSummary.length === 0 && (
+                                <span className="rq-pi-badge-empty">No physical inventory records yet.</span>
+                              )}
+                              {!piLoading && piSummary !== null && piSummary.length > 0 && (
+                                <span className="rq-pi-badge-counts">
+                                  {piSummary.map(row => (
+                                    <span key={row.status} className="rq-pi-badge-item">
+                                      {row.count} {row.status.replace(/_/g, ' ')}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
                             </div>
                             <div className="rq-edit-actions">
                               <button

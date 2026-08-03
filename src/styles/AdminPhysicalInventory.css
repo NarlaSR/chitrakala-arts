@@ -1,0 +1,163 @@
+/* ─── AdminPhysicalInventory.css ───────────────────────────────── */
+
+.admin-physical-inventory {
+  min-height: 100vh;
+  background-color: var(--bg-light);
+}
+
+.pi-loading {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 1.1rem;
+}
+
+.pi-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.pi-error {
+  background: #fee2e2;
+  border-left: 4px solid #ef4444;
+  color: #991b1b;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 1.25rem;
+  font-weight: 500;
+}
+
+/* Filter row */
+.pi-filter-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.pi-filter-btn {
+  background: var(--white, #fff);
+  border: 2px solid var(--border-color, #e5e5e5);
+  border-radius: 20px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-dark, #2c2c2c);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.pi-filter-btn:hover {
+  border-color: var(--primary-color, #8b4513);
+}
+
+.pi-filter-active {
+  background: var(--primary-color, #8b4513);
+  border-color: var(--primary-color, #8b4513);
+  color: #fff;
+}
+
+.pi-filter-count {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  margin-left: 0.2rem;
+}
+
+.pi-empty {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-light, #666);
+}
+
+/* Table */
+.pi-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  background: var(--white, #fff);
+}
+
+.pi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.pi-table th {
+  background: #f8f5f0;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--border-color, #e5e5e5);
+  white-space: nowrap;
+  color: var(--text-dark, #2c2c2c);
+}
+
+.pi-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  color: var(--text-dark, #2c2c2c);
+  vertical-align: top;
+}
+
+.pi-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.pi-table tbody tr:hover {
+  background: #faf8f5;
+}
+
+.pi-td-title {
+  max-width: 220px;
+}
+
+.pi-artwork-id {
+  display: block;
+  color: var(--text-light, #666);
+  font-size: 0.76rem;
+  font-family: monospace;
+  margin-top: 0.1rem;
+}
+
+.pi-td-sku {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--text-light, #666);
+}
+
+.pi-td-date {
+  white-space: nowrap;
+  color: var(--text-light, #666);
+  font-size: 0.82rem;
+}
+
+.pi-td-notes {
+  max-width: 200px;
+  font-size: 0.82rem;
+  color: var(--text-light, #666);
+}
+
+/* Status badges */
+.pi-status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.pi-status-pending    { background: #f1f5f9; color: #475569; }
+.pi-status-transit    { background: #fef3c7; color: #92400e; }
+.pi-status-received   { background: #dbeafe; color: #1d4ed8; }
+.pi-status-inspection { background: #ffedd5; color: #c2410c; }
+.pi-status-inspected  { background: #ede9fe; color: #6d28d9; }
+.pi-status-available  { background: #dcfce7; color: #166534; }
+.pi-status-reserved   { background: #fce7f3; color: #9d174d; }
+.pi-status-sold       { background: #d1fae5; color: #065f46; }
+.pi-status-damaged    { background: #fee2e2; color: #991b1b; }
+.pi-status-archived   { background: #e5e7eb; color: #374151; }

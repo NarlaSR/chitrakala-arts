@@ -1,0 +1,245 @@
+/* ─── AdminShipments.css ───────────────────────────────── */
+
+.admin-shipments {
+  min-height: 100vh;
+  background-color: var(--bg-light);
+}
+
+.sh-loading {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 1.1rem;
+}
+
+.sh-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.sh-error {
+  background: #fee2e2;
+  border-left: 4px solid #ef4444;
+  color: #991b1b;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 1.25rem;
+  font-weight: 500;
+}
+
+/* Filter row */
+.sh-filter-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.sh-filter-btn {
+  background: var(--white, #fff);
+  border: 2px solid var(--border-color, #e5e5e5);
+  border-radius: 20px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-dark, #2c2c2c);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.sh-filter-btn:hover {
+  border-color: var(--primary-color, #8b4513);
+}
+
+.sh-filter-active {
+  background: var(--primary-color, #8b4513);
+  border-color: var(--primary-color, #8b4513);
+  color: #fff;
+}
+
+.sh-filter-count {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  margin-left: 0.2rem;
+}
+
+.sh-empty {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-light, #666);
+}
+
+/* Table */
+.sh-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  background: var(--white, #fff);
+}
+
+.sh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.sh-table th {
+  background: #f8f5f0;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--border-color, #e5e5e5);
+  white-space: nowrap;
+  color: var(--text-dark, #2c2c2c);
+}
+
+.sh-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  color: var(--text-dark, #2c2c2c);
+  vertical-align: middle;
+}
+
+.sh-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sh-table tbody tr:hover {
+  background: #faf8f5;
+}
+
+.sh-row-expanded td {
+  background: #fdf7f0;
+  border-bottom: none;
+}
+
+.sh-td-ref {
+  font-family: monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sh-td-center {
+  text-align: center;
+}
+
+.sh-td-date {
+  white-space: nowrap;
+  color: var(--text-light, #666);
+  font-size: 0.82rem;
+}
+
+/* Status badges */
+.sh-status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.sh-status-draft      { background: #f1f5f9; color: #475569; }
+.sh-status-ready      { background: #dbeafe; color: #1d4ed8; }
+.sh-status-shipped    { background: #ede9fe; color: #6d28d9; }
+.sh-status-transit    { background: #fef3c7; color: #92400e; }
+.sh-status-customs    { background: #ffedd5; color: #c2410c; }
+.sh-status-delivered  { background: #dcfce7; color: #166534; }
+.sh-status-closed     { background: #f1f5f9; color: #334155; }
+.sh-status-cancelled  { background: #fee2e2; color: #991b1b; }
+
+/* View button */
+.sh-btn {
+  display: inline-block;
+  border: none;
+  border-radius: 5px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.sh-btn-view {
+  background: var(--primary-color, #8b4513);
+  color: #fff;
+}
+
+.sh-btn-view:hover {
+  opacity: 0.88;
+}
+
+/* Expanded detail panel */
+.sh-detail-row td {
+  background: #fdf7f0;
+  padding: 0;
+}
+
+.sh-detail-panel {
+  padding: 1.25rem 1.5rem 1.5rem;
+  border-top: 2px solid #f0e0cc;
+}
+
+.sh-detail-loading {
+  padding: 1rem 0;
+  color: var(--text-light, #666);
+  font-style: italic;
+}
+
+.sh-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+}
+
+.sh-detail-meta p {
+  margin: 0;
+}
+
+.sh-items-heading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary-color, #8b4513);
+  margin: 0 0 0.75rem;
+}
+
+.sh-items-table-wrap {
+  overflow-x: auto;
+}
+
+.sh-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.sh-items-table th {
+  background: #f8f5f0;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color, #e5e5e5);
+}
+
+.sh-items-table td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color, #e5e5e5);
+}
+
+.sh-artwork-id {
+  color: var(--text-light, #666);
+  font-size: 0.78rem;
+  font-family: monospace;
+}
+
+.sh-no-items {
+  color: var(--text-light, #666);
+  font-style: italic;
+  font-size: 0.88rem;
+  margin: 0;
+}

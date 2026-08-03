@@ -1,0 +1,103 @@
+/* ─── AdminCreateShipment.css ───────────────────────────── */
+
+.admin-create-shipment {
+  min-height: 100vh;
+  background-color: var(--bg-light);
+}
+
+.acs-content {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.acs-error {
+  background: #fee2e2;
+  border-left: 4px solid #ef4444;
+  color: #991b1b;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 1.25rem;
+  font-weight: 500;
+}
+
+.acs-form {
+  background: var(--white, #fff);
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 8px;
+  padding: 1.75rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.acs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.acs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.acs-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dark, #2c2c2c);
+}
+
+.acs-required {
+  color: #ef4444;
+}
+
+.acs-input {
+  padding: 0.55rem 0.75rem;
+  border: 1.5px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--text-dark, #2c2c2c);
+  background: var(--white, #fff);
+  transition: border-color 0.15s;
+}
+
+.acs-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #8b4513);
+}
+
+.acs-input:disabled {
+  background: #f5f5f5;
+  color: #999;
+}
+
+.acs-textarea {
+  padding: 0.55rem 0.75rem;
+  border: 1.5px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--text-dark, #2c2c2c);
+  background: var(--white, #fff);
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.acs-textarea:focus {
+  outline: none;
+  border-color: var(--primary-color, #8b4513);
+}
+
+.acs-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .acs-row {
+    grid-template-columns: 1fr;
+  }
+}
