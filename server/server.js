@@ -514,10 +514,15 @@ app.get('/api/images/logo', async (req, res) => {
 
 // Artwork Routes
 
-// Get all artworks (public)
+// Get all artworks (public). Optional ?category=<slug> filters server-side
+// (WEB-CAT-02) — omitted, empty, or non-string values behave exactly as
+// before (all public artworks, no filter).
 app.get('/api/artworks', async (req, res) => {
   try {
-    const artworks = await db.getArtworks();
+    const categorySlug = typeof req.query.category === 'string' && req.query.category.trim() !== ''
+      ? req.query.category.trim()
+      : null;
+    const artworks = await db.getArtworks(categorySlug);
     // Transform each artwork: remove image_data, add updatedAt, remove updated_at
     const transformed = artworks.map(artwork => {
       if ('image_data' in artwork) delete artwork.image_data;
