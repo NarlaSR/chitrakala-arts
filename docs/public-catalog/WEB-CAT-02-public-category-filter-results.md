@@ -337,3 +337,122 @@ Clean except pre-existing, unrelated untracked files (same set as before this re
 ### Ready for PR review / merge (after refresh)
 
 ✅ **Yes.** The branch is fully current with `main` through ARCH-INV-06, the merge was conflict-free and independently verified to be lossless in both directions, and every required regression check — local and staging — passed, including two initially-surprising-but-correct staging results (`texture-art: 0`, `warli-art: 1`) that were investigated and confirmed to reflect the actual current data state rather than a bug.
+
+---
+
+## Post-Deploy Production Smoke (2026-08-03)
+
+**Merge commit:** `51fd8fe` — Merge pull request #28 from NarlaSR/feature/WEB-CAT-02-public-category-filter
+**Latest main commit:** `51fd8fe`
+**Railway backend:** `chitrakalaarts-production.up.railway.app`
+**Vercel frontend:** `www.chitrakala-arts.com`
+
+### Preflight
+
+| Check | Result |
+|---|---|
+| `git checkout main && git pull origin main --ff-only` | Updated to `51fd8fe` (WEB-CAT-02 merge) |
+| Working tree clean | ✅ Untracked files only, nothing staged |
+| WEB-CAT-02 files changed (via `git diff 961f9bc..51fd8fe --name-only`) | `server/dbQueries.js`, `server/server.js`, `docs/inventory-architecture/ARCH-INV-06-receiving-inspection-workflow-results.md`, `docs/public-catalog/WEB-CAT-02-public-category-filter-results.md` — no ORD/frontend/order/schema files touched |
+
+### Railway Deploy Verification
+
+Category filtering behavior proves the new code is live (a pre-WEB-CAT-02 backend would return 38 regardless of the `?category` param — it ignored it):
+
+| Check | Result |
+|---|---|
+| `GET /api/artworks?category=dot-mandala` returned `19` (not `38`) | ✅ WEB-CAT-02 code is live on Railway |
+| `GET /api/artworks` (unfiltered) | ✅ `38` |
+
+### Vercel Frontend Deploy Verification
+
+WEB-CAT-02 made no frontend file changes (confirmed via diff). Frontend verification is limited to confirming the site loads.
+
+| Check | Result |
+|---|---|
+| Production frontend loads (`www.chitrakala-arts.com`) | ✅ `200` |
+
+### Category Filter HTTP Checks (Production)
+
+All checks against `chitrakalaarts-production.up.railway.app`:
+
+| Check | Expected | Actual | Result |
+|---|---|---|---|
+| `GET /api/artworks` (no filter) | All public artworks | `38` | ✅ |
+| `?category=dot-mandala` | Public dot-mandala artworks | `19` | ✅ |
+| `?category=lippan-art` | Public lippan-art artworks | `8` | ✅ |
+| `?category=texture-art` | Public texture-art artworks | `1` | ✅ |
+| `?category=mirror-mosaic` | Public mirror-mosaic artworks | `4` | ✅ |
+| `?category=textile-design` | Public textile-design artworks | `6` | ✅ |
+| `?category=warli-art` | `0` (ISYNC-18 hidden imports) | `0` | ✅ |
+| `?category=mixed-art` | `0` (ISYNC-18 hidden import) | `0` | ✅ |
+| Category sum (`19+8+1+4+6+0+0`) | `= 38` (no double-count or miss) | `38` | ✅ |
+| `?category=` (empty string) | `38` (treats as no filter) | `38` | ✅ |
+| `?category=nonexistent` | `0`, `[]` | `0` | ✅ |
+| SQL injection (`x'; DROP TABLE artworks; --`) | `0`, table intact | `0`, table intact (38 before/after) | ✅ |
+| `GET /api/categories` | 7 categories | `7` | ✅ |
+
+### Visibility and Safety Checks
+
+| Check | Result |
+|---|---|
+| All 38 public artworks have `status = IN_STOCK` | ✅ Only `IN_STOCK` — no `MADE_TO_ORDER`, `NEEDS_REVIEW`, or other statuses |
+| All 38 public artworks have `show_on_website = true` | ✅ |
+| ISYNC-18 artworks not in unfiltered public gallery | ✅ None of the 4 ISYNC-18 artwork IDs appear in any public response |
+| ISYNC-18 artworks not in `?category=warli-art` (0 results) | ✅ |
+| SQL injection attempt — zero unintended rows, artworks table intact | ✅ |
+
+### Admin Endpoint Auth Checks (ARCH-INV regression)
+
+| Endpoint | Expected | Result |
+|---|---|---|
+| `GET /api/admin/shipments` | `401` | ✅ |
+| `GET /api/admin/physical-inventory` | `401` | ✅ |
+| `PATCH /api/admin/physical-inventory/1/status` | `401` | ✅ |
+| `GET /api/admin/physical-inventory/summary` | `401` | ✅ |
+| `GET /api/admin/artworks` | `401` | ✅ |
+| `GET /api/admin/order-requests` | `401` | ✅ |
+
+### Order Request / ORD-03 / ORD-04 Regression
+
+WEB-CAT-02 touched only `getArtworks()` and `GET /api/artworks` — confirmed via diff above that no ORD files, no order-request route, no `sendOrderRequestNotificationEmail()` were modified.
+
+| Check | Result |
+|---|---|
+| `POST /api/order-requests` (empty body) | ✅ `400` — endpoint up, validates body (not `404`) |
+| `GET /api/admin/order-requests` | ✅ `401` — auth-gated, endpoint registered |
+| ORD-03 / ORD-04 code not in WEB-CAT-02 diff | ✅ Confirmed via `git diff 961f9bc..51fd8fe --name-only` — zero ORD files in changeset |
+
+### Production Data Safety (requires authenticated session — manual verification by Sanjay)
+
+Production credentials not available to automated smoke. Sanjay must verify the following after logging into `www.chitrakala-arts.com/ckk-secure-admin`:
+
+| Check | Expected | Verified by |
+|---|---|---|
+| SHIP-2026-001 status = DRAFT | ✅ DRAFT | Sanjay |
+| All 4 PI rows status = PENDING_SHIPMENT | ✅ PENDING_SHIPMENT | Sanjay |
+| No PI status changed (no operational action taken) | ✅ unchanged | Sanjay |
+| No SKU generated on ISYNC-18 artworks | ✅ sku=null | Sanjay |
+| Order requests unchanged | ✅ | Sanjay |
+
+**Instruction:** Read only — do not click any status-change or action button in the admin UI during this verification.
+
+### Safety Confirmations
+
+- ✅ No production data modified — all category filter checks were read-only `GET` requests
+- ✅ No production shipment status changed
+- ✅ No production `physical_inventory` row status changed
+- ✅ No artwork published, no `show_on_website` changed
+- ✅ No SKU generated
+- ✅ No Inventory Preview or Apply run
+- ✅ No order request created or modified on production
+- ✅ No ORD-03 / ORD-04 behavior changed — confirmed via diff and HTTP regression check
+- ✅ No schema migration run
+- ✅ No secrets printed or committed
+- ✅ `server/.env` not used — all checks were against the Railway public URL directly
+
+### Done Recommendation
+
+**WEB-CAT-02 can be marked Done — deployed and production-validated.**
+
+The category filter fix is live on Railway, confirmed by the behavioral difference between filtered and unfiltered responses. All 7 category slugs return correct counts (including `warli-art: 0` and `mixed-art: 0`, confirming ISYNC-18 hidden imports are excluded). The unfiltered total (`38`) equals the category sum, confirming no double-count. All admin endpoints remain auth-gated. Order request pathway is unaffected. No production data was modified.
