@@ -44,6 +44,8 @@ const AdminReviewQueue = () => {
   const [brokenImageIds, setBrokenImageIds] = useState(() => new Set());
   const [piSummary,    setPiSummary]    = useState(null);
   const [piLoading,    setPiLoading]    = useState(false);
+  const [invWarning,   setInvWarning]   = useState(null);
+  // invWarning: { artwork, message, piSummary, mode: 'status'|'edit', pendingStatus }
 
   useEffect(() => {
     if (!authLoading && !isAdmin()) navigate('/ckk-secure-admin');
@@ -78,16 +80,28 @@ const AdminReviewQueue = () => {
   // ── Actions ─────────────────────────────────────────────────────────────────
   const flash = (msg) => { setActionMsg(msg); setTimeout(() => setActionMsg(''), 3000); };
 
-  const handleStatusChange = async (artwork, newStatus) => {
-    const label = (newStatus === 'IN_STOCK' || newStatus === 'MADE_TO_ORDER')
-      ? `Change status to ${newStatus.replace(/_/g, ' ')}? The artwork will only appear on the public site if "Show on website" is also enabled.`
-      : `Change status to ${newStatus.replace(/_/g, ' ')}?`;
-    if (!window.confirm(label)) return;
+  const handleStatusChange = async (artwork, newStatus, overrideNoInventory = false) => {
+    if (!overrideNoInventory) {
+      const label = (newStatus === 'IN_STOCK' || newStatus === 'MADE_TO_ORDER')
+        ? `Change status to ${newStatus.replace(/_/g, ' ')}? The artwork will only appear on the public site if "Show on website" is also enabled.`
+        : `Change status to ${newStatus.replace(/_/g, ' ')}?`;
+      if (!window.confirm(label)) return;
+    }
     try {
-      await artworksAPI.updateStatus(artwork.id, newStatus);
+      await artworksAPI.updateStatus(artwork.id, newStatus, overrideNoInventory);
       flash(`"${artwork.title}" → ${newStatus.replace(/_/g, ' ')}`);
       loadArtworks();
     } catch (err) {
+      if (err.response?.status === 409 && err.response.data?.warning) {
+        setInvWarning({
+          artwork,
+          message: err.response.data.message,
+          piSummary: err.response.data.summary,
+          mode: 'status',
+          pendingStatus: newStatus,
+        });
+        return;
+      }
       flash(`Error: ${err.response?.data?.error || 'Status update failed'}`);
     }
   };
@@ -121,29 +135,55 @@ const AdminReviewQueue = () => {
     setPiSummary(null);
   };
 
-  const saveEdit = async (artwork) => {
+  const buildEditFormData = (artwork, overrideNoInventory = false) => {
+    const fd = new FormData();
+    if (editForm.title)       fd.append('title',       editForm.title.trim());
+    if (editForm.description) fd.append('description', editForm.description.trim());
+    if (editForm.dimensions)  fd.append('size',        editForm.dimensions.trim());
+    if (editForm.materials)   fd.append('materials',   editForm.materials.trim());
+    if (editForm.quantity)    fd.append('quantity',    editForm.quantity);
+    if (editForm.price)       fd.append('price',       editForm.price);
+    if (editForm.notes)       fd.append('notes',       editForm.notes.trim());
+    if (editForm.status && editForm.status !== artwork.status)
+                              fd.append('status',      editForm.status);
+    fd.append('show_on_website', String(editForm.show_on_website));
+    if (overrideNoInventory)  fd.append('override_no_inventory', 'true');
+    return fd;
+  };
+
+  const saveEdit = async (artwork, overrideNoInventory = false) => {
     setEditSaving(true);
     setEditError('');
     try {
-      const fd = new FormData();
-      if (editForm.title)       fd.append('title',       editForm.title.trim());
-      if (editForm.description) fd.append('description', editForm.description.trim());
-      if (editForm.dimensions)  fd.append('size',        editForm.dimensions.trim());
-      if (editForm.materials)   fd.append('materials',   editForm.materials.trim());
-      if (editForm.quantity)    fd.append('quantity',    editForm.quantity);
-      if (editForm.price)       fd.append('price',           editForm.price);
-      if (editForm.notes)       fd.append('notes',           editForm.notes.trim());
-      if (editForm.status && editForm.status !== artwork.status)
-                                fd.append('status',          editForm.status);
-      fd.append('show_on_website', String(editForm.show_on_website));
+      const fd = buildEditFormData(artwork, overrideNoInventory);
       await artworksAPI.update(artwork.id, fd);
       flash(`"${editForm.title || artwork.title}" saved`);
       cancelEdit();
       loadArtworks();
     } catch (err) {
+      if (err.response?.status === 409 && err.response.data?.warning) {
+        setInvWarning({
+          artwork,
+          message: err.response.data.message,
+          piSummary: err.response.data.summary,
+          mode: 'edit',
+          pendingStatus: null,
+        });
+        return;
+      }
       setEditError(err.response?.data?.error || 'Save failed');
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const handleInvWarningProceed = async () => {
+    const { artwork, mode, pendingStatus } = invWarning;
+    setInvWarning(null);
+    if (mode === 'status') {
+      await handleStatusChange(artwork, pendingStatus, true);
+    } else {
+      await saveEdit(artwork, true);
     }
   };
 
@@ -436,6 +476,39 @@ const AdminReviewQueue = () => {
           </div>
         )}
       </div>
+
+      {/* Inventory readiness warning modal (ARCH-INV-07) */}
+      {invWarning && (
+        <div className="rq-inv-warning-backdrop" role="dialog" aria-modal="true" aria-labelledby="inv-warn-title">
+          <div className="rq-inv-warning-modal">
+            <h3 id="inv-warn-title" className="rq-inv-warning-title">Inventory Not Ready</h3>
+            <p className="rq-inv-warning-msg">{invWarning.message}</p>
+            {invWarning.piSummary && invWarning.piSummary.length > 0 && (
+              <div className="rq-inv-warning-summary">
+                {invWarning.piSummary.map(row => (
+                  <span key={row.status} className="rq-inv-warning-item">
+                    {row.count} {row.status.replace(/_/g, ' ')}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="rq-inv-warning-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => setInvWarning(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="rq-btn-warn-proceed"
+                onClick={handleInvWarningProceed}
+              >
+                Publish anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
