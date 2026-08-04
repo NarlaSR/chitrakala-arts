@@ -555,6 +555,49 @@ app.get('/api/images/logo', async (req, res) => {
 
 // Artwork Routes
 
+// Public-safe artwork size shape (WEB-PUB-01) — only fields the public UI
+// needs/displays. No admin-only fields (artwork_id, created_at) exist on
+// this nested object today, but shaping it explicitly keeps that true.
+function shapePublicArtworkSize(size) {
+  return {
+    id: size.id,
+    size_label: size.size_label,
+    price: size.price,
+    price_usd: size.price_usd,
+  };
+}
+
+// Public-safe artwork shape (WEB-PUB-01). Explicit whitelist so admin-only/
+// internal fields (show_on_website, sku, quantity, fx_rate_used,
+// multiplier_used, created_at, image_mime_type) are never sent to public
+// clients — confirmed via investigation that none of these are read by any
+// public-facing frontend code (see docs/public-catalog/WEB-PUB-01-*.md).
+//
+// Applied ONLY to the two public GET route responses below — never inside
+// dbQueries.js — because db.getArtworkById()/db.getArtworks() are also
+// called internally by POST /api/order-requests, which needs the full
+// (unshaped) object (e.g. artwork.sku) to build its order_request_items
+// snapshot. Shaping the shared DB functions instead of the HTTP response
+// here would have silently broken that snapshot capture.
+function shapePublicArtwork(artwork) {
+  return {
+    id: artwork.id,
+    title: artwork.title,
+    category: artwork.category,
+    price: artwork.price,
+    description: artwork.description,
+    dimensions: artwork.dimensions,
+    materials: artwork.materials,
+    image: artwork.image,
+    featured: artwork.featured,
+    price_inr: artwork.price_inr,
+    price_usd: artwork.price_usd,
+    status: artwork.status,
+    sizes: Array.isArray(artwork.sizes) ? artwork.sizes.map(shapePublicArtworkSize) : [],
+    updatedAt: artwork.updated_at || artwork.updatedAt || null,
+  };
+}
+
 // Get all artworks (public). Optional ?category=<slug> filters server-side
 // (WEB-CAT-02) — omitted, empty, or non-string values behave exactly as
 // before (all public artworks, no filter).
@@ -564,14 +607,7 @@ app.get('/api/artworks', async (req, res) => {
       ? req.query.category.trim()
       : null;
     const artworks = await db.getArtworks(categorySlug);
-    // Transform each artwork: remove image_data, add updatedAt, remove updated_at
-    const transformed = artworks.map(artwork => {
-      if ('image_data' in artwork) delete artwork.image_data;
-      artwork.updatedAt = artwork.updated_at || null;
-      delete artwork.updated_at;
-      return artwork;
-    });
-    res.json(transformed);
+    res.json(artworks.map(shapePublicArtwork));
   } catch (error) {
     console.error('Error reading artworks:', error);
     res.status(500).json({ error: 'Failed to fetch artworks' });
@@ -585,10 +621,7 @@ app.get('/api/artworks/:id', async (req, res) => {
     if (!artwork) {
       return res.status(404).json({ error: 'Artwork not found' });
     }
-    if ('image_data' in artwork) delete artwork.image_data;
-    artwork.updatedAt = artwork.updated_at || null;
-    delete artwork.updated_at;
-    res.json(artwork);
+    res.json(shapePublicArtwork(artwork));
   } catch (error) {
     console.error('Error reading artwork:', error);
     res.status(500).json({ error: 'Failed to fetch artwork' });
