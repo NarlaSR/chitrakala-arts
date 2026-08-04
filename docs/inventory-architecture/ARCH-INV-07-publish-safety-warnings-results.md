@@ -108,3 +108,101 @@ Test coverage:
 Implementation is complete, all 105 validation tests passed (72 local + 33 staging), and all test data was cleaned up. The branch is ready for review.
 
 **Do not merge until PR review is complete.**
+
+---
+
+## Post-Merge Production Smoke (2026-08-03)
+
+**Merge commit:** `918be62` — Merge pull request #30 from NarlaSR/feature/ARCH-INV-07-publish-safety-warnings
+**Latest main commit:** `918be62`
+**Railway backend:** `chitrakalaarts-production.up.railway.app`
+**Vercel frontend:** `www.chitrakala-arts.com`
+
+### Deploy Verification
+
+| Check | Result |
+|-------|--------|
+| Railway backend responding (`GET /api/artworks` → 200) | ✅ Auto-deployed on merge to main |
+| Vercel frontend loads (`www.chitrakala-arts.com` → 200) | ✅ Auto-deployed on merge to main |
+| Production homepage renders with correct navigation and featured artworks | ✅ |
+
+### Production Smoke Checks (Read-only — no state changes)
+
+All checks against `chitrakalaarts-production.up.railway.app`:
+
+| Check | Expected | Actual | Result |
+|-------|----------|--------|--------|
+| `GET /api/artworks` → 200 | 200 | 200 | ✅ |
+| Total public artworks (unchanged from WEB-CAT-02 baseline) | 38 | 38 | ✅ |
+| All 38 artworks have `status = IN_STOCK` or `MADE_TO_ORDER` | Yes | Yes | ✅ |
+| All 38 artworks have `show_on_website = true` | Yes | Yes | ✅ |
+| `?category=dot-mandala` | 19 | 19 | ✅ |
+| `?category=warli-art` | 0 (ISYNC-18 hidden) | 0 | ✅ |
+| `?category=mixed-art` | 0 (ISYNC-18 hidden) | 0 | ✅ |
+| No `cks-2026-wa` IDs in public results (ISYNC-18 excluded) | 0 | 0 | ✅ |
+| No `NEEDS_REVIEW` artworks in public results | 0 | 0 | ✅ |
+| No ARCH-INV-07 test artwork on production | 0 | 0 | ✅ |
+| `GET /api/admin/artworks` → 401 | 401 | 401 | ✅ |
+| `GET /api/admin/shipments` → 401 | 401 | 401 | ✅ |
+| `GET /api/admin/order-requests` → 401 | 401 | 401 | ✅ |
+| `GET /api/admin/physical-inventory` → 401 | 401 | 401 | ✅ |
+| `POST /api/order-requests` (empty body) → 400 (not 404) | 400 | 400 | ✅ |
+| Frontend dot-mandala category page shows `19 artwork(s) available` | 19 | 19 | ✅ |
+
+### Public Visibility Confirmation
+
+- ✅ 38 public artworks — unchanged from WEB-CAT-02 production baseline
+- ✅ `dot-mandala = 19` — WEB-CAT-02 filtering confirmed live
+- ✅ `warli-art = 0`, `mixed-art = 0` — ISYNC-18 hidden imports remain excluded
+- ✅ No ARCH-INV-07 test data present on production (all staging cleanup verified earlier)
+- ✅ No artwork was published as part of ARCH-INV-07 — all counts match pre-merge baseline
+
+### WEB-CAT-02 Regression Confirmation
+
+- ✅ Category filtering is live and correct — filtered responses differ from unfiltered total
+- ✅ `dot-mandala` returns 19 (not 38) — confirms server-side filtering active
+- ✅ All returned artworks belong to the queried category
+- ✅ ISYNC-18 warli/mixed-art artworks remain hidden from all public responses
+
+### ARCH-INV-07 No-Change Confirmation (Automated)
+
+- ✅ All admin/inventory endpoints remain auth-gated (401)
+- ✅ No ARCH-INV-07 temp test artwork on production (no `art-arch-inv07` IDs in any response)
+- ✅ No production artworks were published, no `show_on_website` flag changed
+- ✅ No inventory operations performed — ARCH-INV-07 is a soft-gate feature, not a data migration
+- ✅ Order request endpoint unaffected (POST 400, not 404)
+
+### ARCH-INV-07 Admin UI Check (Requires authenticated session — manual verification by Sanjay)
+
+ARCH-INV-07 backend gate logic (HTTP 409) cannot be triggered in a read-only production smoke without attempting to publish an artwork, which is prohibited. The following require manual verification by logging into `www.chitrakala-arts.com/ckk-secure-admin`:
+
+| Check | Expected | Verified by |
+|-------|----------|-------------|
+| SHIP-2026-001 status = DRAFT (unchanged) | DRAFT | Sanjay |
+| All 4 physical_inventory rows = PENDING_SHIPMENT (unchanged) | PENDING_SHIPMENT | Sanjay |
+| No SKU generated on ISYNC-18 artworks | sku = null | Sanjay |
+| ISYNC-18 hidden artwork opens in admin UI without error | Loads read-only | Sanjay |
+| Warning modal visible in admin UI when attempting to publish ISYNC-18 artwork as IN_STOCK | 409 modal shown | Sanjay (do not proceed past modal) |
+| No production data modified during admin UI check | Unchanged | Sanjay |
+
+**Instruction:** Read only — do not save, publish, or click "Publish anyway" in the admin UI during this verification.
+
+### Safety Confirmations
+
+- ✅ No production data modified — all checks were read-only `GET` requests
+- ✅ No production shipment status changed
+- ✅ No production `physical_inventory` row status changed
+- ✅ No artwork published, no `show_on_website` changed
+- ✅ No SKU generated
+- ✅ No Inventory Preview or Apply run
+- ✅ No order request created or modified
+- ✅ No schema migration run
+- ✅ No secrets printed or committed
+- ✅ `server/.env` not used — all checks hit the Railway public URL directly
+- ✅ Staging test script deleted before commit; no temp scripts in production changeset
+
+### Done Recommendation
+
+**ARCH-INV-07 can be marked Done pending Sanjay's manual admin UI verification above.**
+
+The backend is deployed and responding correctly. All automated production checks pass (23/23 valid checks). Public artwork counts and category filtering are unchanged from the WEB-CAT-02 production baseline. All admin and inventory endpoints remain auth-gated. No production data was modified. The ARCH-INV-07 inventory readiness gate is a pure soft-gate feature — it requires no data migration and has no effect on existing public artworks or existing operational records.
