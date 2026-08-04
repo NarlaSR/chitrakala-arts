@@ -71,8 +71,10 @@ export const artworksAPI = {
     return response.data;
   },
 
-  updateStatus: async (id, status) => {
-    const response = await api.patch(`/admin/artworks/${id}/status`, { status });
+  updateStatus: async (id, status, overrideNoInventory = false) => {
+    const body = { status };
+    if (overrideNoInventory) body.override_no_inventory = true;
+    const response = await api.patch(`/admin/artworks/${id}/status`, body);
     return response.data;
   },
 

@@ -337,6 +337,47 @@ const VALID_SKU_PATTERN = /^CKS-\d{4}-(DM|LA|MM|WA|TA|MA|TD)-\d{5}$/;
 
 const isValidInventorySku = (sku) => VALID_SKU_PATTERN.test(sku);
 
+// Returns true when the request includes an explicit inventory-readiness override.
+// Handles both JSON bodies (boolean true) and multipart/form-data bodies (string 'true').
+const isInvOverride = (val) => val === true || val === 'true';
+
+// Returns a 409 warning payload when an artwork has no INSPECTED or AVAILABLE physical
+// inventory items, or null when at least one ready item exists and the save can proceed.
+function buildInvWarningPayload(piSummary) {
+  if (piSummary.some(r => r.status === 'INSPECTED' || r.status === 'AVAILABLE')) return null;
+  return {
+    warning: true,
+    warning_type: 'NO_INSPECTED_OR_AVAILABLE_INVENTORY',
+    requires_override: true,
+    message: invReadinessMessage(piSummary),
+    summary: piSummary,
+  };
+}
+
+function invReadinessMessage(piSummary) {
+  if (!piSummary.length) {
+    return 'No physical inventory records exist for this artwork. Publish without verified physical inventory?';
+  }
+  const s = new Set(piSummary.map(r => r.status));
+  if (s.has('IN_TRANSIT')) {
+    return "This artwork's inventory is currently in transit. No item has arrived or been inspected yet.";
+  }
+  if (s.has('RECEIVED') || s.has('INSPECTION_REQUIRED')) {
+    return 'This artwork has arrived but has not yet been inspected. Mark at least one item Inspected or Available before publishing.';
+  }
+  if (s.has('PENDING_SHIPMENT') && !s.has('DAMAGED') && !s.has('ARCHIVED')) {
+    return "This artwork's inventory is pending shipment from India. No item has arrived or been inspected yet.";
+  }
+  if (s.has('DAMAGED') && !s.has('ARCHIVED')) {
+    return "This artwork's inventory is marked as damaged. No item is available or inspected.";
+  }
+  if (s.has('ARCHIVED')) {
+    return "This artwork's inventory has been archived. No item is available or inspected.";
+  }
+  const detail = piSummary.map(r => `${r.count} ${r.status.replace(/_/g, ' ')}`).join(', ');
+  return `This artwork has no inspected or available inventory. Current inventory state: ${detail}.`;
+}
+
 // Returns the integer value, null if not supplied, or { error } if invalid.
 const validateQuantity = (val) => {
   if (val === undefined || val === null || val === '') return null; // not provided
@@ -742,6 +783,23 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
       });
     }
 
+    // Resolve final status and visibility once — used by both the inventory check and SKU logic.
+    const finalStatus = req.body.status || existingArtwork.status;
+    const finalShowOnWebsite = req.body.show_on_website !== undefined
+      ? req.body.show_on_website === 'true'
+      : (existingArtwork.show_on_website ?? false);
+
+    // Inventory readiness warning (ARCH-INV-07): fires only when transitioning from
+    // non-publicly-orderable to IN_STOCK + show_on_website=true. Not triggered for
+    // MADE_TO_ORDER (no physical inventory required). Skipped when override is explicit.
+    const currentlyOrderable = (existingArtwork.status === 'IN_STOCK' || existingArtwork.status === 'MADE_TO_ORDER') && existingArtwork.show_on_website === true;
+    const requestedInStockPublic = finalStatus === 'IN_STOCK' && finalShowOnWebsite === true;
+    if (!currentlyOrderable && requestedInStockPublic && !isInvOverride(req.body.override_no_inventory)) {
+      const piSummary = await db.getPhysicalInventorySummaryForArtwork(req.params.id);
+      const warningPayload = buildInvWarningPayload(piSummary);
+      if (warningPayload) return res.status(409).json(warningPayload);
+    }
+
     // Resolve SKU: preserve existing (immutable once set), validate if admin explicitly provides one,
     // or auto-generate when the artwork is saved into a public/orderable state with no SKU yet.
     let finalSku = existingArtwork.sku ?? null; // default: preserve
@@ -762,16 +820,12 @@ app.put('/api/artworks/:id', authenticateToken, upload.single('image'), async (r
     }
     // Auto-generate SKU if the save results in a public/orderable state and no SKU exists yet.
     if (!finalSku) {
-      const finalStatus       = req.body.status || existingArtwork.status;
-      const finalShowOnWebsite = req.body.show_on_website !== undefined
-        ? req.body.show_on_website === 'true'
-        : (existingArtwork.show_on_website ?? false);
       const finalCategory = req.body.category?.trim() || existingArtwork.category;
       finalSku = await maybeGenerateSku(pool, {
-        category:       finalCategory,
-        status:         finalStatus,
+        category:        finalCategory,
+        status:          finalStatus,
         show_on_website: finalShowOnWebsite,
-        existingSku:    null,
+        existingSku:     null,
       }).catch(() => null);
     }
 
@@ -885,16 +939,31 @@ app.patch('/api/admin/artworks/:id/status', authenticateToken, async (req, res) 
     });
   }
   try {
+    // Fetch existing artwork for the inventory readiness transition check (ARCH-INV-07).
+    const existingArtwork = await db.getArtworkById(req.params.id);
+    if (!existingArtwork) return res.status(404).json({ error: 'Artwork not found' });
+
+    // Inventory readiness warning (ARCH-INV-07): fires only when transitioning from
+    // non-publicly-orderable to IN_STOCK + show_on_website=true. PATCH does not change
+    // show_on_website, so the existing value is used on both sides of the check.
+    const currentlyOrderable = (existingArtwork.status === 'IN_STOCK' || existingArtwork.status === 'MADE_TO_ORDER') && existingArtwork.show_on_website === true;
+    const requestedInStockPublic = status === 'IN_STOCK' && existingArtwork.show_on_website === true;
+    if (!currentlyOrderable && requestedInStockPublic && !isInvOverride(req.body.override_no_inventory)) {
+      const piSummary = await db.getPhysicalInventorySummaryForArtwork(req.params.id);
+      const warningPayload = buildInvWarningPayload(piSummary);
+      if (warningPayload) return res.status(409).json(warningPayload);
+    }
+
     const artwork = await db.updateArtworkStatus(req.params.id, status);
     if (!artwork) return res.status(404).json({ error: 'Artwork not found' });
 
     // Auto-generate SKU if this status change makes the artwork public/orderable and it has no SKU yet.
     if (!artwork.sku) {
       const generatedSku = await maybeGenerateSku(pool, {
-        category:       artwork.category,
-        status:         artwork.status,
+        category:        artwork.category,
+        status:          artwork.status,
         show_on_website: artwork.show_on_website,
-        existingSku:    null,
+        existingSku:     null,
       }).catch(() => null);
       if (generatedSku) {
         const withSku = await db.updateArtworkSku(artwork.id, generatedSku);

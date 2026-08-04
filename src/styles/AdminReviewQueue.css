@@ -386,3 +386,75 @@
   .rq-summary { gap: 0.5rem; }
   .rq-count-num { font-size: 1.4rem; }
 }
+
+/* ── Inventory readiness warning modal (ARCH-INV-07) ───────────────────────── */
+
+.rq-inv-warning-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.rq-inv-warning-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 2rem;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.rq-inv-warning-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  color: #92400e;
+}
+
+.rq-inv-warning-msg {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.rq-inv-warning-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.rq-inv-warning-item {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #78350f;
+}
+
+.rq-inv-warning-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.rq-btn-warn-proceed {
+  background: #b45309;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rq-btn-warn-proceed:hover {
+  background: #92400e;
+}
