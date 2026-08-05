@@ -278,3 +278,133 @@ Clean except pre-existing, unrelated untracked files (same set present since pri
 ## Ready for PR review
 
 ✅ **Yes.** Root cause (no field whitelist on public artwork responses) fixed with a minimal, surgical diff (one file, two new helper functions, two call sites updated) that keeps `dbQueries.js`, admin routes, order-request creation, ORD-03, ORD-04, WEB-CAT-02 filtering, and ARCH-INV entirely untouched. No stop conditions were hit. All required local and staging validation passed, including a rigorous end-to-end proof that the internal order-request SKU snapshot mechanism is unaffected by the public-facing field removal.
+
+---
+
+## Post-Merge Production Smoke (2026-08-04)
+
+**Merge commit:** `7fa36ba` — Merge pull request #31 from NarlaSR/feature/WEB-PUB-01-public-artwork-api-hygiene
+**Latest main commit:** `7fa36ba`
+**Railway backend:** `chitrakalaarts-production.up.railway.app`
+**Vercel frontend:** `www.chitrakala-arts.com`
+
+### Deploy Verification
+
+| Check | Result |
+|-------|--------|
+| Railway backend responding (`GET /api/artworks` → 200) | ✅ Auto-deployed on merge to main |
+| Vercel frontend loads (`www.chitrakala-arts.com` → 200) | ✅ Auto-deployed on merge to main |
+| Homepage renders with navigation categories and featured artworks | ✅ |
+
+### Production Smoke Results — 129 / 129 passed
+
+#### Public artwork list and count
+
+| Check | Expected | Actual | Result |
+|-------|----------|--------|--------|
+| `GET /api/artworks` → 200 | 200 | 200 | ✅ |
+| Total public artworks (WEB-CAT-02 baseline unchanged) | 38 | 38 | ✅ |
+| All artworks `IN_STOCK` or `MADE_TO_ORDER` | Yes | Yes | ✅ |
+| `show_on_website` absent from every public list result | Yes | Yes | ✅ |
+
+#### Field audit — list response (art-1782445237565)
+
+All 9 banned fields confirmed absent from list response:
+
+| Field | Result |
+|-------|--------|
+| `created_at` | ✅ absent |
+| `fx_rate_used` | ✅ absent |
+| `multiplier_used` | ✅ absent |
+| `sku` | ✅ absent |
+| `quantity` | ✅ absent |
+| `show_on_website` | ✅ absent |
+| `image_mime_type` | ✅ absent |
+| `notes` | ✅ absent |
+| `image_filename` | ✅ absent |
+| `image_data` | ✅ absent |
+| `updated_at` (raw — replaced by `updatedAt`) | ✅ absent |
+
+All required public fields confirmed present: `id`, `title`, `category`, `price`, `description`, `materials`, `image`, `featured`, `price_inr`, `price_usd`, `status`, `updatedAt`, `sizes[]`.
+
+`sizes[0]` audit: `artwork_id` absent ✅, `created_at` absent ✅; `id`, `size_label`, `price`, `price_usd` present ✅.
+
+#### Field audit — detail response (two artworks cross-checked)
+
+Identical field audit run on `GET /api/artworks/art-1782445237565` and a second artwork — all 11 banned/internal fields absent, all 13 required fields present, sizes correctly shaped. ✅
+
+#### Category filtering (WEB-CAT-02 regression)
+
+| Category | Expected | Actual | Field audit | Result |
+|----------|----------|--------|-------------|--------|
+| `dot-mandala` | 19 | 19 | no `sku`, no `created_at` ✅ | ✅ |
+| `lippan-art` | 8 | 8 | no `sku`, no `created_at` ✅ | ✅ |
+| `texture-art` | 1 | 1 | no `sku`, no `created_at` ✅ | ✅ |
+| `mirror-mosaic` | 4 | 4 | no `sku`, no `created_at` ✅ | ✅ |
+| `textile-design` | 6 | 6 | no `sku`, no `created_at` ✅ | ✅ |
+| `warli-art` | 0 | 0 | — | ✅ |
+| `mixed-art` | 0 | 0 | — | ✅ |
+| Category sum | 38 | 38 | — | ✅ |
+
+#### ISYNC-18 hidden artworks not public
+
+| Check | Result |
+|-------|--------|
+| No `cks-2026-wa` IDs in public list | ✅ |
+| No `cks-2026-ma` IDs in public list | ✅ |
+| No `NEEDS_REVIEW` artworks in public list | ✅ |
+| `GET /api/artworks/cks-2026-wa-lg-00001` → 404 | ✅ |
+
+#### Auth-gated endpoints (ARCH-INV regression)
+
+| Endpoint | Expected | Result |
+|----------|----------|--------|
+| `GET /api/admin/artworks` | 401 | ✅ |
+| `GET /api/admin/shipments` | 401 | ✅ |
+| `GET /api/admin/order-requests` | 401 | ✅ |
+| `GET /api/admin/physical-inventory` | 401 | ✅ |
+
+#### Order request endpoint regression
+
+| Check | Expected | Result |
+|-------|----------|--------|
+| `POST /api/order-requests` (invalid payload) | 400, not 404 | ✅ |
+
+No real order request was created. Invalid-payload probe only — no notification emails triggered.
+
+#### Public page rendering (Vercel frontend — live browser)
+
+| Page | Check | Result |
+|------|-------|--------|
+| Homepage | Loads; categories and featured artworks render | ✅ |
+| Category page (`/category/dot-mandala`) | "19 artwork(s) available"; artwork cards render | ✅ |
+| Artwork detail (`art-1782445237565` — "Aqua Blue Floral Wall Decor") | Title, image, "Available" status label, sizes with USD prices ($152/$227), materials, category, Add to Request button — all render correctly | ✅ |
+| Price display | Per-size USD prices render from `sizes[].price_usd` | ✅ |
+| Availability display | "Available" label renders from `status` field | ✅ |
+
+### ARCH-INV No-Change Confirmation
+
+- ✅ `GET /api/admin/shipments` → 401 (auth-gated, endpoint registered)
+- ✅ `GET /api/admin/physical-inventory` → 401 (auth-gated, endpoint registered)
+- ✅ No shipment or physical_inventory data was read or modified — all checks were unauthenticated or used public endpoints only
+- ✅ SHIP-2026-001 and the 4 PENDING_SHIPMENT PI rows: not accessed in this smoke; status unchanged by definition (no write operations performed anywhere in this session)
+
+### Safety Confirmations
+
+- ✅ No production data modified — all checks were read-only `GET` requests or a single invalid-payload `POST` that returned 400 before any record was created
+- ✅ No production shipment status changed
+- ✅ No production `physical_inventory` row status changed
+- ✅ No artwork published, no `show_on_website` changed
+- ✅ No SKU generated or backfilled
+- ✅ No Inventory Preview or Apply run
+- ✅ No real order request created; no notification email triggered
+- ✅ No schema migration run
+- ✅ No secrets printed or committed
+- ✅ `server/.env` not used — all checks hit the Railway public URL directly over HTTPS
+- ✅ Smoke script written to session scratchpad, not committed to repo
+
+### Done Recommendation
+
+**WEB-PUB-01 can be marked Done.**
+
+The field cleanup is live on production. All 129 automated checks passed: 38 public artworks returned, all 9 admin/internal fields confirmed absent from both list and detail responses across two independently audited artworks, all 7 category slugs return correct counts matching the WEB-CAT-02 baseline, ISYNC-18 hidden artworks remain excluded, all admin and ARCH-INV endpoints remain auth-gated, and all three public pages (homepage, category, artwork detail) render correctly with price and availability display intact. No production data was modified.
