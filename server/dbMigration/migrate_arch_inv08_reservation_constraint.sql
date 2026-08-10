@@ -1,0 +1,42 @@
+-- Migration: ARCH-INV-08 — Order Request Reservation Workflow
+-- Ticket: ARCH-INV-08
+-- Date: 2026-08-10
+--
+-- Adds a UNIQUE constraint on order_request_items.physical_inventory_id to enforce
+-- the one-to-one reservation invariant at the database level: each physical inventory
+-- unit can be reserved for at most one order request item at a time.
+--
+-- DEPLOYMENT PREFLIGHT — run these three queries against the target database and
+-- review the results before executing the migration:
+--
+--   1. Count of non-null physical_inventory_id values (should be 0 on a clean database;
+--      any non-zero value means reservations already exist and must be reviewed):
+--
+--      SELECT COUNT(*) AS non_null_count
+--      FROM order_request_items
+--      WHERE physical_inventory_id IS NOT NULL;
+--
+--   2. Duplicate check — must return ZERO rows before running the migration:
+--
+--      SELECT physical_inventory_id, COUNT(*) AS n
+--      FROM order_request_items
+--      WHERE physical_inventory_id IS NOT NULL
+--      GROUP BY physical_inventory_id
+--      HAVING COUNT(*) > 1;
+--
+--   3. Orphan check — must return ZERO rows before running the migration:
+--
+--      SELECT ori.id, ori.physical_inventory_id
+--      FROM order_request_items ori
+--      LEFT JOIN physical_inventory pi ON pi.id = ori.physical_inventory_id
+--      WHERE ori.physical_inventory_id IS NOT NULL AND pi.id IS NULL;
+--
+-- Proceed only if query 2 and query 3 return zero rows.
+--
+-- IDEMPOTENCY: the constraint name is deterministic; re-running on a database that
+-- already has the constraint will fail with a "already exists" error, which is safe
+-- to ignore if you know the constraint is already in place.
+
+ALTER TABLE order_request_items
+  ADD CONSTRAINT uq_ori_physical_inventory_id
+  UNIQUE (physical_inventory_id);

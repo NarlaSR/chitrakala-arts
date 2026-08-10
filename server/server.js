@@ -2198,6 +2198,8 @@ app.get('/api/admin/order-requests/:id', authenticateToken, async (req, res) => 
 
 // PATCH /api/admin/order-requests/:id/status — admin only. Review-status change only;
 // never touches artworks (no quantity/status/SOLD/OUT_OF_STOCK side effects).
+// CANCELLED auto-releases all reserved physical inventory (all-or-nothing).
+// FULFILLED is blocked while any items have an active reservation.
 app.patch('/api/admin/order-requests/:id/status', authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -2210,12 +2212,105 @@ app.patch('/api/admin/order-requests/:id/status', authenticateToken, async (req,
         error: `Invalid or missing status. Allowed values: ${[...ALLOWED_ORDER_REQUEST_STATUSES].join(', ')}`,
       });
     }
-    const orderRequest = await db.updateOrderRequestStatus(id, status);
+    const username = req.user?.username || null;
+    const orderRequest = await db.updateOrderRequestStatus(id, status, username);
     if (!orderRequest) return res.status(404).json({ error: 'Order request not found' });
     res.json(orderRequest);
   } catch (error) {
+    if (error.code === 'FULFILLED_BLOCKED_BY_RESERVATION') {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.code === 'RESERVATION_INTEGRITY_ERROR') {
+      return res.status(500).json({ error: error.message });
+    }
     console.error('Error updating order request status:', error);
     res.status(500).json({ error: 'Failed to update order request status' });
+  }
+});
+
+// ─── ARCH-INV-08: Physical inventory reservation for order request items ────────
+
+// POST /api/admin/order-requests/:id/reserve — reserve a specific physical
+// inventory unit for a single order request item. Body: { item_id, physical_inventory_id }.
+app.post('/api/admin/order-requests/:id/reserve', authenticateToken, async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: 'Invalid order request id' });
+    }
+    const itemId = Number(req.body.item_id);
+    const piId = Number(req.body.physical_inventory_id);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: 'item_id must be a positive integer' });
+    }
+    if (!Number.isInteger(piId) || piId <= 0) {
+      return res.status(400).json({ error: 'physical_inventory_id must be a positive integer' });
+    }
+    const username = req.user?.username || null;
+    await db.reservePhysicalInventoryForOrderItem(orderId, itemId, piId, username);
+    res.json({ success: true });
+  } catch (error) {
+    if (error.code === 'ORDER_NOT_FOUND' || error.code === 'ITEM_NOT_FOUND' || error.code === 'PI_NOT_FOUND') {
+      return res.status(404).json({ error: error.message });
+    }
+    if (['ORDER_NOT_CONFIRMED', 'ITEM_ALREADY_RESERVED', 'ARTWORK_MISMATCH', 'SIZE_MISMATCH'].includes(error.code)) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.code === 'PI_NOT_AVAILABLE') {
+      return res.status(409).json({ error: error.message });
+    }
+    console.error('Error reserving physical inventory:', error);
+    res.status(500).json({ error: 'Failed to reserve physical inventory' });
+  }
+});
+
+// POST /api/admin/order-requests/:id/release — release the physical inventory
+// reservation for a single order request item. Body: { item_id }.
+// Does not require the order to be in any particular status.
+app.post('/api/admin/order-requests/:id/release', authenticateToken, async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: 'Invalid order request id' });
+    }
+    const itemId = Number(req.body.item_id);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: 'item_id must be a positive integer' });
+    }
+    const username = req.user?.username || null;
+    await db.releasePhysicalInventoryForOrderItem(orderId, itemId, username);
+    res.json({ success: true });
+  } catch (error) {
+    if (error.code === 'ORDER_NOT_FOUND' || error.code === 'ITEM_NOT_FOUND' || error.code === 'PI_NOT_FOUND') {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.code === 'ITEM_NOT_RESERVED' || error.code === 'PI_NOT_RESERVED') {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error releasing physical inventory reservation:', error);
+    res.status(500).json({ error: 'Failed to release physical inventory reservation' });
+  }
+});
+
+// GET /api/admin/order-requests/:orderId/items/:itemId/reservation-candidates —
+// list physical inventory units eligible to be reserved for this item.
+// Backend enforces: AVAILABLE, artwork_id match, strict size match (IS NOT DISTINCT FROM),
+// not already linked to another item.
+app.get('/api/admin/order-requests/:orderId/items/:itemId/reservation-candidates', authenticateToken, async (req, res) => {
+  try {
+    const orderId = Number(req.params.orderId);
+    const itemId = Number(req.params.itemId);
+    if (!Number.isInteger(orderId) || orderId <= 0 || !Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: 'Invalid order request or item id' });
+    }
+    const candidates = await db.getReservationCandidatesForItem(orderId, itemId);
+    res.json(candidates);
+  } catch (error) {
+    if (error.code === 'ITEM_NOT_FOUND') {
+      return res.status(404).json({ error: error.message });
+    }
+    console.error('Error fetching reservation candidates:', error);
+    res.status(500).json({ error: 'Failed to fetch reservation candidates' });
   }
 });
 

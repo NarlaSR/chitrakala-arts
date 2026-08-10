@@ -334,9 +334,214 @@
   vertical-align: middle;
 }
 
+/* ── ARCH-INV-08: Inventory Reservation ── */
+
+.or-inv-heading {
+  margin-top: 1.5rem;
+}
+
+.or-inv-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.or-inv-item-row {
+  background: var(--bg-light);
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.or-inv-item-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.or-inv-item-label {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.or-inv-reserved-badge {
+  display: inline-block;
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.or-inv-unreserved-badge {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.or-inv-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.or-inv-status-note {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+.or-btn-reserve {
+  background: #3b82f6;
+  color: var(--white);
+  border: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.or-btn-reserve:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.or-btn-release {
+  background: #f59e0b;
+  color: var(--white);
+  border: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.or-btn-release:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.or-btn-reserve:disabled,
+.or-btn-release:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.or-inv-picker {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: var(--white);
+  margin-top: 0.25rem;
+}
+
+.or-inv-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+  font-size: 0.88rem;
+}
+
+.or-inv-picker-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text-light);
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.or-inv-picker-loading {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  padding: 0.5rem 0;
+}
+
+.or-inv-empty-state {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  padding: 0.5rem 0;
+  font-style: italic;
+}
+
+.or-inv-candidate-list {
+  list-style: none;
+  margin: 0 0 0.5rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.or-inv-candidate {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  background: var(--bg-light);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.or-inv-candidate:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.or-inv-candidate-selected {
+  border-color: #3b82f6;
+  background: #dbeafe;
+}
+
+.or-inv-candidate-id {
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.or-inv-candidate-size,
+.or-inv-candidate-source,
+.or-inv-candidate-notes,
+.or-inv-candidate-date {
+  color: var(--text-light);
+  font-size: 0.8rem;
+}
+
+.or-inv-picker-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .or-content { padding: 1rem; }
   .or-summary { gap: 0.5rem; }
   .or-count-num { font-size: 1.4rem; }
   .or-detail-grid { grid-template-columns: 1fr; }
+  .or-inv-item-info { flex-direction: column; align-items: flex-start; }
+  .or-inv-picker-confirm { flex-direction: column; align-items: flex-start; }
 }
