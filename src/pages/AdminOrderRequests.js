@@ -38,6 +38,13 @@ const AdminOrderRequests = () => {
   const [statusSaving, setStatusSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
 
+  // Reservation state
+  const [pickerOpen, setPickerOpen] = useState(null); // { orderId, itemId } or null
+  const [candidatesCache, setCandidatesCache] = useState({}); // key: `${orderId}:${itemId}` → array
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [reserveTarget, setReserveTarget] = useState(null); // { orderId, itemId, piId } pending confirm
+  const [actionBusy, setActionBusy] = useState(false);
+
   useEffect(() => {
     if (!authLoading && !isAdmin()) navigate('/ckk-secure-admin');
   }, [authLoading, isAdmin, navigate]);
@@ -65,11 +72,13 @@ const AdminOrderRequests = () => {
 
   const filtered = filter === 'ALL' ? requests : requests.filter(r => r.status === filter);
 
-  const flash = (msg) => { setActionMsg(msg); setTimeout(() => setActionMsg(''), 3000); };
+  const flash = (msg) => { setActionMsg(msg); setTimeout(() => setActionMsg(''), 4000); };
 
   const toggleExpand = async (request) => {
     if (expandedId === request.id) {
       setExpandedId(null);
+      setPickerOpen(null);
+      setReserveTarget(null);
       return;
     }
     setExpandedId(request.id);
@@ -87,6 +96,15 @@ const AdminOrderRequests = () => {
     }
   };
 
+  const refreshDetail = async (requestId) => {
+    try {
+      const detail = await orderRequestsAPI.getById(requestId);
+      setDetailCache(prev => ({ ...prev, [requestId]: detail }));
+    } catch {
+      flash('Failed to refresh request details');
+    }
+  };
+
   const saveStatus = async (requestId, currentStatus) => {
     const newStatus = statusDrafts[requestId];
     if (!newStatus || newStatus === currentStatus) return;
@@ -98,11 +116,96 @@ const AdminOrderRequests = () => {
         ...prev,
         [requestId]: prev[requestId] ? { ...prev[requestId], status: updated.status } : prev[requestId],
       }));
+      // Close any open reservation picker for this order so stale picker state cannot dangle.
+      setPickerOpen(prev => (prev?.orderId === requestId ? null : prev));
+      setReserveTarget(prev => (prev?.orderId === requestId ? null : prev));
+      // Refresh detail to pick up any auto-released reservations from CANCELLED
+      if (newStatus === 'CANCELLED') {
+        await refreshDetail(requestId);
+        // Clear all candidate caches for this order since reservations were released
+        setCandidatesCache(prev => {
+          const next = { ...prev };
+          Object.keys(next).forEach(k => { if (k.startsWith(`${requestId}:`)) delete next[k]; });
+          return next;
+        });
+      }
       loadRequests();
     } catch (err) {
       flash(`Error: ${err.response?.data?.error || 'Status update failed'}`);
     } finally {
       setStatusSaving(false);
+    }
+  };
+
+  const openPicker = async (orderId, itemId) => {
+    const key = `${orderId}:${itemId}`;
+    setPickerOpen({ orderId, itemId });
+    setReserveTarget(null);
+    if (!candidatesCache[key]) {
+      setCandidatesLoading(true);
+      try {
+        const candidates = await orderRequestsAPI.getReservationCandidates(orderId, itemId);
+        setCandidatesCache(prev => ({ ...prev, [key]: candidates }));
+      } catch {
+        flash('Failed to load reservation candidates');
+        setPickerOpen(null);
+      } finally {
+        setCandidatesLoading(false);
+      }
+    }
+  };
+
+  const closePicker = () => {
+    setPickerOpen(null);
+    setReserveTarget(null);
+  };
+
+  const selectCandidate = (orderId, itemId, piId) => {
+    setReserveTarget({ orderId, itemId, piId });
+  };
+
+  const confirmReserve = async () => {
+    if (!reserveTarget) return;
+    const { orderId, itemId, piId } = reserveTarget;
+    setActionBusy(true);
+    try {
+      await orderRequestsAPI.reserve(orderId, itemId, piId);
+      flash(`PI #${piId} reserved for item #${itemId}`);
+      setPickerOpen(null);
+      setReserveTarget(null);
+      // Invalidate all candidate caches for this order — the reserved PI may have been
+      // visible in sibling items' cached candidate lists.
+      setCandidatesCache(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(k => { if (k.startsWith(`${orderId}:`)) delete next[k]; });
+        return next;
+      });
+      await refreshDetail(orderId);
+    } catch (err) {
+      flash(`Reserve failed: ${err.response?.data?.error || 'Unknown error'}`);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleRelease = async (orderId, itemId, piId) => {
+    if (!window.confirm(`Release reservation of PI #${piId} from item #${itemId}? The unit will return to Available.`)) return;
+    setActionBusy(true);
+    try {
+      await orderRequestsAPI.release(orderId, itemId);
+      flash(`PI #${piId} reservation released`);
+      // Invalidate all candidate caches for this order — the newly AVAILABLE PI may
+      // now be eligible to appear in sibling items' candidate lists.
+      setCandidatesCache(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(k => { if (k.startsWith(`${orderId}:`)) delete next[k]; });
+        return next;
+      });
+      await refreshDetail(orderId);
+    } catch (err) {
+      flash(`Release failed: ${err.response?.data?.error || 'Unknown error'}`);
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -298,6 +401,133 @@ const AdminOrderRequests = () => {
                                         ))}
                                       </tbody>
                                     </table>
+                                  </div>
+
+                                  {/* Inventory Reservation Section */}
+                                  <h4 className="or-items-heading or-inv-heading">Inventory Reservation</h4>
+                                  <div className="or-inv-section">
+                                    {(detail.items || []).map(item => {
+                                      const isReserved = item.physical_inventory_id != null;
+                                      const isConfirmed = detail.status === 'CONFIRMED';
+                                      const pickerKey = `${detail.id}:${item.id}`;
+                                      const isPickerOpenForThis =
+                                        pickerOpen && pickerOpen.orderId === detail.id && pickerOpen.itemId === item.id;
+                                      const candidates = candidatesCache[pickerKey] || [];
+
+                                      return (
+                                        <div key={item.id} className="or-inv-item-row">
+                                          <div className="or-inv-item-info">
+                                            <span className="or-inv-item-label">
+                                              Item #{item.id} — {item.snapshot_title}
+                                              {item.snapshot_size_label ? ` (${item.snapshot_size_label})` : ''}
+                                            </span>
+                                            {isReserved ? (
+                                              <span className="or-inv-reserved-badge">
+                                                Reserved: PI #{item.physical_inventory_id}
+                                              </span>
+                                            ) : (
+                                              <span className="or-inv-unreserved-badge">Not reserved</span>
+                                            )}
+                                          </div>
+
+                                          <div className="or-inv-actions">
+                                            {isReserved && (
+                                              <button
+                                                className="or-btn or-btn-release"
+                                                disabled={actionBusy}
+                                                onClick={() => handleRelease(detail.id, item.id, item.physical_inventory_id)}
+                                              >
+                                                Release Reservation
+                                              </button>
+                                            )}
+                                            {!isReserved && isConfirmed && !isPickerOpenForThis && (
+                                              <button
+                                                className="or-btn or-btn-reserve"
+                                                disabled={actionBusy}
+                                                onClick={() => openPicker(detail.id, item.id)}
+                                              >
+                                                Reserve Inventory
+                                              </button>
+                                            )}
+                                            {!isReserved && !isConfirmed && (
+                                              <span className="or-inv-status-note">
+                                                Reservation requires CONFIRMED status
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          {isPickerOpenForThis && (
+                                            <div className="or-inv-picker">
+                                              <div className="or-inv-picker-header">
+                                                <strong>Select a physical inventory unit to reserve</strong>
+                                                <button className="or-inv-picker-close" onClick={closePicker}>✕</button>
+                                              </div>
+                                              {candidatesLoading ? (
+                                                <div className="or-inv-picker-loading">Loading candidates…</div>
+                                              ) : candidates.length === 0 ? (
+                                                <div className="or-inv-empty-state">
+                                                  No inventory is currently available for reservation. Inventory must be received, inspected, and made Available first.
+                                                </div>
+                                              ) : (
+                                                <ul className="or-inv-candidate-list">
+                                                  {candidates.map(pi => {
+                                                    const isSelected =
+                                                      reserveTarget &&
+                                                      reserveTarget.orderId === detail.id &&
+                                                      reserveTarget.itemId === item.id &&
+                                                      reserveTarget.piId === pi.id;
+                                                    return (
+                                                      <li
+                                                        key={pi.id}
+                                                        className={`or-inv-candidate${isSelected ? ' or-inv-candidate-selected' : ''}`}
+                                                        onClick={() => selectCandidate(detail.id, item.id, pi.id)}
+                                                      >
+                                                        <span className="or-inv-candidate-id">PI #{pi.id}</span>
+                                                        {pi.size_label && (
+                                                          <span className="or-inv-candidate-size">{pi.size_label}</span>
+                                                        )}
+                                                        {pi.source && (
+                                                          <span className="or-inv-candidate-source">Source: {pi.source}</span>
+                                                        )}
+                                                        {pi.condition_notes && (
+                                                          <span className="or-inv-candidate-notes">{pi.condition_notes}</span>
+                                                        )}
+                                                        {pi.received_date && (
+                                                          <span className="or-inv-candidate-date">
+                                                            Received: {new Date(pi.received_date).toLocaleDateString()}
+                                                          </span>
+                                                        )}
+                                                      </li>
+                                                    );
+                                                  })}
+                                                </ul>
+                                              )}
+                                              {reserveTarget &&
+                                                reserveTarget.orderId === detail.id &&
+                                                reserveTarget.itemId === item.id && (
+                                                  <div className="or-inv-picker-confirm">
+                                                    <span>Reserve PI #{reserveTarget.piId} for this item?</span>
+                                                    <button
+                                                      className="btn-primary"
+                                                      disabled={actionBusy}
+                                                      onClick={confirmReserve}
+                                                    >
+                                                      {actionBusy ? 'Reserving…' : 'Confirm Reserve'}
+                                                    </button>
+                                                    <button
+                                                      className="btn-secondary"
+                                                      disabled={actionBusy}
+                                                      onClick={() => setReserveTarget(null)}
+                                                    >
+                                                      Cancel
+                                                    </button>
+                                                  </div>
+                                                )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </>
                               ) : (

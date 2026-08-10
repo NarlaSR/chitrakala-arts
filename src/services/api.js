@@ -198,6 +198,26 @@ export const orderRequestsAPI = {
     const response = await api.patch(`/admin/order-requests/${id}/status`, { status });
     return response.data;
   },
+
+  reserve: async (orderId, itemId, physicalInventoryId) => {
+    const response = await api.post(`/admin/order-requests/${orderId}/reserve`, {
+      item_id: itemId,
+      physical_inventory_id: physicalInventoryId,
+    });
+    return response.data;
+  },
+
+  release: async (orderId, itemId) => {
+    const response = await api.post(`/admin/order-requests/${orderId}/release`, {
+      item_id: itemId,
+    });
+    return response.data;
+  },
+
+  getReservationCandidates: async (orderId, itemId) => {
+    const response = await api.get(`/admin/order-requests/${orderId}/items/${itemId}/reservation-candidates`);
+    return response.data;
+  },
 };
 
 // ARCH-INV-04/05: Admin Inventory Views + Mutations

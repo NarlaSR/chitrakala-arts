@@ -799,12 +799,346 @@ async function getOrderRequestById(id) {
   return orderRequest;
 }
 
-async function updateOrderRequestStatus(id, status) {
+async function updateOrderRequestStatus(id, status, username) {
+  // CANCELLED: auto-release all reserved physical inventory — all-or-nothing transaction.
+  if (status === 'CANCELLED') {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderRes = await client.query(
+        'SELECT id FROM order_requests WHERE id = $1 FOR UPDATE',
+        [id]
+      );
+      if (orderRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const itemsRes = await client.query(
+        'SELECT id, physical_inventory_id FROM order_request_items WHERE order_request_id = $1 ORDER BY id ASC FOR UPDATE',
+        [id]
+      );
+      const reservedItems = itemsRes.rows.filter(i => i.physical_inventory_id !== null);
+
+      const piMap = {};
+      for (const item of reservedItems) {
+        const piRes = await client.query(
+          'SELECT id, artwork_id, status FROM physical_inventory WHERE id = $1 FOR UPDATE',
+          [item.physical_inventory_id]
+        );
+        if (piRes.rows.length === 0 || piRes.rows[0].status !== 'RESERVED') {
+          const err = new Error(
+            `Physical inventory unit #${item.physical_inventory_id} linked to item #${item.id} is not in RESERVED status`
+          );
+          err.code = 'RESERVATION_INTEGRITY_ERROR';
+          throw err;
+        }
+        piMap[item.physical_inventory_id] = piRes.rows[0];
+      }
+
+      for (const item of reservedItems) {
+        const pi = piMap[item.physical_inventory_id];
+        await client.query(
+          'UPDATE physical_inventory SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          ['AVAILABLE', item.physical_inventory_id]
+        );
+        await client.query(
+          'UPDATE order_request_items SET physical_inventory_id = NULL WHERE id = $1',
+          [item.id]
+        );
+        await client.query(
+          `INSERT INTO inventory_movements
+             (physical_inventory_id, artwork_id, movement_type, quantity_change,
+              reference_type, reference_id, notes, created_by)
+           VALUES ($1, $2, 'RESERVATION_RELEASED', 0, 'order_request', $3, $4, $5)`,
+          [
+            item.physical_inventory_id,
+            pi.artwork_id,
+            String(id),
+            `Reservation auto-released due to order request #${id} cancellation`,
+            username || null,
+          ]
+        );
+      }
+
+      const updated = await client.query(
+        'UPDATE order_requests SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+        [status, id]
+      );
+      await client.query('COMMIT');
+      return updated.rows[0] || null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // FULFILLED: block if any items have a physical inventory reservation.
+  // Uses FOR UPDATE on order_requests to serialize with reservePhysicalInventoryForOrderItem.
+  if (status === 'FULFILLED') {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderRes = await client.query(
+        'SELECT id FROM order_requests WHERE id = $1 FOR UPDATE',
+        [id]
+      );
+      if (orderRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const reservedCheck = await client.query(
+        'SELECT COUNT(*)::int AS count FROM order_request_items WHERE order_request_id = $1 AND physical_inventory_id IS NOT NULL',
+        [id]
+      );
+      if (reservedCheck.rows[0].count > 0) {
+        const err = new Error(
+          'Cannot mark this order as Fulfilled while physical inventory is reserved for it. Fulfillment of reserved physical inventory will be handled by ARCH-INV-09.'
+        );
+        err.code = 'FULFILLED_BLOCKED_BY_RESERVATION';
+        throw err;
+      }
+
+      const updated = await client.query(
+        'UPDATE order_requests SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+        [status, id]
+      );
+      await client.query('COMMIT');
+      return updated.rows[0] || null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // All other statuses: simple update, no PI interaction.
   const result = await pool.query(
     `UPDATE order_requests SET status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
     [id, status]
   );
   return result.rows[0] || null;
+}
+
+// ─── ARCH-INV-08: Physical inventory reservation for order request items ────────
+
+async function reservePhysicalInventoryForOrderItem(orderId, itemId, physicalInventoryId, username) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock order_requests first (consistent lock order: orders → items → PI)
+    const orderRes = await client.query(
+      'SELECT id, status FROM order_requests WHERE id = $1 FOR UPDATE',
+      [orderId]
+    );
+    if (orderRes.rows.length === 0) {
+      const err = new Error('Order request not found');
+      err.code = 'ORDER_NOT_FOUND';
+      throw err;
+    }
+    if (orderRes.rows[0].status !== 'CONFIRMED') {
+      const err = new Error('Reservation is only allowed for CONFIRMED order requests');
+      err.code = 'ORDER_NOT_CONFIRMED';
+      throw err;
+    }
+
+    const itemRes = await client.query(
+      `SELECT id, order_request_id, artwork_id, artwork_size_id, physical_inventory_id
+       FROM order_request_items WHERE id = $1 AND order_request_id = $2 FOR UPDATE`,
+      [itemId, orderId]
+    );
+    if (itemRes.rows.length === 0) {
+      const err = new Error('Order request item not found');
+      err.code = 'ITEM_NOT_FOUND';
+      throw err;
+    }
+    const item = itemRes.rows[0];
+    if (item.physical_inventory_id !== null) {
+      const err = new Error('This item already has a physical inventory unit reserved');
+      err.code = 'ITEM_ALREADY_RESERVED';
+      throw err;
+    }
+
+    const piRes = await client.query(
+      'SELECT id, artwork_id, artwork_size_id, status FROM physical_inventory WHERE id = $1 FOR UPDATE',
+      [physicalInventoryId]
+    );
+    if (piRes.rows.length === 0) {
+      const err = new Error('Physical inventory unit not found');
+      err.code = 'PI_NOT_FOUND';
+      throw err;
+    }
+    const pi = piRes.rows[0];
+    if (pi.status !== 'AVAILABLE') {
+      const err = new Error(`Physical inventory unit is not available (status: ${pi.status})`);
+      err.code = 'PI_NOT_AVAILABLE';
+      throw err;
+    }
+    if (pi.artwork_id !== item.artwork_id) {
+      const err = new Error('Physical inventory unit does not match the requested artwork');
+      err.code = 'ARTWORK_MISMATCH';
+      throw err;
+    }
+    // Strict size match — NULL item size means no-size-variant artwork; only PI with NULL size satisfies it.
+    if (pi.artwork_size_id !== item.artwork_size_id) {
+      const err = new Error('Physical inventory unit size does not match the requested item size');
+      err.code = 'SIZE_MISMATCH';
+      throw err;
+    }
+
+    await client.query(
+      'UPDATE physical_inventory SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      ['RESERVED', physicalInventoryId]
+    );
+    await client.query(
+      'UPDATE order_request_items SET physical_inventory_id = $1 WHERE id = $2',
+      [physicalInventoryId, itemId]
+    );
+    await client.query(
+      `INSERT INTO inventory_movements
+         (physical_inventory_id, artwork_id, movement_type, quantity_change,
+          reference_type, reference_id, notes, created_by)
+       VALUES ($1, $2, 'RESERVED', 0, 'order_request', $3, $4, $5)`,
+      [
+        physicalInventoryId,
+        pi.artwork_id,
+        String(orderId),
+        `Reserved for order request #${orderId}, item #${itemId}`,
+        username || null,
+      ]
+    );
+
+    await client.query('COMMIT');
+    return { orderId, itemId, physicalInventoryId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function releasePhysicalInventoryForOrderItem(orderId, itemId, username) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock order_requests first (consistent lock order)
+    const orderRes = await client.query(
+      'SELECT id FROM order_requests WHERE id = $1 FOR UPDATE',
+      [orderId]
+    );
+    if (orderRes.rows.length === 0) {
+      const err = new Error('Order request not found');
+      err.code = 'ORDER_NOT_FOUND';
+      throw err;
+    }
+
+    const itemRes = await client.query(
+      `SELECT id, artwork_id, physical_inventory_id
+       FROM order_request_items WHERE id = $1 AND order_request_id = $2 FOR UPDATE`,
+      [itemId, orderId]
+    );
+    if (itemRes.rows.length === 0) {
+      const err = new Error('Order request item not found');
+      err.code = 'ITEM_NOT_FOUND';
+      throw err;
+    }
+    const item = itemRes.rows[0];
+    if (item.physical_inventory_id === null) {
+      const err = new Error('This item does not have a reserved physical inventory unit');
+      err.code = 'ITEM_NOT_RESERVED';
+      throw err;
+    }
+
+    const piId = item.physical_inventory_id;
+    const piRes = await client.query(
+      'SELECT id, artwork_id, status FROM physical_inventory WHERE id = $1 FOR UPDATE',
+      [piId]
+    );
+    if (piRes.rows.length === 0) {
+      const err = new Error('Physical inventory unit not found');
+      err.code = 'PI_NOT_FOUND';
+      throw err;
+    }
+    const pi = piRes.rows[0];
+    if (pi.status !== 'RESERVED') {
+      const err = new Error(`Physical inventory unit is not in RESERVED status (status: ${pi.status})`);
+      err.code = 'PI_NOT_RESERVED';
+      throw err;
+    }
+
+    await client.query(
+      'UPDATE physical_inventory SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      ['AVAILABLE', piId]
+    );
+    await client.query(
+      'UPDATE order_request_items SET physical_inventory_id = NULL WHERE id = $1',
+      [itemId]
+    );
+    await client.query(
+      `INSERT INTO inventory_movements
+         (physical_inventory_id, artwork_id, movement_type, quantity_change,
+          reference_type, reference_id, notes, created_by)
+       VALUES ($1, $2, 'RESERVATION_RELEASED', 0, 'order_request', $3, $4, $5)`,
+      [
+        piId,
+        pi.artwork_id,
+        String(orderId),
+        `Reservation released from order request #${orderId}, item #${itemId}`,
+        username || null,
+      ]
+    );
+
+    await client.query('COMMIT');
+    return { orderId, itemId, piId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function getReservationCandidatesForItem(orderId, itemId) {
+  const itemRes = await pool.query(
+    `SELECT id, artwork_id, artwork_size_id
+     FROM order_request_items WHERE id = $1 AND order_request_id = $2`,
+    [itemId, orderId]
+  );
+  if (itemRes.rows.length === 0) {
+    const err = new Error('Order request item not found');
+    err.code = 'ITEM_NOT_FOUND';
+    throw err;
+  }
+  const item = itemRes.rows[0];
+
+  const result = await pool.query(
+    `SELECT pi.id, pi.artwork_id, pi.artwork_size_id, pi.status,
+            pi.condition_notes, pi.notes, pi.received_date, pi.inspected_date,
+            pi.source, a.title AS artwork_title, asz.size_label
+     FROM physical_inventory pi
+     LEFT JOIN artworks a ON a.id = pi.artwork_id
+     LEFT JOIN artwork_sizes asz ON asz.id = pi.artwork_size_id
+     WHERE pi.artwork_id = $1
+       AND pi.status = 'AVAILABLE'
+       AND pi.artwork_size_id IS NOT DISTINCT FROM $2
+       AND pi.id NOT IN (
+         SELECT ori.physical_inventory_id
+         FROM order_request_items ori
+         WHERE ori.physical_inventory_id IS NOT NULL
+       )
+     ORDER BY pi.id`,
+    [item.artwork_id, item.artwork_size_id]
+  );
+  return result.rows;
 }
 
 // ─── ARCH-INV-05: Admin shipment creation and item assignment ────────────────
@@ -1229,4 +1563,7 @@ module.exports = {
   removeShipmentItemAdmin,
   PI_TRANSITION_MAP,
   updatePhysicalInventoryStatusAdmin,
+  reservePhysicalInventoryForOrderItem,
+  releasePhysicalInventoryForOrderItem,
+  getReservationCandidatesForItem,
 };
