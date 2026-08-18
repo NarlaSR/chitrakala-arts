@@ -2196,10 +2196,9 @@ app.get('/api/admin/order-requests/:id', authenticateToken, async (req, res) => 
   }
 });
 
-// PATCH /api/admin/order-requests/:id/status — admin only. Review-status change only;
-// never touches artworks (no quantity/status/SOLD/OUT_OF_STOCK side effects).
+// PATCH /api/admin/order-requests/:id/status — admin only.
 // CANCELLED auto-releases all reserved physical inventory (all-or-nothing).
-// FULFILLED is blocked while any items have an active reservation.
+// FULFILLED triggers fulfillOrderRequest: validates items, marks PI SOLD, records movements.
 app.patch('/api/admin/order-requests/:id/status', authenticateToken, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -2217,10 +2216,13 @@ app.patch('/api/admin/order-requests/:id/status', authenticateToken, async (req,
     if (!orderRequest) return res.status(404).json({ error: 'Order request not found' });
     res.json(orderRequest);
   } catch (error) {
-    if (error.code === 'FULFILLED_BLOCKED_BY_RESERVATION') {
+    if (error.code === 'ORDER_ALREADY_TERMINAL') {
+      return res.status(409).json({ error: error.message });
+    }
+    if (['ORDER_NOT_CONFIRMED_FOR_FULFILLMENT', 'IN_STOCK_ITEM_NOT_RESERVED', 'FULFILLMENT_ITEM_TYPE_UNRESOLVED'].includes(error.code)) {
       return res.status(400).json({ error: error.message });
     }
-    if (error.code === 'RESERVATION_INTEGRITY_ERROR') {
+    if (error.code === 'RESERVATION_INTEGRITY_ERROR' || error.code === 'FULFILLMENT_INTEGRITY_ERROR') {
       return res.status(500).json({ error: error.message });
     }
     console.error('Error updating order request status:', error);

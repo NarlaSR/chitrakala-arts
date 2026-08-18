@@ -24,6 +24,19 @@ const STATUS_COLORS = {
   FULFILLED: 'or-status-fulfilled',
 };
 
+function getItemFulfillStatus(item) {
+  if (item.physical_inventory_id != null) {
+    return { eligible: true, type: 'pi', label: `Reserved: PI #${item.physical_inventory_id} → will be Sold` };
+  }
+  if (item.snapshot_availability === 'MADE_TO_ORDER') {
+    return { eligible: true, type: 'mto', label: 'Made-to-Order — no PI required' };
+  }
+  if (item.snapshot_availability === 'IN_STOCK') {
+    return { eligible: false, label: 'IN_STOCK item — reservation required before fulfillment' };
+  }
+  return { eligible: false, label: `Unresolved item type (snapshot: ${item.snapshot_availability ?? 'null'}) — review required` };
+}
+
 const AdminOrderRequests = () => {
   const { logout, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -44,6 +57,10 @@ const AdminOrderRequests = () => {
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [reserveTarget, setReserveTarget] = useState(null); // { orderId, itemId, piId } pending confirm
   const [actionBusy, setActionBusy] = useState(false);
+
+  // Fulfill state
+  const [fulfillConfirmOpen, setFulfillConfirmOpen] = useState(false);
+  const [fulfillBusy, setFulfillBusy] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin()) navigate('/ckk-secure-admin');
@@ -79,6 +96,7 @@ const AdminOrderRequests = () => {
       setExpandedId(null);
       setPickerOpen(null);
       setReserveTarget(null);
+      setFulfillConfirmOpen(false);
       return;
     }
     setExpandedId(request.id);
@@ -206,6 +224,21 @@ const AdminOrderRequests = () => {
       flash(`Release failed: ${err.response?.data?.error || 'Unknown error'}`);
     } finally {
       setActionBusy(false);
+    }
+  };
+
+  const handleFulfill = async (requestId) => {
+    setFulfillBusy(true);
+    try {
+      await orderRequestsAPI.updateStatus(requestId, 'FULFILLED');
+      flash(`Order #${requestId} marked as Fulfilled`);
+      setFulfillConfirmOpen(false);
+      await refreshDetail(requestId);
+      loadRequests();
+    } catch (err) {
+      flash(`Fulfill failed: ${err.response?.data?.error || 'Unknown error'}`);
+    } finally {
+      setFulfillBusy(false);
     }
   };
 
@@ -340,7 +373,7 @@ const AdminOrderRequests = () => {
                                           value={statusDrafts[request.id] ?? detail.status}
                                           onChange={e => setStatusDrafts(prev => ({ ...prev, [request.id]: e.target.value }))}
                                         >
-                                          {STATUS_OPTIONS.map(s => (
+                                          {STATUS_OPTIONS.filter(s => s !== 'FULFILLED').map(s => (
                                             <option key={s} value={s}>{FILTER_LABELS[s]}</option>
                                           ))}
                                         </select>
@@ -409,6 +442,8 @@ const AdminOrderRequests = () => {
                                     {(detail.items || []).map(item => {
                                       const isReserved = item.physical_inventory_id != null;
                                       const isConfirmed = detail.status === 'CONFIRMED';
+                                      const isFulfilled = detail.status === 'FULFILLED';
+                                      const isTerminal = isFulfilled || detail.status === 'CANCELLED';
                                       const pickerKey = `${detail.id}:${item.id}`;
                                       const isPickerOpenForThis =
                                         pickerOpen && pickerOpen.orderId === detail.id && pickerOpen.itemId === item.id;
@@ -421,7 +456,11 @@ const AdminOrderRequests = () => {
                                               Item #{item.id} — {item.snapshot_title}
                                               {item.snapshot_size_label ? ` (${item.snapshot_size_label})` : ''}
                                             </span>
-                                            {isReserved ? (
+                                            {isReserved && isFulfilled ? (
+                                              <span className="or-inv-sold-badge">
+                                                Sold: PI #{item.physical_inventory_id}
+                                              </span>
+                                            ) : isReserved ? (
                                               <span className="or-inv-reserved-badge">
                                                 Reserved: PI #{item.physical_inventory_id}
                                               </span>
@@ -431,7 +470,7 @@ const AdminOrderRequests = () => {
                                           </div>
 
                                           <div className="or-inv-actions">
-                                            {isReserved && (
+                                            {isReserved && !isFulfilled && (
                                               <button
                                                 className="or-btn or-btn-release"
                                                 disabled={actionBusy}
@@ -449,7 +488,7 @@ const AdminOrderRequests = () => {
                                                 Reserve Inventory
                                               </button>
                                             )}
-                                            {!isReserved && !isConfirmed && (
+                                            {!isReserved && !isConfirmed && !isTerminal && (
                                               <span className="or-inv-status-note">
                                                 Reservation requires CONFIRMED status
                                               </span>
@@ -529,6 +568,69 @@ const AdminOrderRequests = () => {
                                       );
                                     })}
                                   </div>
+
+                                  {/* Fulfill Order Section — CONFIRMED orders only */}
+                                  {detail.status === 'CONFIRMED' && (() => {
+                                    const items = detail.items || [];
+                                    const fulfillStatuses = items.map(getItemFulfillStatus);
+                                    const allEligible = fulfillStatuses.every(s => s.eligible);
+                                    const blockedItems = fulfillStatuses.filter(s => !s.eligible);
+                                    return (
+                                      <div className="or-fulfill-section">
+                                        <h4 className="or-items-heading or-inv-heading">Fulfill Order</h4>
+                                        <ul className="or-fulfill-eligibility-list">
+                                          {items.map((item, i) => {
+                                            const fs = fulfillStatuses[i];
+                                            return (
+                                              <li
+                                                key={item.id}
+                                                className={`or-fulfill-item-row${fs.eligible ? ' or-fulfill-eligible' : ' or-fulfill-item-blocked'}`}
+                                              >
+                                                <strong>Item #{item.id}</strong> — {item.snapshot_title}
+                                                {item.snapshot_size_label ? ` (${item.snapshot_size_label})` : ''}
+                                                <span className={fs.eligible ? ' or-fulfill-eligible' : ' or-fulfill-blocked'}>
+                                                  {' '}{fs.label}
+                                                </span>
+                                              </li>
+                                            );
+                                          })}
+                                        </ul>
+                                        {!allEligible && (
+                                          <p className="or-fulfill-blocked-note">
+                                            {blockedItems.length} item{blockedItems.length > 1 ? 's' : ''} must be resolved before fulfillment.
+                                          </p>
+                                        )}
+                                        {allEligible && !fulfillConfirmOpen && (
+                                          <button
+                                            className="or-btn-fulfill"
+                                            disabled={fulfillBusy}
+                                            onClick={() => setFulfillConfirmOpen(true)}
+                                          >
+                                            Fulfill Order
+                                          </button>
+                                        )}
+                                        {allEligible && fulfillConfirmOpen && (
+                                          <div className="or-fulfill-confirm">
+                                            <span>Mark order #{detail.id} as Fulfilled? PI units will be permanently marked Sold.</span>
+                                            <button
+                                              className="btn-primary"
+                                              disabled={fulfillBusy}
+                                              onClick={() => handleFulfill(detail.id)}
+                                            >
+                                              {fulfillBusy ? 'Fulfilling…' : 'Confirm Fulfillment'}
+                                            </button>
+                                            <button
+                                              className="btn-secondary"
+                                              disabled={fulfillBusy}
+                                              onClick={() => setFulfillConfirmOpen(false)}
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </>
                               ) : (
                                 <div className="or-detail-loading">Failed to load details.</div>

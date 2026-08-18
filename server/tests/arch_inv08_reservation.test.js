@@ -427,32 +427,18 @@ describe('ARCH-INV-08 Reservation Workflow', () => {
 
   // ── FULFILLED protection ───────────────────────────────────────────────────
 
-  describe('updateOrderRequestStatus — FULFILLED protection', () => {
-    it('blocks FULFILLED when any item has a reservation', async () => {
-      const piId = await createTestPI(artworkId, null);
+  describe('updateOrderRequestStatus — FULFILLED and terminal-state protection', () => {
+    it('allows FULFILLED for a CONFIRMED order where all items are MADE_TO_ORDER', async () => {
       const order = await createTestOrderRequest('CONFIRMED');
-      const item = await createTestItem(order.id, artworkId, null);
-
-      await db.reservePhysicalInventoryForOrderItem(order.id, item.id, piId, 'test-user');
-
-      await assert.rejects(
-        () => db.updateOrderRequestStatus(order.id, 'FULFILLED', 'test-user'),
-        (err) => { assert.equal(err.code, 'FULFILLED_BLOCKED_BY_RESERVATION'); return true; }
+      // Use direct SQL insert with snapshot_availability='MADE_TO_ORDER' — createTestItem
+      // does not set snapshot_availability (null), which would fail the eligibility check.
+      await query(
+        `INSERT INTO order_request_items
+           (order_request_id, artwork_id, artwork_size_id, quantity, snapshot_title,
+            snapshot_availability, created_at)
+         VALUES ($1, $2, NULL, 1, 'Test Artwork', 'MADE_TO_ORDER', CURRENT_TIMESTAMP)`,
+        [order.id, artworkId]
       );
-
-      // Order must remain CONFIRMED (rolled back)
-      const rows = await query('SELECT status FROM order_requests WHERE id = $1', [order.id]);
-      assert.equal(rows[0].status, 'CONFIRMED');
-      // PI must remain RESERVED
-      assert.equal((await getPIStatus(piId)).status, 'RESERVED');
-
-      await cleanupPI(piId);
-      await cleanupOrderRequest(order.id);
-    });
-
-    it('allows FULFILLED when no reservations exist', async () => {
-      const order = await createTestOrderRequest('CONFIRMED');
-      await createTestItem(order.id, artworkId, null);
 
       const result = await db.updateOrderRequestStatus(order.id, 'FULFILLED', 'test-user');
       assert.equal(result.status, 'FULFILLED');
@@ -462,42 +448,89 @@ describe('ARCH-INV-08 Reservation Workflow', () => {
 
     it('FULFILLED concurrency: reserve and FULFILLED serialize correctly', async () => {
       // Both operations lock order_requests FOR UPDATE, so they serialize.
-      // One of them will win; the other will see the committed state.
-      // We verify no partial/inconsistent state remains.
+      // Item is IN_STOCK with no PI reserved yet:
+      //   - If Reserve wins first: PI→RESERVED, item FK set → Fulfill sees RESERVED PI → PI→SOLD, order→FULFILLED (both succeed)
+      //   - If Fulfill wins first: IN_STOCK_ITEM_NOT_RESERVED → ROLLBACK → Reserve succeeds (one success, one fail)
+      // Either way: no orphaned RESERVED PI, no double-SOLD, final state consistent.
       const piId = await createTestPI(artworkId, null);
       const order = await createTestOrderRequest('CONFIRMED');
-      const item = await createTestItem(order.id, artworkId, null);
+      // Direct insert with snapshot_availability='IN_STOCK' to use the production-realistic path
+      const itemRows = await query(
+        `INSERT INTO order_request_items
+           (order_request_id, artwork_id, artwork_size_id, quantity, snapshot_title,
+            snapshot_availability, created_at)
+         VALUES ($1, $2, NULL, 1, 'Test Artwork', 'IN_STOCK', CURRENT_TIMESTAMP)
+         RETURNING id`,
+        [order.id, artworkId]
+      );
+      const itemId = itemRows[0].id;
 
-      // Run reserve and FULFILLED concurrently
       const results = await Promise.allSettled([
-        db.reservePhysicalInventoryForOrderItem(order.id, item.id, piId, 'test-user'),
+        db.reservePhysicalInventoryForOrderItem(order.id, itemId, piId, 'test-user'),
         db.updateOrderRequestStatus(order.id, 'FULFILLED', 'test-user'),
       ]);
 
-      // Exactly one must succeed; the other must fail
       const successes = results.filter(r => r.status === 'fulfilled');
       const failures = results.filter(r => r.status === 'rejected');
-      assert.equal(successes.length, 1);
-      assert.equal(failures.length, 1);
+      // At least one must succeed; at most one failure
+      assert.ok(successes.length >= 1 && successes.length <= 2);
+      assert.ok(failures.length <= 1);
 
-      // Fetch final state — must be consistent
+      // Final state must be internally consistent
       const orderRows = await query('SELECT status FROM order_requests WHERE id = $1', [order.id]);
       const piStatus = (await getPIStatus(piId)).status;
-      const itemPiId = await getItemPIId(item.id);
+      const itemPiId = await getItemPIId(itemId);
       const finalStatus = orderRows[0].status;
 
       if (finalStatus === 'FULFILLED') {
-        // Reserve must have lost: PI still AVAILABLE, item FK null
-        assert.equal(piStatus, 'AVAILABLE');
-        assert.equal(itemPiId, null);
+        // Reserve won then Fulfill won: PI=SOLD, FK retained (not null)
+        assert.equal(piStatus, 'SOLD');
+        assert.equal(itemPiId, piId);
       } else {
-        // Reserve won: PI is RESERVED, item FK is set, FULFILLED was blocked
+        // Fulfill lost (IN_STOCK_ITEM_NOT_RESERVED), Reserve won: PI=RESERVED, FK set
         assert.equal(finalStatus, 'CONFIRMED');
         assert.equal(piStatus, 'RESERVED');
         assert.equal(itemPiId, piId);
       }
 
       await cleanupPI(piId);
+      await cleanupOrderRequest(order.id);
+    });
+
+    it('FULFILLED → CANCELLED is blocked (ORDER_ALREADY_TERMINAL)', async () => {
+      const order = await createTestOrderRequest('CONFIRMED');
+      await query(
+        `INSERT INTO order_request_items
+           (order_request_id, artwork_id, artwork_size_id, quantity, snapshot_title,
+            snapshot_availability, created_at)
+         VALUES ($1, $2, NULL, 1, 'Test Artwork', 'MADE_TO_ORDER', CURRENT_TIMESTAMP)`,
+        [order.id, artworkId]
+      );
+      await db.updateOrderRequestStatus(order.id, 'FULFILLED', 'test-user');
+
+      await assert.rejects(
+        () => db.updateOrderRequestStatus(order.id, 'CANCELLED', 'test-user'),
+        (err) => { assert.equal(err.code, 'ORDER_ALREADY_TERMINAL'); return true; }
+      );
+
+      const rows = await query('SELECT status FROM order_requests WHERE id = $1', [order.id]);
+      assert.equal(rows[0].status, 'FULFILLED');
+
+      await cleanupOrderRequest(order.id);
+    });
+
+    it('CANCELLED → CONFIRMED is blocked (ORDER_ALREADY_TERMINAL)', async () => {
+      const order = await createTestOrderRequest('CONFIRMED');
+      await db.updateOrderRequestStatus(order.id, 'CANCELLED', 'test-user');
+
+      await assert.rejects(
+        () => db.updateOrderRequestStatus(order.id, 'CONFIRMED', 'test-user'),
+        (err) => { assert.equal(err.code, 'ORDER_ALREADY_TERMINAL'); return true; }
+      );
+
+      const rows = await query('SELECT status FROM order_requests WHERE id = $1', [order.id]);
+      assert.equal(rows[0].status, 'CANCELLED');
+
       await cleanupOrderRequest(order.id);
     });
   });

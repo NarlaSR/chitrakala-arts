@@ -799,7 +799,156 @@ async function getOrderRequestById(id) {
   return orderRequest;
 }
 
+// ─── ARCH-INV-09: Order fulfillment — RESERVED → SOLD lifecycle ─────────────────
+
+async function fulfillOrderRequest(orderId, username) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // [1] Lock order row — first lock in consistent ordering
+    const orderRes = await client.query(
+      'SELECT id, status FROM order_requests WHERE id = $1 FOR UPDATE',
+      [orderId]
+    );
+    if (orderRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    if (orderRes.rows[0].status !== 'CONFIRMED') {
+      const err = new Error(
+        `Cannot fulfill this order: status is ${orderRes.rows[0].status}. Only CONFIRMED orders may be fulfilled.`
+      );
+      err.code = 'ORDER_NOT_CONFIRMED_FOR_FULFILLMENT';
+      throw err;
+    }
+
+    // [2] Lock all items ORDER BY id ASC — second lock in consistent ordering
+    const itemsRes = await client.query(
+      `SELECT id, artwork_id, artwork_size_id, physical_inventory_id, snapshot_availability
+       FROM order_request_items WHERE order_request_id = $1 ORDER BY id ASC FOR UPDATE`,
+      [orderId]
+    );
+    const items = itemsRes.rows;
+
+    // [3] Evaluate eligibility for every item before any mutation
+    for (const item of items) {
+      if (item.physical_inventory_id !== null) continue; // PI-backed — eligible
+      if (item.snapshot_availability === 'MADE_TO_ORDER') continue; // non-PI — eligible
+      if (item.snapshot_availability === 'IN_STOCK') {
+        const err = new Error(
+          `Item #${item.id} is an IN_STOCK item with no reserved physical inventory unit. ` +
+          'Reserve a physical inventory unit for this item before fulfilling the order.'
+        );
+        err.code = 'IN_STOCK_ITEM_NOT_RESERVED';
+        throw err;
+      }
+      // NULL or unrecognized snapshot_availability with no PI link
+      const snapshotDisplay = item.snapshot_availability === null
+        ? 'null'
+        : JSON.stringify(item.snapshot_availability);
+      const err = new Error(
+        `Item #${item.id} has an unresolved availability type (snapshot_availability: ${snapshotDisplay}) ` +
+        'and no reserved physical inventory unit. Review this item before fulfilling.'
+      );
+      err.code = 'FULFILLMENT_ITEM_TYPE_UNRESOLVED';
+      throw err;
+    }
+
+    // [4] Process PI-backed items: lock PI, validate, mark SOLD, write movement
+    for (const item of items.filter(i => i.physical_inventory_id !== null)) {
+      const piId = item.physical_inventory_id;
+
+      const piRes = await client.query(
+        'SELECT id, artwork_id, artwork_size_id, status FROM physical_inventory WHERE id = $1 FOR UPDATE',
+        [piId]
+      );
+      if (piRes.rows.length === 0) {
+        const err = new Error(
+          `Physical inventory unit #${piId} linked to item #${item.id} was not found`
+        );
+        err.code = 'FULFILLMENT_INTEGRITY_ERROR';
+        throw err;
+      }
+      const pi = piRes.rows[0];
+
+      if (pi.status !== 'RESERVED') {
+        const err = new Error(
+          `Physical inventory unit #${piId} linked to item #${item.id} is not in RESERVED status (status: ${pi.status})`
+        );
+        err.code = 'FULFILLMENT_INTEGRITY_ERROR';
+        throw err;
+      }
+      if (pi.artwork_id !== item.artwork_id) {
+        const err = new Error(
+          `Physical inventory unit #${piId} artwork (${pi.artwork_id}) does not match ` +
+          `item #${item.id} artwork (${item.artwork_id})`
+        );
+        err.code = 'FULFILLMENT_INTEGRITY_ERROR';
+        throw err;
+      }
+      if (pi.artwork_size_id !== item.artwork_size_id) {
+        const err = new Error(
+          `Physical inventory unit #${piId} size (${pi.artwork_size_id}) does not match ` +
+          `item #${item.id} size (${item.artwork_size_id})`
+        );
+        err.code = 'FULFILLMENT_INTEGRITY_ERROR';
+        throw err;
+      }
+
+      // Mark PI SOLD — FK on order_request_items intentionally retained for historical traceability
+      await client.query(
+        'UPDATE physical_inventory SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        ['SOLD', piId]
+      );
+
+      await client.query(
+        `INSERT INTO inventory_movements
+           (physical_inventory_id, artwork_id, movement_type, quantity_change,
+            reference_type, reference_id, notes, created_by)
+         VALUES ($1, $2, 'SOLD', 0, 'order_request', $3, $4, $5)`,
+        [
+          piId,
+          pi.artwork_id,
+          String(orderId),
+          `Sold — order request #${orderId} fulfilled, item #${item.id}`,
+          username || null,
+        ]
+      );
+    }
+
+    // [5] Mark order FULFILLED
+    const updated = await client.query(
+      'UPDATE order_requests SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      ['FULFILLED', orderId]
+    );
+
+    await client.query('COMMIT');
+    return updated.rows[0] || null;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function updateOrderRequestStatus(id, status, username) {
+  // Fast-fail pre-check (non-authoritative — concurrency protection enforced inside each transaction).
+  const preCheck = await pool.query('SELECT status FROM order_requests WHERE id = $1', [id]);
+  if (preCheck.rows.length === 0) return null;
+  const preStatus = preCheck.rows[0].status;
+  if (preStatus === 'FULFILLED' || preStatus === 'CANCELLED') {
+    const err = new Error(`Cannot change the status of a ${preStatus} order`);
+    err.code = 'ORDER_ALREADY_TERMINAL';
+    throw err;
+  }
+
+  // FULFILLED: delegate to fulfillOrderRequest for full atomic lifecycle.
+  if (status === 'FULFILLED') {
+    return await fulfillOrderRequest(id, username);
+  }
+
   // CANCELLED: auto-release all reserved physical inventory — all-or-nothing transaction.
   if (status === 'CANCELLED') {
     const client = await pool.connect();
@@ -807,12 +956,20 @@ async function updateOrderRequestStatus(id, status, username) {
       await client.query('BEGIN');
 
       const orderRes = await client.query(
-        'SELECT id FROM order_requests WHERE id = $1 FOR UPDATE',
+        'SELECT id, status FROM order_requests WHERE id = $1 FOR UPDATE',
         [id]
       );
       if (orderRes.rows.length === 0) {
         await client.query('ROLLBACK');
         return null;
+      }
+      // Authoritative terminal check after lock
+      const lockedStatus = orderRes.rows[0].status;
+      if (lockedStatus === 'FULFILLED' || lockedStatus === 'CANCELLED') {
+        await client.query('ROLLBACK');
+        const err = new Error(`Cannot change the status of a ${lockedStatus} order`);
+        err.code = 'ORDER_ALREADY_TERMINAL';
+        throw err;
       }
 
       const itemsRes = await client.query(
@@ -876,54 +1033,26 @@ async function updateOrderRequestStatus(id, status, username) {
     }
   }
 
-  // FULFILLED: block if any items have a physical inventory reservation.
-  // Uses FOR UPDATE on order_requests to serialize with reservePhysicalInventoryForOrderItem.
-  if (status === 'FULFILLED') {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const orderRes = await client.query(
-        'SELECT id FROM order_requests WHERE id = $1 FOR UPDATE',
-        [id]
-      );
-      if (orderRes.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return null;
-      }
-
-      const reservedCheck = await client.query(
-        'SELECT COUNT(*)::int AS count FROM order_request_items WHERE order_request_id = $1 AND physical_inventory_id IS NOT NULL',
-        [id]
-      );
-      if (reservedCheck.rows[0].count > 0) {
-        const err = new Error(
-          'Cannot mark this order as Fulfilled while physical inventory is reserved for it. Fulfillment of reserved physical inventory will be handled by ARCH-INV-09.'
-        );
-        err.code = 'FULFILLED_BLOCKED_BY_RESERVATION';
-        throw err;
-      }
-
-      const updated = await client.query(
-        'UPDATE order_requests SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-        [status, id]
-      );
-      await client.query('COMMIT');
-      return updated.rows[0] || null;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  // All other statuses: simple update, no PI interaction.
+  // All other statuses: atomic update guarded against concurrent terminal-state writes.
   const result = await pool.query(
-    `UPDATE order_requests SET status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+    `UPDATE order_requests
+     SET status = $2, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1 AND status NOT IN ('FULFILLED', 'CANCELLED')
+     RETURNING *`,
     [id, status]
   );
-  return result.rows[0] || null;
+  if (result.rows.length === 0) {
+    const check = await pool.query('SELECT status FROM order_requests WHERE id = $1', [id]);
+    if (!check.rows[0]) return null;
+    const s = check.rows[0].status;
+    if (s === 'FULFILLED' || s === 'CANCELLED') {
+      const err = new Error(`Cannot change the status of a ${s} order`);
+      err.code = 'ORDER_ALREADY_TERMINAL';
+      throw err;
+    }
+    return null;
+  }
+  return result.rows[0];
 }
 
 // ─── ARCH-INV-08: Physical inventory reservation for order request items ────────
@@ -1566,4 +1695,5 @@ module.exports = {
   reservePhysicalInventoryForOrderItem,
   releasePhysicalInventoryForOrderItem,
   getReservationCandidatesForItem,
+  fulfillOrderRequest,
 };
